@@ -346,7 +346,9 @@ func TestRigChangeReloadsOnNewCameraAndOnConnect(t *testing.T) {
 		t.Errorf("iris = %v", v)
 	}
 
-	// the connection drops: values are forgotten, specs stay
+	// the connection drops: values are forgotten, specs stay (the service
+	// returns no value for a camera that is not connected)
+	f.controls[1] = []app.ControlView{{Spec: rangeSpec(core.Iris, 0, 1, 0.01)}}
 	f.setStatus(1, core.StateError)
 	c.RefreshRig()
 	if c.Value(1, core.Iris) != nil || !c.Has(1, core.Iris) {
@@ -481,5 +483,33 @@ func TestConfirmRequiredAsksAndNeverAutoConfirms(t *testing.T) {
 	}
 	if v := c.Value(1, core.ColorBars); v == nil || v.Number != 1 {
 		t.Errorf("value after confirm = %v", v)
+	}
+}
+
+// A camera that fails to connect while its controls are being read must
+// still end up with its controls (offline, without values), not stuck on
+// "reading controls".
+func TestStatusChangeDuringTheFirstLoadDoesNotLoseTheControls(t *testing.T) {
+	f := newFakeAPI()
+	f.assign(1, "acme.cam", core.StateConnecting, app.ControlView{Spec: rangeSpec(core.Gain, 0, 36, 1)})
+	var pending []func()
+	o := syncOptions()
+	o.Go = func(fn func()) { pending = append(pending, fn) }
+	c := NewController(f, o)
+	c.Load() // the first read is in flight
+	f.setStatus(1, core.StateError)
+	c.RefreshRig()
+	for len(pending) > 0 {
+		fn := pending[0]
+		pending = pending[1:]
+		fn()
+		testUI.drain()
+	}
+	testUI.drain()
+	if !c.Loaded(1) || !c.Has(1, core.Gain) {
+		t.Fatalf("loaded=%v: the controls of an offline camera must still be shown", c.Loaded(1))
+	}
+	if c.Value(1, core.Gain) != nil {
+		t.Error("an offline camera has no values")
 	}
 }

@@ -353,11 +353,14 @@ func (c *Controller) applyRig(r app.Rig) {
 			if cur.Status.State == core.StateConnected {
 				c.loadControls(slot)
 			} else {
-				// connection lost: the values are no longer current
+				// connection lost: the values are no longer current. The
+				// controls are read again (without values): a first read
+				// still in flight is now stale and would be dropped.
 				c.slots[i].values = nil
 				c.slots[i].lens = core.Lens{}
 				c.slots[i].gen++
 				c.notify(Change{Kind: ChSlot, Slot: slot})
+				c.loadControls(slot)
 			}
 		default:
 			c.slots[i].camera = cur
