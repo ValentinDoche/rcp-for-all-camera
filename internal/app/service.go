@@ -72,9 +72,10 @@ type Service struct {
 }
 
 type slotState struct {
-	cfg  core.CameraConfig // Password filled from secrets, never persisted
-	info core.ModelInfo
-	cam  core.Camera
+	cfg   core.CameraConfig // Password filled from secrets, never persisted
+	info  core.ModelInfo
+	cam   core.Camera
+	unsub func() // camera event subscription
 }
 
 // NewService loads the saved rig. Saved entries that no longer validate
@@ -176,7 +177,7 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 	}
 	if err := s.storePassword(slot, cfg.Password); err != nil {
 		s.mu.Unlock()
-		st.cam.Close()
+		st.close()
 		return Slot{}, toAPIError(err)
 	}
 	old := s.slots[slot-1]
@@ -192,11 +193,11 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 			s.log.Warn("password not restored after failed save", "slot", slot, "err", err)
 		}
 		s.mu.Unlock()
-		st.cam.Close()
+		st.close()
 		return Slot{}, toAPIError(err)
 	}
 	if old != nil {
-		old.cam.Close()
+		old.close()
 	}
 	out := Slot{Slot: slot, Camera: viewOf(st)}
 	rig, emit := s.rigLocked(), s.emit
@@ -233,7 +234,7 @@ func (s *Service) ClearSlot(slot int) error {
 	}
 	rig, emit := s.rigLocked(), s.emit
 	s.mu.Unlock()
-	old.cam.Close()
+	old.close()
 	emit.Emit(EventRigChanged, rig)
 	return nil
 }
@@ -347,12 +348,15 @@ func (s *Service) setPanel(p PanelStatus) {
 	emit.Emit(EventPanelStatus, p)
 }
 
+// closeAll closes every camera. Cameras are closed outside the lock: a
+// driver may emit a last status event while closing.
 func (s *Service) closeAll() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, st := range s.slots {
+	slots := s.slots
+	s.mu.Unlock()
+	for _, st := range slots {
 		if st != nil {
-			st.cam.Close()
+			st.close()
 		}
 	}
 }
@@ -390,7 +394,9 @@ func (s *Service) build(cfg core.CameraConfig) (*slotState, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &slotState{cfg: cfg, info: info, cam: cam}, nil
+	st := &slotState{cfg: cfg, info: info, cam: cam}
+	st.unsub = cam.Subscribe(func(e core.Event) { s.forward(cam, e) })
+	return st, nil
 }
 
 func (s *Service) storePassword(slot int, pw string) error {
@@ -449,3 +455,30 @@ func secretKey(slot int) string { return "camera/" + strconv.Itoa(slot) }
 type nopEmitter struct{}
 
 func (nopEmitter) Emit(string, any) {}
+
+// close ends the event subscription, then closes the camera.
+func (st *slotState) close() {
+	if st.unsub != nil {
+		st.unsub()
+	}
+	st.cam.Close()
+}
+
+// forward emits a camera event tagged with the camera's current slot. Events
+// from a camera that is no longer in a slot (replaced, cleared) are dropped.
+func (s *Service) forward(cam core.Camera, e core.Event) {
+	s.mu.Lock()
+	slot := 0
+	for i, st := range s.slots {
+		if st != nil && st.cam == cam {
+			slot = i + 1
+			break
+		}
+	}
+	emit := s.emit
+	s.mu.Unlock()
+	if slot == 0 {
+		return
+	}
+	emit.Emit(EventCamera, CameraEvent{Slot: slot, Event: e})
+}

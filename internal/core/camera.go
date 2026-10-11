@@ -42,6 +42,8 @@ type Event struct {
 //   - Connect returns once the first connection attempt is done. The driver
 //     then keeps reconnecting by itself until Close.
 //   - Subscribe callbacks run on a driver goroutine and must not block.
+//     A driver never calls them from inside Subscribe itself (the app may
+//     hold its lock while subscribing).
 type Camera interface {
 	Controls() []ControlSpec
 	Connect(ctx context.Context) error

@@ -96,7 +96,7 @@ func (s *Service) SetBindIP(ip string) error {
 	rig, emit := s.rigLocked(), s.emit
 	s.mu.Unlock()
 	for _, st := range stale {
-		st.cam.Close()
+		st.close()
 	}
 	s.log.Info("bind address changed", "ip", ip)
 	emit.Emit(EventRigChanged, rig)

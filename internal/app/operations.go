@@ -177,7 +177,7 @@ func (s *Service) ImportConfig(data []byte) error {
 			s.mu.Unlock()
 			for _, f := range fresh {
 				if f != nil {
-					f.cam.Close()
+					f.close()
 				}
 			}
 			return invalid(fmt.Sprintf("camera %d: %v", i+1, toAPIError(err).(*Error).Message))
@@ -191,7 +191,7 @@ func (s *Service) ImportConfig(data []byte) error {
 		s.mu.Unlock()
 		for _, f := range fresh {
 			if f != nil {
-				f.cam.Close()
+				f.close()
 			}
 		}
 		return toAPIError(err)
@@ -201,7 +201,7 @@ func (s *Service) ImportConfig(data []byte) error {
 
 	for i, st := range old {
 		if st != nil {
-			st.cam.Close()
+			st.close()
 		}
 		if err := s.secrets.Delete(secretKey(i + 1)); err != nil {
 			s.log.Warn("password not deleted", "slot", i+1, "err", err)
