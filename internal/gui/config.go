@@ -132,6 +132,9 @@ func (p *configPage) slotRow(slot int) fyne.CanvasObject {
 			title = cam.ModelName
 		}
 		line2 := fmt.Sprintf("%s %s, %s:%d", cam.Brand, cam.ModelName, cam.Host, cam.Port)
+		if cam.Host == "" {
+			line2 = fmt.Sprintf("%s %s", cam.Brand, cam.ModelName)
+		}
 		mid = container.NewVBox(
 			widgets.NewText(title, style.Text, 13).Bold().Clip(),
 			widgets.NewText(line2, style.TextMuted, 11).Clip(),
@@ -188,6 +191,7 @@ type slotForm struct {
 	userBox, passBox fyne.CanvasObject
 	powerZoom        *widget.Check
 	powerZoomBox     fyne.CanvasObject
+	addrBox          fyne.CanvasObject // host and port, hidden for the demo camera
 	userLabel        *widgets.Text
 	pwHint           *widgets.Text
 	clearBtn         *widget.Button
@@ -255,6 +259,7 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 		f.updatePwHint()
 	}
 
+	f.addrBox = container.NewGridWithColumns(2, fieldBlock(f.tx.T("config.host"), f.host), fieldBlock(f.tx.T("config.port"), f.port))
 	f.powerZoom = widget.NewCheck(f.tx.T("config.powerZoom"), nil)
 	pzHint := widget.NewLabel(f.tx.T("config.powerZoomHint"))
 	pzHint.Wrapping = fyne.TextWrapWord
@@ -295,7 +300,7 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 		container.NewGridWithColumns(2, fieldBlock(f.tx.T("config.brand"), f.brand), fieldBlock(f.tx.T("config.model"), f.model)),
 		container.NewVBox(container.NewHBox(f.support), f.notes, f.supportHelp),
 		fieldBlock(f.tx.T("config.name"), f.name),
-		container.NewGridWithColumns(2, fieldBlock(f.tx.T("config.host"), f.host), fieldBlock(f.tx.T("config.port"), f.port)),
+		f.addrBox,
 		container.NewGridWithColumns(2, f.userBox, f.passBox),
 		f.powerZoomBox,
 		f.errTxt,
@@ -373,6 +378,11 @@ func (f *slotForm) setModel(m *core.ModelInfo) {
 // updateAuth shows the credential fields only when the model uses them, and
 // the power zoom box only for a model with an interchangeable lens.
 func (f *slotForm) updateAuth() {
+	if f.current != nil && f.current.NoAddress {
+		f.addrBox.Hide()
+	} else {
+		f.addrBox.Show()
+	}
 	if f.current != nil && f.current.InterchangeableLens {
 		f.powerZoomBox.Show()
 	} else {
@@ -420,7 +430,9 @@ func (f *slotForm) input() (app.SlotInput, string) {
 	}
 	m := f.current
 	host := strings.TrimSpace(f.host.Text)
-	if host == "" {
+	if m.NoAddress {
+		host, f.port.Text = "", ""
+	} else if host == "" {
 		return in, f.tx.T("config.needHost")
 	}
 	port := 0

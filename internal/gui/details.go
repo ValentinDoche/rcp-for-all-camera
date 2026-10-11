@@ -281,7 +281,11 @@ func (h *detailsHeader) apply() {
 		h.rec.Hide()
 		return
 	}
-	h.sub.SetText(fmt.Sprintf("%s %s · %s", cam.Brand, cam.ModelName, cam.Host))
+	sub := fmt.Sprintf("%s %s", cam.Brand, cam.ModelName)
+	if cam.Host != "" {
+		sub += " · " + cam.Host
+	}
+	h.sub.SetText(sub)
 	if v := h.ctl.Value(h.slot, core.Tally); v != nil && v.On {
 		h.tally.Show()
 	} else {

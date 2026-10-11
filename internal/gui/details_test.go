@@ -187,3 +187,33 @@ func TestDetailsFitAMaximisedFullHDWindowWithoutScrolling(t *testing.T) {
 		t.Errorf("details need %v px of width, the window gives %v", need, have)
 	}
 }
+
+func TestDemoCameraNeedsNoAddressAndDrivesEverything(t *testing.T) {
+	a, svc, _ := newTestApp(t, true)
+	sized(a)
+	a.ShowConfig(4)
+	f := a.config.form
+	f.brand.SetSelected("Démo")
+	if f.current == nil || !f.current.NoAddress {
+		t.Fatal("the demo model must be picked")
+	}
+	if f.addrBox.Visible() {
+		t.Error("the demo camera has no address: host and port are hidden")
+	}
+	f.save()
+	cam := svc.Rig().Slots[3].Camera
+	if cam == nil || cam.Host != "" || cam.Status.State != core.StateConnected {
+		t.Fatalf("demo slot = %+v", cam)
+	}
+	a.ShowDetails(4)
+	for _, id := range []core.ControlID{core.Iris, core.Zoom, core.Focus, core.Gain, core.ND, core.WhiteBalance, core.Contrast} {
+		if !a.details.cards[id] {
+			t.Errorf("%s must be live on the demo camera", id)
+		}
+	}
+	test.Tap(iconButtons(a, icons.Plus)[0]) // iris +
+	waitWrites(a.ctl)
+	if v := a.ctl.Value(4, core.Iris); v == nil || v.Number != 3.5 {
+		t.Errorf("demo iris after + = %v, want 3.5", v)
+	}
+}

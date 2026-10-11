@@ -56,6 +56,10 @@ func TestScreenshots(t *testing.T) {
 		a.Window().Resize(size)
 		save("2-details", mode)
 
+		a.ShowDetails(2) // FX6: what it does not declare is greyed
+		a.Window().Resize(size)
+		save("2b-details-greyed", mode)
+
 		a.ShowConfig(2)
 		a.Window().Resize(size)
 		save("3-config-edit", mode)

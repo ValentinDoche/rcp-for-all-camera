@@ -17,6 +17,7 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/blackmagic"
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/demo"
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/panasonic"
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/sony"
 	"github.com/valentindoche/rcp-for-all-camera/internal/config"
@@ -297,6 +298,9 @@ func newLiveService(t testing.TB) (*app.Service, *memStore, *[]*liveCam) {
 		if err := reg.Register(liveDriver{Driver: d, cams: cams}); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := reg.Register(demo.Driver{}); err != nil { // the real demo camera
+		t.Fatal(err)
 	}
 	st := &memStore{}
 	svc, err := app.NewService(app.Options{
