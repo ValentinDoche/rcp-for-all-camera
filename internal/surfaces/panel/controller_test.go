@@ -330,10 +330,73 @@ func TestControllerStepKeysAndActions(t *testing.T) {
 	h.waitCall(t, "shutterSpeed", func(v core.Value) bool { return v.Choice == "1/100" })
 	press(0x5B) // AUTO IRIS
 	h.waitCall(t, "autoIris", func(v core.Value) bool { return v.Kind == core.KindAction })
-	press(0x57) // W/B
-	h.waitCall(t, "autoWhiteBalance", func(v core.Value) bool { return v.Kind == core.KindAction })
 	press(0x58) // BARS: known off -> on
 	h.waitCall(t, "colorBars", func(v core.Value) bool { return v.On })
+}
+
+func TestControllerWhiteBalanceMode(t *testing.T) {
+	h := start(t, sonyAPI(), Options{}) // 5600 K step 50, tint 0
+	<-h.status
+	h.loaded(t)
+	h.input(t, micropanel.State{})
+	press := func(k micropanel.Key) {
+		h.input(t, micropanel.State{Keys: []micropanel.Key{k}})
+		h.input(t, micropanel.State{})
+	}
+	press(0x57) // W/B: mode on
+	waitFor(t, "W/B lit, 5600 shown", func() bool {
+		d, _, l := h.dev.snapshot()
+		return ledOn(&l, micropanel.LEDWB) && [4]byte(d[4:8]) == shutterOf("5600")
+	})
+	press(0x54) // SHUTTER up: +100 K (spec step 50)
+	h.waitCall(t, "whiteBalance", func(v core.Value) bool { return v.Number == 5700 })
+	press(0x53) // GAIN down: tint -1
+	h.waitCall(t, "tint", func(v core.Value) bool { return v.Number == -1 })
+	for _, c := range h.api.callsCopy() {
+		if c.id == "shutterSpeed" || c.id == "gain" || c.id == "autoWhiteBalance" {
+			t.Fatalf("white balance mode wrote %s", c.id)
+		}
+	}
+	press(0x57) // W/B: mode off, keys back to shutter
+	waitFor(t, "W/B off", func() bool { _, _, l := h.dev.snapshot(); return !ledOn(&l, micropanel.LEDWB) })
+	press(0x54)
+	h.waitCall(t, "shutterSpeed", func(v core.Value) bool { return v.Choice == "1/60" })
+
+	// A camera switch leaves the mode.
+	press(0x57)
+	waitFor(t, "W/B lit", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDWB) })
+	h.api.SelectSlot(1)
+	waitFor(t, "W/B off after a switch", func() bool {
+		_, m, l := h.dev.snapshot()
+		return m == micropanel.MatrixNumber(1, micropanel.PixAmber) && !ledOn(&l, micropanel.LEDWB)
+	})
+}
+
+func TestControllerWhiteBalanceModeNeedsWBOrTint(t *testing.T) {
+	api := sonyAPI()
+	var specs []core.ControlSpec
+	for _, s := range sonySpecs() {
+		if s.ID != core.WhiteBalance && s.ID != core.Tint {
+			specs = append(specs, s)
+		}
+	}
+	api.specs = specs
+	h := start(t, api, Options{})
+	<-h.status
+	h.loaded(t)
+	h.input(t, micropanel.State{})
+	h.input(t, micropanel.State{Keys: []micropanel.Key{0x57}}) // W/B: nothing
+	h.input(t, micropanel.State{})
+	h.input(t, micropanel.State{Keys: []micropanel.Key{0x54}}) // SHUTTER up stays shutter
+	h.waitCall(t, "shutterSpeed", func(v core.Value) bool { return v.Choice == "1/60" })
+	if _, _, l := h.dev.snapshot(); ledOn(&l, micropanel.LEDWB) {
+		t.Error("W/B lit for a camera without white balance")
+	}
+	for _, c := range api.callsCopy() {
+		if c.id == "autoWhiteBalance" {
+			t.Error("W/B must not trigger auto white balance any more")
+		}
+	}
 }
 
 func TestControllerBarsUnknownDoesNothing(t *testing.T) {

@@ -82,6 +82,35 @@ func shutterText(s core.ControlSpec, v core.Value) string {
 	return t
 }
 
+// kelvinText: four digits, the colour temperature in Kelvin ("5600");
+// from 10000 K in thousands with one decimal ("10.0", "12.5").
+func kelvinText(_ core.ControlSpec, v core.Value) string {
+	n := math.Round(v.Number)
+	if n >= 9999.5 {
+		return strconv.FormatFloat(n/1000, 'f', 1, 64)
+	}
+	return strconv.Itoa(int(n))
+}
+
+// tintText: two digits. "0"; -9..+9 signed ("-5", "+5"); 10..99 as is
+// ("12"); -99..-10 with both decimal points lit as the minus sign ("1.2."
+// = -12); "Hi" / "Lo" beyond ±99.
+func tintText(_ core.ControlSpec, v core.Value) string {
+	n := int(math.Round(v.Number))
+	switch {
+	case n > 99:
+		return "Hi"
+	case n < -99:
+		return "Lo"
+	case n <= -10:
+		d := strconv.Itoa(-n)
+		return d[:1] + "." + d[1:] + "."
+	case n > 0 && n < 10:
+		return "+" + strconv.Itoa(n)
+	}
+	return strconv.Itoa(n)
+}
+
 // isFStop reports whether an iris control is in f-stops; otherwise it is
 // normalized 0..1.
 func isFStop(s core.ControlSpec) bool { return s.Unit == "f" || s.Max > 1 }
@@ -167,4 +196,5 @@ var expectedKind = map[core.ControlID]core.ControlKind{
 	core.ND: core.KindEnum, core.ISO: core.KindEnum, core.ShutterSpeed: core.KindEnum,
 	core.Gain: core.KindRange, core.ShutterAngle: core.KindRange,
 	core.Iris: core.KindRange, core.MasterBlack: core.KindRange,
+	core.WhiteBalance: core.KindRange, core.Tint: core.KindRange,
 }

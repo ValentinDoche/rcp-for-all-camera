@@ -76,6 +76,10 @@ type Controller struct {
 	knobs            irisKnobs
 	coarseAt, sensAt time.Time
 
+	// wbMode: W/B toggled the white balance mode (SHUTTER keys = Kelvin,
+	// GAIN keys = tint). Left on a camera switch.
+	wbMode bool
+
 	// alarmUntil is when the ALARM blink after a failed command stops.
 	alarmUntil time.Time
 	now        func() time.Time
@@ -156,6 +160,7 @@ func (c *Controller) setRig(r app.Rig) {
 	if r.Active != c.rig.Active {
 		c.releaseLocked()
 		c.cam = camState{slot: r.Active}
+		c.wbMode = false
 	}
 	c.rig = r
 	for i := range c.tally {
@@ -261,6 +266,20 @@ func (c *Controller) refresh() {
 		}
 	}
 	c.cam = next
+	if c.wbMode && !c.wbAvailableLocked() {
+		c.wbMode = false
+	}
+}
+
+// wbAvailableLocked reports whether the active camera has a white balance
+// or a tint the white balance mode can step.
+func (c *Controller) wbAvailableLocked() bool {
+	for _, id := range []core.ControlID{core.WhiteBalance, core.Tint} {
+		if s, _, declared, _ := c.cam.get(id); declared && s.Kind == core.KindRange {
+			return true
+		}
+	}
+	return false
 }
 
 // --- input from the panel --------------------------------------------------
@@ -409,18 +428,23 @@ func (c *Controller) pressLocked(name string) {
 		stepKey([]core.ControlID{core.ND}, +1)
 	case "ND_DOWN":
 		stepKey([]core.ControlID{core.ND}, -1)
-	case "GAIN_UP":
-		stepKey(gainIDs, +1)
-	case "GAIN_DOWN":
-		stepKey(gainIDs, -1)
-	case "SHUTTER_UP":
-		stepKey(shutterIDs, +1)
-	case "SHUTTER_DOWN":
-		stepKey(shutterIDs, -1)
+	case "GAIN_UP", "GAIN_DOWN":
+		ids := gainIDs
+		if c.wbMode {
+			ids = []core.ControlID{core.Tint}
+		}
+		stepKey(ids, keyDir(name))
+	case "SHUTTER_UP", "SHUTTER_DOWN":
+		ids := shutterIDs
+		if c.wbMode {
+			ids = []core.ControlID{core.WhiteBalance}
+		}
+		stepKey(ids, keyDir(name))
 	case "AUTO_IRIS":
 		trigger(core.AutoIris)
 	case "WB":
-		trigger(core.AutoWhiteBalance)
+		// The white balance mode; auto white balance stays in the app.
+		c.wbMode = !c.wbMode && c.wbAvailableLocked()
 	case "BARS":
 		// Toggle only from a known state: never guess what goes on air.
 		if s, v, _, known := c.cam.get(core.ColorBars); known && s.Kind == core.KindToggle && !s.ReadOnly {
@@ -429,6 +453,14 @@ func (c *Controller) pressLocked(name string) {
 	default:
 		c.log.Debug("panel key not mapped", "key", name)
 	}
+}
+
+// keyDir is +1 for a *_UP key, -1 otherwise.
+func keyDir(name string) int {
+	if strings.HasSuffix(name, "_UP") {
+		return +1
+	}
+	return -1
 }
 
 // onWriteError resyncs the cache after a failed write (writer goroutine).
@@ -461,6 +493,7 @@ func (c *Controller) frame(now time.Time) frame {
 		knobs:  c.knobs,
 		coarse: previewing(c.coarseAt, now),
 		sens:   previewing(c.sensAt, now),
+		wb:     c.wbMode,
 	})
 }
 

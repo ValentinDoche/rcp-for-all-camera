@@ -36,17 +36,18 @@ Frames are rendered at ~30 Hz and only the reports that changed are sent.
 | Camera buttons 1–8 | empty slot: off · assigned: **blue** · active: **orange** (amber, GUI selection colour) · tally on: **red** (wins over orange). The LEDs are on/off per colour channel, so a dimmed "assigned" is not possible. |
 | Camera matrix | Active slot number in orange, red when that camera's tally is on. `-` when no slot is selected. |
 | ND (1 digit) | `nd` option index: 0 = clear, 1 = first filter… |
-| GAIN (2 digits) | `gain` in dB: `00`, `06`, `-3`; `Lo`/`Hi` outside −9..99. Else `iso`: hundreds, read ×100 (`1.6` = 160, `16` = 1600), trailing point = thousands (`13.` = 12800). |
-| SHUTTER (4 digits) | `shutterSpeed` without `1/` (`50`, `2000`), else `shutterAngle` in degrees (`180`, `172.8`). The first one whose value is known wins. **While COARSE is turned** (and 5 s after its last movement): the iris window centre as an f-stop (`F5.6`, `F11`, `F22`), blinking at 2 Hz, with the SHUTTER ▲▼ LEDs off (see [Iris lever window](#iris-lever-window-coarse-and-sens)). |
+| GAIN (2 digits) | **W/B mode**: `tint`, see [White balance mode](#white-balance-mode-wb). Otherwise `gain` in dB: `00`, `06`, `-3`; `Lo`/`Hi` outside −9..99. Else `iso`: hundreds, read ×100 (`1.6` = 160, `16` = 1600), trailing point = thousands (`13.` = 12800). |
+| SHUTTER (4 digits) | **W/B mode**: `whiteBalance` in Kelvin (`5600`; from 10000 K in thousands, `10.0`, `12.5`). Otherwise `shutterSpeed` without `1/` (`50`, `2000`), else `shutterAngle` in degrees (`180`, `172.8`). The first one whose value is known wins. **While COARSE is turned** (and 5 s after its last movement): the iris window centre as an f-stop (`F5.6`, `F11`, `F22`), blinking at 2 Hz, with the SHUTTER ▲▼ LEDs off (see [Iris lever window](#iris-lever-window-coarse-and-sens)). |
 | IRIS (3 digits) | `iris` in f-stops (`F2.8`, `F11`); a normalized iris (range 0..1) as a percentage. |
 | MB (3 digits) | `masterBlack`, signed: `+12`, `-5`, `0` (no sign at zero). Ranges with a step below 1 are shown ×100 (`+12` = 0.12). Beyond ±99 (set from the GUI or the camera, the ring cannot go there) it shows `+Hi` / `-Lo`. The `+` is drawn with segments e, f, g (left half of a cross; TODO(verify) on the panel). |
 | CC (1 digit) | Blank: no standard control yet. |
 | Any display | **Blank** when the camera does not declare the control, **dashes** when the value is unknown (camera not connected; always the case while drivers are placeholders). Blank everywhere when the active slot is empty or no slot is selected. |
 | Iris scale (LEDs 0–15) | Camera iris as a bar from the opening down to CLS (2.0, 2.8 … 16 on segments 1, 3 … 13), **masked to the lever window**: segments the lever cannot reach are always off (CLS too when the window does not reach the closed end). Off when unknown. While the lever waits for pickup, the segment under the **lever** blinks (2 Hz). **While SENS is turned** (and 5 s after): the window itself, every reachable segment lit. |
 | IRIS/MB ACTIVE | Red = lever and ring both drive the camera (picked up). White = at least one is waiting for pickup or its value is unknown. Off = camera has neither control. |
-| ND / GAIN / SHUTTER ▲▼ | Lit when the value can still move that way (off when unknown). SHUTTER ▲▼ are off during the COARSE preview. |
+| ND / GAIN / SHUTTER ▲▼ | Lit when the value can still move that way (off when unknown). In W/B mode GAIN ▲▼ follow `tint` and SHUTTER ▲▼ `whiteBalance`. SHUTTER ▲▼ are off during the COARSE preview. |
 | BARS + BARS indicator | `colorBars` is on. |
-| W/B, AUTO IRIS | Lit while the key is held (if the camera has the action). |
+| W/B | Lit while the white balance mode is on. |
+| AUTO IRIS | Lit while the key is held (if the camera has the action). |
 | PANEL ACTIVE (red) | Always on while the app drives the panel. |
 | NETWORK | Active camera connected. |
 | ALARM | Blinks while the active camera is in error state, and for 3 s after any command failed (`camera:commandFailed` or a failed panel write). A request for confirmation (operator lock) is not an error. |
@@ -60,10 +61,10 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 |---|---|
 | CAMERA 1–8 | `SelectSlot(n)` for an assigned slot; the button of an empty slot is inert (LED off). Keys held when the panel connects are ignored. |
 | ND ▲▼ | Next/previous `nd` option. |
-| MASTER GAIN ▲▼ | `gain` ± its step (step 0 → range/20), else next/previous `iso` option. |
-| SHUTTER ▲▼ | Next/previous `shutterSpeed` option, else `shutterAngle` through 11.25, 15, 22.5, 45, 72, 90, 144, 172.8, 180, 216, 270, 360. |
+| MASTER GAIN ▲▼ | `gain` ± its step (step 0 → range/20), else next/previous `iso` option. **W/B mode**: `tint` ± its step. |
+| SHUTTER ▲▼ | Next/previous `shutterSpeed` option, else `shutterAngle` through 11.25, 15, 22.5, 45, 72, 90, 144, 172.8, 180, 216, 270, 360. **W/B mode**: `whiteBalance` ± max(its step, 100 K). |
 | AUTO IRIS | `autoIris` action. |
-| W/B | `autoWhiteBalance` action. |
+| W/B | Toggles the **white balance mode** (below). It no longer triggers `autoWhiteBalance`: auto white balance stays available in the app. |
 | BARS | Toggles `colorBars`, **only when its current value is known** (never guess what goes on air). |
 | Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when the camera reports them (`core.Lens`), so the lever never asks for an aperture the lens lacks, then to the **lever window** set by COARSE and SENS (whole range by default). Normalized iris: linear over the whole range, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
 | Master black ring | `masterBlack`, linear, soft takeover. The travel is limited to what the MB display shows as a number: −0.99..+0.99 for ranges shown ×100 (Blackmagic −2..2), −99..+99 for integer ranges, intersected with the range. A value set beyond that elsewhere cannot be picked up by the ring until it comes back inside. |
@@ -91,6 +92,37 @@ reconnection, or a change of the value from elsewhere (GUI, camera, another even
 lever only takes control once it **reaches** the camera value (within 1 % of travel) or
 **crosses** it between two reports. Until then nothing is written. With an unknown value
 nothing is ever written.
+
+### White balance mode (W/B)
+
+W/B toggles a mode where the SHUTTER and MASTER GAIN keys and displays set the white
+balance instead of shutter and gain. The W/B LED is lit while the mode is on.
+
+- SHUTTER ▲▼: `whiteBalance` ± one step of at least **100 K** (max(spec step, 100 K)),
+  quantized to the spec step. The SHUTTER display shows the Kelvin value: `5600`, and
+  from 10000 K in thousands with one decimal (`10.0` = 10000 K, `12.5` = 12500 K).
+- MASTER GAIN ▲▼: `tint` ± its step. The GAIN display shows the tint on 2 digits:
+
+  | Tint | Display |
+  |---|---|
+  | 0 | `0` |
+  | +1..+9 | `+1`..`+9` (`+` = left half of a cross, as on MB) |
+  | −1..−9 | `-1`..`-9` |
+  | +10..+99 | `10`..`99` (no sign: no room) |
+  | −10..−99 | the two digits with **both decimal points lit** = minus (`1.2.` = −12, `5.0.` = −50) |
+  | beyond ±99 | `Hi` / `Lo` |
+
+- The ▲▼ LEDs show whether `whiteBalance` / `tint` can still move (off when unknown or
+  not declared). A display is blank when the camera lacks that control (e.g. no tint on
+  Panasonic), dashes when the value is unknown.
+- The mode cannot be entered when the camera declares neither `whiteBalance` nor `tint`
+  (W/B then does nothing). A camera switch leaves the mode; so does a camera that no
+  longer declares either control.
+- The COARSE preview keeps priority on the SHUTTER display (and switches SHUTTER ▲▼ off)
+  while it lasts, in the mode too; GAIN keeps showing the tint.
+
+TODO(verify) on hardware: readability of `+` and of the double decimal point for negative
+tints.
 
 ### Iris lever window (COARSE and SENS)
 

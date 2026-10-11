@@ -15,6 +15,12 @@ func digitsOf(texts map[micropanel.Display]string) [14]byte {
 	return d
 }
 
+// shutterOf is the SHUTTER display (digits 4..7) showing text.
+func shutterOf(text string) [4]byte {
+	d := digitsOf(map[micropanel.Display]string{micropanel.DispShutter: text})
+	return [4]byte(d[4:8])
+}
+
 func cameraColour(l micropanel.LEDBits, slot int) micropanel.Colour {
 	base := 16 + 3*(slot-1)
 	var c micropanel.Colour
@@ -140,7 +146,7 @@ func TestRenderStatusLEDsAndBars(t *testing.T) {
 	v := baseView()
 	v.rig.Slots[1].Camera.Status.State = core.StateConnected
 	v.cam.values[core.ColorBars] = core.Bool(true)
-	v.held["WB"] = true
+	v.wb = true
 	f := render(v)
 	for _, n := range []int{micropanel.LEDNetwork, micropanel.LEDBars, micropanel.LEDBarsInd, micropanel.LEDWB} {
 		if !ledOn(&f.leds, n) {
@@ -212,7 +218,8 @@ func TestRenderNeverSetsLEDsAbove74(t *testing.T) {
 	all.rig = rigWith(8, 1, 2, 3, 4, 5, 6, 7, 8)
 	all.cam = cam(8, sonySpecs(), sonyValues())
 	all.cam.values[core.ColorBars] = core.Bool(true)
-	all.held = map[string]bool{"WB": true, "AUTO_IRIS": true}
+	all.held = map[string]bool{"AUTO_IRIS": true}
+	all.wb = true
 	all.iris = pickHint{declared: true, known: true, havePos: true, pos: 1}
 	all.blink = true
 	for _, v := range []view{baseView(), {rig: rigWith(0), held: map[string]bool{}}, all} {
@@ -222,6 +229,44 @@ func TestRenderNeverSetsLEDsAbove74(t *testing.T) {
 				t.Fatalf("LED bit %d set", n)
 			}
 		}
+	}
+}
+
+func TestRenderWhiteBalanceMode(t *testing.T) {
+	v := baseView()
+	v.wb = true
+	v.cam.values[core.Tint] = core.Number(-7)
+	f := render(v)
+	want := digitsOf(map[micropanel.Display]string{
+		micropanel.DispND: "2", micropanel.DispGain: "-7", micropanel.DispShutter: "5600",
+		micropanel.DispIris: "F4.0", micropanel.DispMasterBlack: "+3",
+	})
+	if f.digits != want {
+		t.Errorf("digits = % x, want tint and Kelvin % x", f.digits, want)
+	}
+	if !ledOn(&f.leds, micropanel.LEDWB) {
+		t.Error("W/B must be lit in the white balance mode")
+	}
+	// tint at its minimum: GAIN down off, up on; Kelvin can move both ways
+	if ledOn(&f.leds, micropanel.LEDGainDown) || !ledOn(&f.leds, micropanel.LEDGainUp) {
+		t.Error("GAIN arrows must follow the tint")
+	}
+	if !ledOn(&f.leds, micropanel.LEDShutterUp) || !ledOn(&f.leds, micropanel.LEDShutterDown) {
+		t.Error("SHUTTER arrows must follow the Kelvin")
+	}
+	v.cam.values[core.WhiteBalance] = core.Number(15000)
+	if f := render(v); ledOn(&f.leds, micropanel.LEDShutterUp) || [4]byte(f.digits[4:8]) != shutterOf("15.0") {
+		t.Error("15000 K: SHUTTER up off, shown 15.0")
+	}
+	// COARSE preview keeps priority on the SHUTTER display
+	v.coarse, v.blink = true, true
+	v.knobs = irisKnobs{coarse: coarseFor(sonySpecs()[0], 5.6), sens: 0, read: true}
+	f = render(v)
+	if got := [4]byte(f.digits[4:8]); got == [4]byte(want[4:8]) || ledOn(&f.leds, micropanel.LEDShutterDown) {
+		t.Error("COARSE preview must win over the Kelvin")
+	}
+	if [2]byte(f.digits[2:4]) != [2]byte(want[2:4]) {
+		t.Error("the tint stays on GAIN during the COARSE preview")
 	}
 }
 

@@ -43,6 +43,8 @@ type view struct {
 	knobs irisKnobs
 	// coarse and sens: the knob moved a moment ago, preview its effect.
 	coarse, sens bool
+	// wb: white balance mode, GAIN shows the tint and SHUTTER the Kelvin.
+	wb bool
 }
 
 // frame is one complete panel image.
@@ -85,7 +87,13 @@ func render(v view) frame {
 
 	c := v.cam
 	micropanel.EncodeText(&f.digits, micropanel.DispND, sectionText(c, micropanel.DispND, []core.ControlID{core.ND}, ndText))
-	micropanel.EncodeText(&f.digits, micropanel.DispGain, sectionText(c, micropanel.DispGain, gainIDs, gainText))
+	gainSection, gainFmt := gainIDs, gainText
+	shutterSection, shutterFmt := shutterIDs, shutterText
+	if v.wb {
+		gainSection, gainFmt = []core.ControlID{core.Tint}, tintText
+		shutterSection, shutterFmt = []core.ControlID{core.WhiteBalance}, kelvinText
+	}
+	micropanel.EncodeText(&f.digits, micropanel.DispGain, sectionText(c, micropanel.DispGain, gainSection, gainFmt))
 	irisSpec, _, irisDeclared, _ := c.get(core.Iris)
 	coarseView := v.coarse && irisDeclared && irisSpec.Kind == core.KindRange && isFStop(irisSpec) && irisSpec.Min > 0
 	if coarseView {
@@ -96,7 +104,7 @@ func render(v view) frame {
 		}
 		micropanel.EncodeText(&f.digits, micropanel.DispShutter, text)
 	} else {
-		micropanel.EncodeText(&f.digits, micropanel.DispShutter, sectionText(c, micropanel.DispShutter, shutterIDs, shutterText))
+		micropanel.EncodeText(&f.digits, micropanel.DispShutter, sectionText(c, micropanel.DispShutter, shutterSection, shutterFmt))
 	}
 	micropanel.EncodeText(&f.digits, micropanel.DispIris, sectionText(c, micropanel.DispIris, []core.ControlID{core.Iris}, irisText))
 	micropanel.EncodeText(&f.digits, micropanel.DispMasterBlack, sectionText(c, micropanel.DispMasterBlack, []core.ControlID{core.MasterBlack}, mbText))
@@ -111,16 +119,16 @@ func render(v view) frame {
 		f.leds.Set(down, canStep(s, val, -1))
 	}
 	arrows([]core.ControlID{core.ND}, micropanel.LEDNDUp, micropanel.LEDNDDown)
-	arrows(gainIDs, micropanel.LEDGainUp, micropanel.LEDGainDown)
+	arrows(gainSection, micropanel.LEDGainUp, micropanel.LEDGainDown)
 	if !coarseView {
-		arrows(shutterIDs, micropanel.LEDShutterUp, micropanel.LEDShutterDown)
+		arrows(shutterSection, micropanel.LEDShutterUp, micropanel.LEDShutterDown)
 	}
 
 	if _, bars, _, known := c.get(core.ColorBars); known && bars.On {
 		f.leds.Set(micropanel.LEDBars, true)
 		f.leds.Set(micropanel.LEDBarsInd, true)
 	}
-	f.leds.Set(micropanel.LEDWB, v.held["WB"] && c.has(core.AutoWhiteBalance))
+	f.leds.Set(micropanel.LEDWB, v.wb)
 	f.leds.Set(micropanel.LEDAutoIris, v.held["AUTO_IRIS"] && c.has(core.AutoIris))
 
 	// IRIS/MB ACTIVE: red = the lever/ring drive the camera, white = waiting

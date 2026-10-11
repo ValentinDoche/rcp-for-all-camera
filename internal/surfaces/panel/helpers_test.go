@@ -41,6 +41,7 @@ func sonySpecs() []core.ControlSpec {
 		rng(core.GainR, 0, 16, 0.01, ""), rng(core.GainG, 0, 16, 0.01, ""), rng(core.GainB, 0, 16, 0.01, ""),
 		rng(core.LiftR, -2, 2, 0.01, ""), rng(core.LiftG, -2, 2, 0.01, ""), rng(core.LiftB, -2, 2, 0.01, ""),
 		kind(core.Tally, core.KindToggle),
+		rng(core.WhiteBalance, 2000, 15000, 50, "K"), rng(core.Tint, -7, 7, 1, ""),
 	}
 }
 
@@ -65,6 +66,7 @@ func sonyValues() map[core.ControlID]core.Value {
 		core.Iris: core.Number(4), core.Gain: core.Number(6), core.ShutterSpeed: core.Choice("1/50"),
 		core.ND: core.Choice("1/8"), core.MasterBlack: core.Number(3), core.ColorBars: core.Bool(false),
 		core.GainR: core.Number(1), core.LiftR: core.Number(0),
+		core.WhiteBalance: core.Number(5600), core.Tint: core.Number(0),
 	}
 }
 

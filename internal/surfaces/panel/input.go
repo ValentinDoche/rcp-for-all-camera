@@ -13,6 +13,7 @@ var standardAngles = []float64{11.25, 15, 22.5, 45, 72, 90, 144, 172.8, 180, 216
 // step returns the value one key press away from cur (dir +1 = up, -1 =
 // down). ok is false when the value cannot move that way. Up raises the
 // number shown: next enum option in declared order, higher range value.
+// White balance moves by at least wbMinStep.
 func step(s core.ControlSpec, cur core.Value, dir int) (core.Value, bool) {
 	switch s.Kind {
 	case core.KindEnum:
@@ -34,6 +35,9 @@ func step(s core.ControlSpec, cur core.Value, dir int) (core.Value, bool) {
 			if inc <= 0 {
 				inc = (s.Max - s.Min) / 20
 			}
+			if s.ID == core.WhiteBalance {
+				inc = max(inc, wbMinStep)
+			}
 			next = quantize(s, cur.Number+float64(dir)*inc)
 		}
 		next = min(max(next, s.Min), s.Max)
@@ -44,6 +48,9 @@ func step(s core.ControlSpec, cur core.Value, dir int) (core.Value, bool) {
 	}
 	return core.Value{}, false
 }
+
+// wbMinStep is the smallest white balance change of one key press (Kelvin).
+const wbMinStep = 100
 
 // nextAngle is the next standard angle beyond cur inside the spec range, or
 // cur when there is none.
