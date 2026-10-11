@@ -173,7 +173,12 @@ func (p *detailsPage) askValue(sp core.ControlSpec) {
 			p.ctl.SetNotice(texts.Notice{Text: tx.T("controlrow.numberExpected", "label", label), Level: texts.LevelError})
 			return
 		}
-		p.ctl.Write(p.slot, sp.ID, core.Number(widgets.Quantize(v, widgets.RangeOf(sp))))
+		r := widgets.RangeOf(sp)
+		if sp.ID == core.Iris { // inside the lens, not just the control's range
+			k := widgets.NewIrisScale(sp, p.ctl.Lens(p.slot))
+			r.Min, r.Max = k.Min, k.Max
+		}
+		p.ctl.Write(p.slot, sp.ID, core.Number(widgets.Quantize(v, r)))
 	}, p.win)
 	d.Resize(fyne.NewSize(360, 0))
 	d.Show()
