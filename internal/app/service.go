@@ -167,7 +167,7 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 	s.mu.Lock()
 	cfg := core.CameraConfig{
 		Model: in.Model, Name: in.Name, Host: in.Host, Port: in.Port,
-		Username: in.Username,
+		Username: in.Username, PowerZoom: in.PowerZoom,
 	}
 	switch {
 	case in.Password != nil:
@@ -306,6 +306,19 @@ func (s *Service) Controls(slot int) ([]ControlView, error) {
 	return out, nil
 }
 
+// Lens returns what the slot's camera reports about its lens. It is zero for
+// a camera that does not report it, or while it is offline.
+func (s *Service) Lens(slot int) (core.Lens, error) {
+	cam, err := s.camera(slot)
+	if err != nil {
+		return core.Lens{}, err
+	}
+	if lr, ok := cam.(core.LensReporter); ok {
+		return lr.Lens(), nil
+	}
+	return core.Lens{}, nil
+}
+
 // SetControl writes one control of the slot's camera.
 func (s *Service) SetControl(slot int, id string, v core.Value) error {
 	return s.setControl(slot, id, v, false)
@@ -406,6 +419,8 @@ func (s *Service) build(cfg core.CameraConfig) (*slotState, error) {
 	if cfg.Port == 0 {
 		cfg.Port = info.DefaultPort
 	}
+	// A built-in lens has its zoom or not whatever the user says.
+	cfg.PowerZoom = cfg.PowerZoom && info.InterchangeableLens
 	cfg.BindIP = s.bindIP
 	cam, err := s.reg.New(cfg)
 	if err != nil {
@@ -456,6 +471,7 @@ func viewOf(st *slotState) *CameraView {
 		Model: st.info.ID, Brand: st.info.Brand, ModelName: st.info.Name, Support: st.info.Support,
 		Name: st.cfg.Name, Host: st.cfg.Host, Port: st.cfg.Port,
 		Username: st.cfg.Username, HasPassword: st.cfg.Password != "",
+		PowerZoom: st.cfg.PowerZoom, InterchangeableLens: st.info.InterchangeableLens,
 		Status: st.cam.Status(),
 	}
 }

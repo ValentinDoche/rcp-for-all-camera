@@ -62,7 +62,12 @@ type CameraView struct {
 	Port        int               `json:"port"`
 	Username    string            `json:"username,omitempty"`
 	HasPassword bool              `json:"hasPassword"`
-	Status      core.Status       `json:"status"`
+	// PowerZoom: the lens has a motorised zoom (see SlotInput.PowerZoom).
+	PowerZoom bool `json:"powerZoom"`
+	// InterchangeableLens: the model takes any lens, so PowerZoom is
+	// editable; otherwise its zoom is built in.
+	InterchangeableLens bool        `json:"interchangeableLens"`
+	Status              core.Status `json:"status"`
 }
 
 // SlotInput is what the GUI sends to assign or edit a slot.
@@ -75,12 +80,16 @@ type SlotInput struct {
 	// Password: null keeps the stored one, "" clears it, any other value
 	// replaces it.
 	Password *string `json:"password"`
+	// PowerZoom: the mounted lens has a motorised zoom. Only used by models
+	// with an interchangeable lens; without it the camera has no zoom
+	// control.
+	PowerZoom bool `json:"powerZoom"`
 }
 
 // String, GoString and LogValue keep the password out of fmt verbs and slog.
 func (in SlotInput) String() string {
-	return fmt.Sprintf("{Model:%s Name:%s Host:%s Port:%d Username:%s Password:%s}",
-		in.Model, in.Name, in.Host, in.Port, in.Username, in.passwordState())
+	return fmt.Sprintf("{Model:%s Name:%s Host:%s Port:%d Username:%s Password:%s PowerZoom:%t}",
+		in.Model, in.Name, in.Host, in.Port, in.Username, in.passwordState(), in.PowerZoom)
 }
 
 func (in SlotInput) GoString() string { return "app.SlotInput" + in.String() }
@@ -91,6 +100,7 @@ func (in SlotInput) LogValue() slog.Value {
 		slog.String("host", in.Host), slog.Int("port", in.Port),
 		slog.String("username", in.Username),
 		slog.String("password", in.passwordState()),
+		slog.Bool("powerZoom", in.PowerZoom),
 	)
 }
 

@@ -21,7 +21,7 @@ func (testDriver) Models() []core.ModelInfo {
 	return []core.ModelInfo{
 		{ID: "acme.cam", Brand: "Acme", Name: "Cam", Driver: "acme",
 			Transports: []core.Transport{core.TransportEthernet, core.TransportWiFi}, DefaultPort: 80,
-			Auth: core.AuthNone, Support: core.SupportPlanned},
+			Auth: core.AuthNone, Support: core.SupportPlanned, InterchangeableLens: true},
 		{ID: "acme.secure", Brand: "Acme", Name: "Secure", Driver: "acme",
 			Transports: []core.Transport{core.TransportEthernet}, DefaultPort: 443,
 			Auth: core.AuthRequired, Support: core.SupportPlanned},
@@ -397,5 +397,39 @@ func TestSavedSelectionOfAnEmptySlotIsDropped(t *testing.T) {
 	f := newFixture(t, saved)
 	if f.svc.Rig().Active != 0 {
 		t.Fatalf("active = %d, want 0 (slot 6 is empty)", f.svc.Rig().Active)
+	}
+}
+
+func TestPowerZoomIsStoredOnlyForInterchangeableLenses(t *testing.T) {
+	f := newFixture(t, config.Rig{Version: config.Version})
+	in := validInput()
+	in.PowerZoom = true
+	sl, err := f.svc.AssignSlot(1, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sl.Camera.PowerZoom || !sl.Camera.InterchangeableLens || !f.store.rig.Slots[0].PowerZoom {
+		t.Errorf("view %+v, stored %+v", sl.Camera, f.store.rig.Slots[0])
+	}
+	sec := SlotInput{Model: "acme.secure", Host: "192.168.10.12", Username: "op", PowerZoom: true}
+	sl, err = f.svc.AssignSlot(2, sec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sl.Camera.PowerZoom || sl.Camera.InterchangeableLens || f.store.rig.Slots[1].PowerZoom {
+		t.Errorf("built-in lens: view %+v, stored %+v", sl.Camera, f.store.rig.Slots[1])
+	}
+}
+
+func TestLensOfACameraWithoutLensInfo(t *testing.T) {
+	f := newFixture(t, config.Rig{Version: config.Version})
+	if _, err := f.svc.Lens(1); code(t, err) != CodeEmptySlot {
+		t.Errorf("empty slot: %v", err)
+	}
+	if _, err := f.svc.AssignSlot(1, validInput()); err != nil {
+		t.Fatal(err)
+	}
+	if l, err := f.svc.Lens(1); err != nil || l != (core.Lens{}) {
+		t.Errorf("lens = %+v, %v", l, err)
 	}
 }
