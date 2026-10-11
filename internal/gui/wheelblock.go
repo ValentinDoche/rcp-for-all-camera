@@ -52,6 +52,7 @@ type wheelBlock struct {
 	wheel *widgets.ColorWheel
 	y     *widgets.Slider
 	cells [4]*widgets.Text
+	bars  [4]*widgets.Panel // the channel colour under each readout
 	reset *widget.Button
 	obj   fyne.CanvasObject
 	quiet bool
@@ -68,8 +69,8 @@ func newWheelBlock(ctl *Controller, slot int, diameter float32) *wheelBlock {
 	var cellObjs []fyne.CanvasObject
 	for i := range b.cells {
 		b.cells[i] = widgets.NewText(texts.Missing, style.Text, 12).Mono().Align(fyne.TextAlignCenter)
-		bar := widgets.Sized(0, 2, widgets.NewPanel(tokens[i], "", 0, nil))
-		cellObjs = append(cellObjs, container.NewVBox(b.cells[i], bar))
+		b.bars[i] = widgets.NewPanel(tokens[i], "", 0, nil)
+		cellObjs = append(cellObjs, container.NewVBox(b.cells[i], widgets.Sized(0, 2, b.bars[i])))
 	}
 	b.reset = widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), b.onReset)
 	b.reset.Importance = widget.LowImportance
@@ -155,6 +156,12 @@ func (b *wheelBlock) apply() {
 	}
 	avail := wheelAvailable(b.ctl, b.slot, b.group)
 	b.wheel.SetDisabled(!avail)
+	for i, tok := range [4]fyne.ThemeColorName{style.Text, style.ChanR, style.ChanG, style.ChanB} {
+		if !avail {
+			tok = style.Border // greyed like the wheel, no channel colour
+		}
+		b.bars[i].SetFill(tok)
+	}
 	if avail {
 		b.reset.Enable()
 	} else {

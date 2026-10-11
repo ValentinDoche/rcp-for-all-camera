@@ -161,10 +161,6 @@ func (r *wheelRenderer) Refresh() {
 	r.puck.StrokeColor = ink
 	r.puck.FillColor = withAlpha(style.C(style.Inset), 0xB0)
 	r.dot.FillColor = ink
-	r.ring.Translucency = 0
-	if r.w.disabled {
-		r.ring.Translucency = 0.6
-	}
 	r.Layout(r.w.Size())
 	r.ring.Refresh()
 	r.hLine.Refresh()
@@ -197,6 +193,11 @@ func (r *wheelRenderer) draw(w, h int) image.Image {
 	if style.Luminance(fill) > 0.5 {
 		tintK = 0.34 // light theme: the pale interior needs a stronger hue hint
 	}
+	// greyed: a plain grey ring and an untinted interior, no colour at all
+	grey := color.NRGBAModel.Convert(style.C(style.Border)).(color.NRGBA)
+	if r.w.disabled {
+		tintK = 0
+	}
 	for py := 0; py < h; py++ {
 		for px := 0; px < w; px++ {
 			dx, dy := float64(px)+0.5-cx, cy-(float64(py)+0.5)
@@ -209,9 +210,12 @@ func (r *wheelRenderer) draw(w, h int) image.Image {
 				hue += 2 * math.Pi
 			}
 			var c color.NRGBA
-			if d >= inner {
+			switch {
+			case d >= inner && r.w.disabled:
+				c = grey
+			case d >= inner:
 				c = hsv(hue, 0.72, 0.92)
-			} else {
+			default:
 				tint := hsv(hue, 1, 1)
 				k := tintK * math.Min(1, d/inner)
 				c = mix(fill, tint, k)
