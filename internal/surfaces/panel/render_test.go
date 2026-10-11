@@ -219,7 +219,7 @@ func TestRenderNeverSetsLEDsAbove74(t *testing.T) {
 	all.cam = cam(8, sonySpecs(), sonyValues())
 	all.cam.values[core.ColorBars] = core.Bool(true)
 	all.held = map[string]bool{"AUTO_IRIS": true}
-	all.wb = true
+	all.wb, all.armed = true, true
 	all.iris = pickHint{declared: true, known: true, havePos: true, pos: 1}
 	all.blink = true
 	for _, v := range []view{baseView(), {rig: rigWith(0), held: map[string]bool{}}, all} {
@@ -267,6 +267,39 @@ func TestRenderWhiteBalanceMode(t *testing.T) {
 	}
 	if [2]byte(f.digits[2:4]) != [2]byte(want[2:4]) {
 		t.Error("the tint stays on GAIN during the COARSE preview")
+	}
+}
+
+func TestRenderStoreAndScenes(t *testing.T) {
+	v := baseView()
+	v.rig.Slots[1].Presets = []int{1, 4}
+	v.rig.Slots[0].Presets = []int{2} // another slot: not shown
+	v.blink = true
+	f := render(v)
+	for n := 1; n <= 5; n++ {
+		if got := ledOn(&f.leds, micropanel.LEDScene1+n-1); got != (n == 1 || n == 4) {
+			t.Errorf("SCENE %d = %v", n, got)
+		}
+	}
+	if ledOn(&f.leds, micropanel.LEDStoreRed) || ledOn(&f.leds, micropanel.LEDStoreWhite) {
+		t.Error("STORE must be off at rest")
+	}
+	v.armed = true
+	f = render(v)
+	if !ledOn(&f.leds, micropanel.LEDStoreRed) {
+		t.Error("STORE must be red while armed")
+	}
+	for n := 1; n <= 5; n++ {
+		if !ledOn(&f.leds, micropanel.LEDScene1+n-1) {
+			t.Errorf("armed, blink on: SCENE %d off", n)
+		}
+	}
+	v.blink = false
+	f = render(v)
+	for n := 1; n <= 5; n++ {
+		if ledOn(&f.leds, micropanel.LEDScene1+n-1) {
+			t.Errorf("armed, blink off: SCENE %d on", n)
+		}
 	}
 }
 

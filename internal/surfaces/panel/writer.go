@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -12,12 +13,23 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
+// opAct is the Service call an op makes.
+type opAct int
+
+const (
+	actSet         opAct = iota // SetControl(slot, id, v)
+	actSelect                   // SelectSlot(slot)
+	actStoreToggle              // SetStoreArmed(!StoreArmed())
+	actScene                    // StorePreset(slot, n) when armed, else RecallPreset if stored
+)
+
 // op is one Service call requested by the panel.
 type op struct {
-	select_ bool // SelectSlot(slot); otherwise SetControl(slot, id, v)
-	slot    int
-	id      core.ControlID
-	v       core.Value
+	act  opAct
+	slot int
+	id   core.ControlID
+	v    core.Value
+	n    int // preset number (actScene)
 }
 
 type opKey struct {
@@ -34,6 +46,7 @@ type writer struct {
 	log      *slog.Logger
 	throttle time.Duration
 	onError  func(op, error) // called after a failed call (refresh the cache)
+	onScene  func()          // called after a scene op (refresh the cache)
 
 	ops  chan op
 	mu   sync.Mutex
@@ -100,9 +113,17 @@ func (w *writer) flush() {
 
 func (w *writer) exec(o op) {
 	var err error
-	if o.select_ {
+	switch o.act {
+	case actSelect:
 		err = w.api.SelectSlot(o.slot)
-	} else {
+	case actStoreToggle:
+		w.api.SetStoreArmed(!w.api.StoreArmed())
+	case actScene:
+		err = w.scene(o)
+		if w.onScene != nil {
+			w.onScene()
+		}
+	default:
 		err = w.api.SetControl(o.slot, string(o.id), o.v)
 	}
 	if err == nil {
@@ -114,6 +135,21 @@ func (w *writer) exec(o op) {
 	}
 }
 
+// scene stores preset o.n of o.slot when Store is armed (the app then
+// disarms), else recalls it if it is stored; otherwise it does nothing.
+// The arming is read here, after any earlier STORE press was applied.
+func (w *writer) scene(o op) error {
+	if w.api.StoreArmed() {
+		return w.api.StorePreset(o.slot, o.n)
+	}
+	for _, s := range w.api.Rig().Slots {
+		if s.Slot == o.slot && slices.Contains(s.Presets, o.n) {
+			return w.api.RecallPreset(o.slot, o.n)
+		}
+	}
+	return nil
+}
+
 // logError logs failures once per (control, error code): NOT_IMPLEMENTED,
 // NOT_CONNECTED and CONFIRM_REQUIRED are expected and logged at debug.
 func (w *writer) logError(o op, err error) {
@@ -122,7 +158,7 @@ func (w *writer) logError(o op, err error) {
 	if errors.As(err, &ae) {
 		code = ae.Code
 	}
-	key := fmt.Sprintf("%d/%s/%v/%s", o.slot, o.id, o.select_, code)
+	key := fmt.Sprintf("%d/%s/%d/%d/%s", o.slot, o.id, o.act, o.n, code)
 	if w.logged[key] {
 		return
 	}
@@ -133,5 +169,5 @@ func (w *writer) logError(o op, err error) {
 		level = slog.LevelDebug
 	}
 	w.log.Log(context.Background(), level, "panel command failed (further identical errors not logged)",
-		"slot", o.slot, "control", o.id, "select", o.select_, "code", code, "err", err)
+		"slot", o.slot, "control", o.id, "act", o.act, "preset", o.n, "code", code, "err", err)
 }

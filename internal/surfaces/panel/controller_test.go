@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -22,6 +23,8 @@ type call struct {
 	slot    int
 	id      string
 	v       core.Value
+	preset  string // "store", "recall" or "arm" (n = preset, v.On = armed)
+	n       int
 }
 
 type fakeAPI struct {
@@ -32,6 +35,7 @@ type fakeAPI struct {
 	calls  []call
 	setErr error
 	lens   core.Lens
+	armed  bool
 	ctl    *Controller // receives rig:changed like app.Host would
 }
 
@@ -72,10 +76,64 @@ func (a *fakeAPI) SelectSlot(slot int) error {
 	return nil
 }
 
-func (a *fakeAPI) StorePreset(slot, n int) error  { return nil }
-func (a *fakeAPI) RecallPreset(slot, n int) error { return nil }
-func (a *fakeAPI) SetStoreArmed(on bool)          {}
-func (a *fakeAPI) StoreArmed() bool               { return false }
+// StorePreset adds n to the slot's presets and disarms, like the app.
+func (a *fakeAPI) StorePreset(slot, n int) error {
+	a.mu.Lock()
+	a.calls = append(a.calls, call{preset: "store", slot: slot, n: n})
+	a.rig.Slots = slices.Clone(a.rig.Slots)
+	sl := &a.rig.Slots[slot-1]
+	if !slices.Contains(sl.Presets, n) {
+		sl.Presets = append(slices.Clone(sl.Presets), n)
+		slices.Sort(sl.Presets)
+	}
+	rig, ctl := a.rig, a.ctl
+	a.mu.Unlock()
+	a.SetStoreArmed(false)
+	if ctl != nil {
+		ctl.Emit(app.EventRigChanged, rig)
+	}
+	return nil
+}
+
+func (a *fakeAPI) RecallPreset(slot, n int) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.calls = append(a.calls, call{preset: "recall", slot: slot, n: n})
+	return nil
+}
+
+// SetStoreArmed emits preset:storeArmed on a change, like the app.
+func (a *fakeAPI) SetStoreArmed(on bool) {
+	a.mu.Lock()
+	if a.armed == on {
+		a.mu.Unlock()
+		return
+	}
+	a.armed = on
+	a.calls = append(a.calls, call{preset: "arm", v: core.Bool(on)})
+	ctl := a.ctl
+	a.mu.Unlock()
+	if ctl != nil {
+		ctl.Emit(app.EventStoreArmed, app.StoreArmedState{Armed: on})
+	}
+}
+
+func (a *fakeAPI) StoreArmed() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.armed
+}
+
+// presetCalls returns the preset calls of kind ("store", "recall", "arm").
+func (a *fakeAPI) presetCalls(kind string) []call {
+	var out []call
+	for _, c := range a.callsCopy() {
+		if c.preset == kind {
+			out = append(out, c)
+		}
+	}
+	return out
+}
 
 func (a *fakeAPI) callsCopy() []call {
 	a.mu.Lock()
@@ -396,6 +454,90 @@ func TestControllerWhiteBalanceModeNeedsWBOrTint(t *testing.T) {
 		if c.id == "autoWhiteBalance" {
 			t.Error("W/B must not trigger auto white balance any more")
 		}
+	}
+}
+
+func TestControllerStoreAndScenes(t *testing.T) {
+	api := sonyAPI()
+	api.rig.Slots[1].Presets = []int{2}
+	h := start(t, api, Options{})
+	<-h.status
+	h.loaded(t)
+	h.input(t, micropanel.State{})
+	press := func(k micropanel.Key) {
+		h.input(t, micropanel.State{Keys: []micropanel.Key{k}})
+		h.input(t, micropanel.State{})
+	}
+	waitFor(t, "SCENE 2 lit only", func() bool {
+		_, _, l := h.dev.snapshot()
+		return ledOn(&l, micropanel.LEDScene1+1) && !ledOn(&l, micropanel.LEDScene1) && !ledOn(&l, micropanel.LEDStoreRed)
+	})
+	press(0x48) // SCENE 1: nothing stored, nothing done
+	press(0x49) // SCENE 2: recall
+	waitFor(t, "recall 2", func() bool { return len(api.presetCalls("recall")) == 1 })
+	if c := api.presetCalls("recall")[0]; c.slot != 2 || c.n != 2 {
+		t.Fatalf("recall = %+v, want slot 2 preset 2", c)
+	}
+
+	press(0x4D) // STORE: armed
+	waitFor(t, "armed", api.StoreArmed)
+	waitFor(t, "STORE red", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDStoreRed) })
+	press(0x4A) // SCENE 3: store, the app disarms
+	waitFor(t, "store 3", func() bool { return len(api.presetCalls("store")) == 1 })
+	if c := api.presetCalls("store")[0]; c.slot != 2 || c.n != 3 {
+		t.Fatalf("store = %+v, want slot 2 preset 3", c)
+	}
+	waitFor(t, "disarmed, SCENE 2 and 3 lit", func() bool {
+		_, _, l := h.dev.snapshot()
+		return !ledOn(&l, micropanel.LEDStoreRed) && ledOn(&l, micropanel.LEDScene1+1) && ledOn(&l, micropanel.LEDScene1+2) &&
+			!ledOn(&l, micropanel.LEDScene1+3)
+	})
+	if api.StoreArmed() {
+		t.Error("still armed after a store")
+	}
+	if n := len(api.presetCalls("recall")); n != 1 {
+		t.Errorf("%d recalls, want 1 (SCENE 1 was empty, SCENE 3 stored)", n)
+	}
+
+	// STORE twice: armed then disarmed.
+	press(0x4D)
+	waitFor(t, "armed", api.StoreArmed)
+	press(0x4D)
+	waitFor(t, "disarmed", func() bool { return !api.StoreArmed() })
+}
+
+func TestControllerFollowsStoreArmingFromTheApp(t *testing.T) {
+	api := sonyAPI()
+	api.armed = true // armed before the panel starts
+	h := start(t, api, Options{})
+	<-h.status
+	waitFor(t, "STORE red at start", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDStoreRed) })
+	api.SetStoreArmed(false) // the GUI's Store button
+	waitFor(t, "STORE off", func() bool { _, _, l := h.dev.snapshot(); return !ledOn(&l, micropanel.LEDStoreRed) })
+	api.SetStoreArmed(true)
+	waitFor(t, "STORE red", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDStoreRed) })
+}
+
+func TestControllerSceneWithoutActiveSlotDoesNothing(t *testing.T) {
+	api := sonyAPI()
+	api.rig.Active = 0
+	api.armed = true
+	h := start(t, api, Options{})
+	<-h.status
+	h.input(t, micropanel.State{})
+	h.input(t, micropanel.State{Keys: []micropanel.Key{0x48}})
+	h.input(t, micropanel.State{})
+	h.input(t, micropanel.State{Keys: []micropanel.Key{0x40}}) // CAM1 as a marker
+	waitFor(t, "SelectSlot(1)", func() bool {
+		for _, c := range api.callsCopy() {
+			if c.select_ {
+				return true
+			}
+		}
+		return false
+	})
+	if c := api.presetCalls("store"); len(c) != 0 {
+		t.Fatalf("stored without an active slot: %+v", c)
 	}
 }
 

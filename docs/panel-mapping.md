@@ -51,7 +51,9 @@ Frames are rendered at ~30 Hz and only the reports that changed are sent.
 | PANEL ACTIVE (red) | Always on while the app drives the panel. |
 | NETWORK | Active camera connected. |
 | ALARM | Blinks while the active camera is in error state, and for 3 s after any command failed (`camera:commandFailed` or a failed panel write). A request for confirmation (operator lock) is not an error. |
-| Others (CABLE, CALL, REL/ABS, EXT, scenes, STORE, PREVIEW) | Off. |
+| STORE | **Red** while Store is armed (shared with the GUI's Store button), off at rest (the white LED is never used). |
+| SCENE 1–5 | Lit for the presets stored on the active slot (`Rig().Slots[i].Presets`). While Store is armed, all five **blink** (2 Hz) to invite a choice. Off with no active camera. |
+| Others (CABLE, CALL, REL/ABS, EXT, SCENE FILE, PREVIEW) | Off. |
 
 ## Input (panel → app)
 
@@ -65,13 +67,15 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | SHUTTER ▲▼ | Next/previous `shutterSpeed` option, else `shutterAngle` through 11.25, 15, 22.5, 45, 72, 90, 144, 172.8, 180, 216, 270, 360. **W/B mode**: `whiteBalance` ± max(its step, 100 K). |
 | AUTO IRIS | `autoIris` action. |
 | W/B | Toggles the **white balance mode** (below). It no longer triggers `autoWhiteBalance`: auto white balance stays available in the app. |
+| STORE | Toggles the app's shared Store arming: `SetStoreArmed(!StoreArmed())`. Works with or without an active camera. |
+| SCENE 1–5 | Store armed: `StorePreset(active slot, n)` (the app disarms). Otherwise `RecallPreset(active slot, n)` if preset *n* is stored on the active slot, else nothing. No active camera: nothing. See [Presets](#presets-store-and-scene-15). |
 | BARS | Toggles `colorBars`, **only when its current value is known** (never guess what goes on air). |
 | Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when the camera reports them (`core.Lens`), so the lever never asks for an aperture the lens lacks, then to the **lever window** set by COARSE and SENS (whole range by default). Normalized iris: linear over the whole range, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
 | Master black ring | `masterBlack`, linear, soft takeover. The travel is limited to what the MB display shows as a number: −0.99..+0.99 for ranges shown ×100 (Blackmagic −2..2), −99..+99 for integer ranges, intersected with the range. A value set beyond that elsewhere cannot be picked up by the ring until it comes back inside. |
 | WHITE R/G/B knobs | `gainR/G/B`, relative. |
 | BLACK R/G/B knobs | `liftR/G/B`, relative. |
 | COARSE, SENS | Set the iris lever window (below). They never write to the camera. |
-| Other keys (SCENE 1–5, STORE, CC ▲▼, ON, BLACK/FLARE, IRIS/MB ACTIVE, CALL, PANEL ACTIVE, PREVIEW), top-right knob | Not mapped; key presses are logged at debug. |
+| Other keys (CC ▲▼, ON, BLACK/FLARE, IRIS/MB ACTIVE, CALL, PANEL ACTIVE, PREVIEW), top-right knob | Not mapped; key presses are logged at debug. |
 
 Rules common to every write:
 
@@ -92,6 +96,20 @@ reconnection, or a change of the value from elsewhere (GUI, camera, another even
 lever only takes control once it **reaches** the camera value (within 1 % of travel) or
 **crosses** it between two reports. Until then nothing is written. With an unknown value
 nothing is ever written.
+
+### Presets (STORE and SCENE 1–5)
+
+The app keeps 5 presets per slot and one **Store arming** shared by the panel and the GUI
+(`app.Service.SetStoreArmed`, event `preset:storeArmed`). The panel keeps a local copy,
+read with `StoreArmed()` when it starts and then updated from the event, so pressing Store
+in the GUI lights the panel's STORE and vice versa.
+
+- STORE toggles the arming. The panel never sets the LED itself: it follows the event.
+- SCENE *n* is resolved on the writer goroutine, after any earlier STORE press was
+  applied: armed → store preset *n* (overwriting it); not armed → recall it if it exists.
+  After a scene key the active camera's controls are re-read, so the displays follow a
+  recall and the lever/ring pick up the recalled values again (soft takeover).
+- Store, recall and arming errors light ALARM like any failed command.
 
 ### White balance mode (W/B)
 

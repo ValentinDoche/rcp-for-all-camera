@@ -76,6 +76,9 @@ type Controller struct {
 	knobs            irisKnobs
 	coarseAt, sensAt time.Time
 
+	// storeArmed is the app's shared Store arming (EventStoreArmed).
+	storeArmed bool
+
 	// wbMode: W/B toggled the white balance mode (SHUTTER keys = Kelvin,
 	// GAIN keys = tint). Left on a camera switch.
 	wbMode bool
@@ -145,6 +148,13 @@ func (c *Controller) Emit(name string, payload any) {
 		case *app.CameraEvent:
 			c.cameraEvent(*e)
 		}
+	case app.EventStoreArmed:
+		switch e := payload.(type) {
+		case app.StoreArmedState:
+			c.setStoreArmed(e.Armed)
+		case *app.StoreArmedState:
+			c.setStoreArmed(e.Armed)
+		}
 	case app.EventCommandFailed:
 		switch e := payload.(type) {
 		case app.CommandFailed:
@@ -153,6 +163,12 @@ func (c *Controller) Emit(name string, payload any) {
 			c.raiseAlarm(e.Code)
 		}
 	}
+}
+
+func (c *Controller) setStoreArmed(on bool) {
+	c.mu.Lock()
+	c.storeArmed = on
+	c.mu.Unlock()
 }
 
 func (c *Controller) setRig(r app.Rig) {
@@ -396,12 +412,23 @@ func (c *Controller) pressLocked(name string) {
 	if strings.HasPrefix(name, "CAM") && len(name) == 4 && name[3] >= '1' && name[3] <= '8' {
 		// An empty slot's button is inert (its LED is off too).
 		if slot := int(name[3] - '0'); c.assignedLocked(slot) {
-			c.w.do(op{select_: true, slot: slot})
+			c.w.do(op{act: actSelect, slot: slot})
 		}
+		return
+	}
+	if name == "STORE" {
+		// The app holds the arming; the LED follows EventStoreArmed.
+		c.w.do(op{act: actStoreToggle})
 		return
 	}
 	slot := c.cam.slot
 	if slot == 0 || slot != c.rig.Active {
+		return
+	}
+	if n, ok := sceneKey(name); ok {
+		if c.assignedLocked(slot) {
+			c.w.do(op{act: actScene, slot: slot, n: n})
+		}
 		return
 	}
 	stepKey := func(ids []core.ControlID, dir int) {
@@ -455,6 +482,16 @@ func (c *Controller) pressLocked(name string) {
 	}
 }
 
+// sceneKey returns n for the key "SCENEn" (1..app.PresetCount).
+func sceneKey(name string) (int, bool) {
+	if len(name) == 6 && strings.HasPrefix(name, "SCENE") {
+		if n := int(name[5] - '0'); n >= 1 && n <= app.PresetCount {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
 // keyDir is +1 for a *_UP key, -1 otherwise.
 func keyDir(name string) int {
 	if strings.HasSuffix(name, "_UP") {
@@ -471,7 +508,7 @@ func (c *Controller) onWriteError(o op, err error) {
 		code = ae.Code
 	}
 	c.raiseAlarm(code)
-	if !o.select_ {
+	if o.act != actSelect {
 		c.requestRefresh()
 	}
 }
@@ -494,6 +531,7 @@ func (c *Controller) frame(now time.Time) frame {
 		coarse: previewing(c.coarseAt, now),
 		sens:   previewing(c.sensAt, now),
 		wb:     c.wbMode,
+		armed:  c.storeArmed,
 	})
 }
 

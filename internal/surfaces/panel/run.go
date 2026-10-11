@@ -17,8 +17,10 @@ func (c *Controller) Run(ctx context.Context, api app.SurfaceAPI, report func(ap
 		report = func(app.SurfaceStatus) {}
 	}
 	w := newWriter(api, c.log, c.opt.Throttle, c.onWriteError)
+	w.onScene = c.refresh // a recalled preset changed the camera
+	armed := api.StoreArmed()
 	c.mu.Lock()
-	c.api, c.w = api, w
+	c.api, c.w, c.storeArmed = api, w, armed
 	c.mu.Unlock()
 	c.setRig(api.Rig())
 

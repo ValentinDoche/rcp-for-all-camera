@@ -2,6 +2,7 @@ package panel
 
 import (
 	"math"
+	"slices"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -45,6 +46,8 @@ type view struct {
 	coarse, sens bool
 	// wb: white balance mode, GAIN shows the tint and SHUTTER the Kelvin.
 	wb bool
+	// armed: Store is armed (the next SCENE key stores).
+	armed bool
 }
 
 // frame is one complete panel image.
@@ -70,6 +73,8 @@ func render(v view) frame {
 		f.leds.SetCamera(s.Slot, c)
 	}
 	f.leds.Set(micropanel.LEDPanelRed, true)
+	// STORE: red while armed, off at rest.
+	f.leds.Set(micropanel.LEDStoreRed, v.armed)
 
 	// ALARM blinks while the active camera is in error, and for a moment
 	// after any command failed.
@@ -83,6 +88,16 @@ func render(v view) frame {
 	}
 	if active.Status.State == core.StateConnected {
 		f.leds.Set(micropanel.LEDNetwork, true)
+	}
+	// SCENE 1-5: lit for the presets stored on the active slot; all
+	// blinking while Store is armed, to invite a choice.
+	presets := activePresets(v.rig)
+	for n := 1; n <= app.PresetCount; n++ {
+		lit := slices.Contains(presets, n)
+		if v.armed {
+			lit = v.blink
+		}
+		f.leds.Set(micropanel.LEDScene1+n-1, lit)
 	}
 
 	c := v.cam
@@ -193,6 +208,16 @@ func irisSegment(s core.ControlSpec, v float64) int {
 		seg = (1 - rangePos(s, v)) * (micropanel.LEDIrisBarCount - 1)
 	}
 	return min(max(int(math.Round(seg)), 0), micropanel.LEDIrisBarCount-1)
+}
+
+// activePresets lists the preset numbers stored on the active slot.
+func activePresets(r app.Rig) []int {
+	for _, s := range r.Slots {
+		if s.Slot == r.Active && r.Active != 0 {
+			return s.Presets
+		}
+	}
+	return nil
 }
 
 func activeCamera(r app.Rig) *app.CameraView {
