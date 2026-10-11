@@ -47,6 +47,9 @@ var segFont = map[rune]byte{
 	't': segD | segE | segF | segG,
 	'U': segB | segC | segD | segE | segF,
 	'-': segG,
+	// A seven-segment digit has no centre bar: '+' is drawn as the left
+	// half of a cross (e, f, g). TODO(verify) readability on the panel.
+	'+': segE | segF | segG,
 	'_': segD,
 	' ': 0,
 }

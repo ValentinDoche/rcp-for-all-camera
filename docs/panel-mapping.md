@@ -39,7 +39,7 @@ Frames are rendered at ~30 Hz and only the reports that changed are sent.
 | GAIN (2 digits) | `gain` in dB: `00`, `06`, `-3`; `Lo`/`Hi` outside −9..99. Else `iso`: hundreds, read ×100 (`1.6` = 160, `16` = 1600), trailing point = thousands (`13.` = 12800). |
 | SHUTTER (4 digits) | `shutterSpeed` without `1/` (`50`, `2000`), else `shutterAngle` in degrees (`180`, `172.8`). The first one whose value is known wins. |
 | IRIS (3 digits) | `iris` in f-stops (`F2.8`, `F11`); a normalized iris (range 0..1) as a percentage. |
-| MB (3 digits) | `masterBlack`; ranges with a step below 1 are shown ×100. |
+| MB (3 digits) | `masterBlack`, signed: `+12`, `-5`, `0` (no sign at zero). Ranges with a step below 1 are shown ×100 (`+12` = 0.12). Beyond ±99 (set from the GUI or the camera, the ring cannot go there) it shows `+Hi` / `-Lo`. The `+` is drawn with segments e, f, g (left half of a cross; TODO(verify) on the panel). |
 | CC (1 digit) | Blank: no standard control yet. |
 | Any display | **Blank** when the camera does not declare the control, **dashes** when the value is unknown (camera not connected; always the case while drivers are placeholders). Blank everywhere when the active slot is empty or no slot is selected. |
 | Iris scale (LEDs 0–15) | Camera iris as a bar from the opening down to CLS (2.0, 2.8 … 16 on segments 1, 3 … 13). Off when unknown. While the lever waits for pickup, the segment under the **lever** blinks (2 Hz). |
@@ -66,7 +66,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | W/B | `autoWhiteBalance` action. |
 | BARS | Toggles `colorBars`, **only when its current value is known** (never guess what goes on air). |
 | Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when the camera reports them (`core.Lens`), so the lever never asks for an aperture the lens lacks. Normalized iris: linear, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
-| Master black ring | `masterBlack`, linear over the range, soft takeover. |
+| Master black ring | `masterBlack`, linear, soft takeover. The travel is limited to what the MB display shows as a number: −0.99..+0.99 for ranges shown ×100 (Blackmagic −2..2), −99..+99 for integer ranges, intersected with the range. A value set beyond that elsewhere cannot be picked up by the ring until it comes back inside. |
 | WHITE R/G/B knobs | `gainR/G/B`, relative. |
 | BLACK R/G/B knobs | `liftR/G/B`, relative. |
 | Other keys (SCENE 1–5, STORE, CC ▲▼, ON, BLACK/FLARE, IRIS/MB ACTIVE, CALL, PANEL ACTIVE, PREVIEW), top-right knob, SENS, COARSE | Not mapped; key presses are logged at debug. |

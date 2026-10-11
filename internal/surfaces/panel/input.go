@@ -132,9 +132,36 @@ func irisPos(s core.ControlSpec, v float64) float64 {
 	return rangePos(s, v)
 }
 
-// mbAt and mbPos map the master black ring linearly onto the range.
-func mbAt(s core.ControlSpec, pos float64) float64 { return quantize(s, s.Min+pos*(s.Max-s.Min)) }
-func mbPos(s core.ControlSpec, v float64) float64  { return rangePos(s, v) }
+// window is the part of a control's range a lever or ring travels over.
+type window struct{ lo, hi float64 }
+
+// reaches reports whether v lies inside the window (half a step of slack),
+// that is whether the lever can pick it up.
+func (w window) reaches(s core.ControlSpec, v float64) bool {
+	tol := max(s.Step/2, 1e-9)
+	return v >= w.lo-tol && v <= w.hi+tol
+}
+
+// mbWindow is the master black ring's travel: the range limited so the MB
+// display stays within ±99 (±0.99 for ranges shown x100).
+func mbWindow(s core.ControlSpec) window {
+	lim := mbShown / mbScale(s)
+	if lo, hi := max(s.Min, -lim), min(s.Max, lim); lo < hi {
+		return window{lo, hi}
+	}
+	return window{s.Min, s.Max}
+}
+
+// mbAt and mbPos map the master black ring linearly onto its window.
+func mbAt(s core.ControlSpec, pos float64) float64 {
+	w := mbWindow(s)
+	return min(max(quantize(s, w.lo+pos*(w.hi-w.lo)), w.lo), w.hi)
+}
+
+func mbPos(s core.ControlSpec, v float64) float64 {
+	w := mbWindow(s)
+	return rangePos(core.ControlSpec{Min: w.lo, Max: w.hi}, v)
+}
 
 // pickupTol is how close (in lever travel, 0..1) the control must come to
 // the camera value to take over without crossing it.

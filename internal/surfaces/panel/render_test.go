@@ -37,7 +37,7 @@ func TestRenderActiveCamera(t *testing.T) {
 
 	want := digitsOf(map[micropanel.Display]string{
 		micropanel.DispND: "2", micropanel.DispGain: "06", micropanel.DispShutter: "50",
-		micropanel.DispIris: "F4.0", micropanel.DispMasterBlack: "3",
+		micropanel.DispIris: "F4.0", micropanel.DispMasterBlack: "+3",
 	})
 	if f.digits != want {
 		t.Errorf("digits = % x, want % x", f.digits, want)

@@ -234,7 +234,7 @@ func TestControllerRendersActiveCamera(t *testing.T) {
 	}
 	want := digitsOf(map[micropanel.Display]string{
 		micropanel.DispND: "2", micropanel.DispGain: "06", micropanel.DispShutter: "50",
-		micropanel.DispIris: "F4.0", micropanel.DispMasterBlack: "3",
+		micropanel.DispIris: "F4.0", micropanel.DispMasterBlack: "+3",
 	})
 	// digits, matrix and LEDs are three reports: wait for the whole frame
 	waitFor(t, "rendered frame", func() bool {
@@ -636,4 +636,47 @@ func TestControllerIrisLeverStaysInsideTheLens(t *testing.T) {
 			t.Errorf("lever asked for f/%v, beyond the lens' f/2.8", c.v.Number)
 		}
 	}
+}
+
+// The ring never asks for more than ±0.99 (MB display ±99) on a -2..2
+// master black, and cannot pick up a value set beyond that elsewhere.
+func TestControllerRingLimitedTo99(t *testing.T) {
+	api := sonyAPI()
+	specs := sonySpecs()
+	for i := range specs {
+		if specs[i].ID == core.MasterBlack {
+			specs[i] = rng(core.MasterBlack, -2, 2, 0.01, "")
+		}
+	}
+	api.specs = specs
+	api.values[core.MasterBlack] = core.Number(0)
+	h := start(t, api, Options{})
+	<-h.status
+	h.loaded(t)
+	ring := func(raw int32) micropanel.State { return micropanel.State{Ring: raw} }
+	h.input(t, ring(-100))
+	h.input(t, ring(100)) // crosses 0: picked
+	for r := int32(100); r <= 4096; r += 128 {
+		h.input(t, ring(r))
+	}
+	h.input(t, ring(4096))
+	h.waitCall(t, "masterBlack", func(v core.Value) bool { return v.Number == 0.99 })
+	for _, c := range api.callsCopy() {
+		if c.id == string(core.MasterBlack) && (c.v.Number > 0.99 || c.v.Number < -0.99) {
+			t.Errorf("ring asked for %v, beyond ±0.99", c.v.Number)
+		}
+	}
+
+	// Set to 1.5 from the GUI: out of the ring's reach.
+	h.ctl.Emit(app.EventCamera, app.CameraEvent{Slot: 2, Event: core.Event{Control: core.MasterBlack, Value: core.Number(1.5)}})
+	before := len(api.callsCopy())
+	for r := int32(4096); r >= -4096; r -= 256 {
+		h.input(t, ring(r))
+	}
+	time.Sleep(30 * time.Millisecond)
+	if got := len(api.callsCopy()); got != before {
+		t.Fatalf("ring picked up a value beyond its travel: %+v", api.callsCopy()[before:])
+	}
+	want := digitsOf(map[micropanel.Display]string{micropanel.DispMasterBlack: "+Hi"})
+	waitFor(t, "+Hi shown", func() bool { d, _, _ := h.dev.snapshot(); return [3]byte(d[11:14]) == [3]byte(want[11:14]) })
 }

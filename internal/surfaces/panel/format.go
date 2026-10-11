@@ -101,14 +101,31 @@ func irisText(s core.ControlSpec, v core.Value) string {
 	return strconv.Itoa(int(math.Round(rangePos(s, v.Number) * 100)))
 }
 
-// mbText: three digits. Integer ranges show the value, fractional ranges
-// (step < 1) show it x100. Clamped to -99..999.
-func mbText(s core.ControlSpec, v core.Value) string {
-	n := v.Number
+// mbScale is the factor between a master black value and the number on the
+// MB display: fractional ranges (step < 1) are shown x100.
+func mbScale(s core.ControlSpec) float64 {
 	if s.Step > 0 && s.Step < 1 {
-		n *= 100
+		return 100
 	}
-	return strconv.Itoa(min(max(int(math.Round(n)), -99), 999))
+	return 1
+}
+
+// mbShown is the largest magnitude the MB display shows as a number.
+const mbShown = 99
+
+// mbText: three digits, signed ("+12", "-5", "0"). Values beyond ±99
+// (set elsewhere than the ring) show "+Hi" / "-Lo".
+func mbText(s core.ControlSpec, v core.Value) string {
+	n := int(math.Round(v.Number * mbScale(s)))
+	switch {
+	case n > mbShown:
+		return "+Hi"
+	case n < -mbShown:
+		return "-Lo"
+	case n > 0:
+		return "+" + strconv.Itoa(n)
+	}
+	return strconv.Itoa(n)
 }
 
 // rangePos is the position of v in the spec range, 0..1.

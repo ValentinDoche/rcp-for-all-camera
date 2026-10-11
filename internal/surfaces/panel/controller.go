@@ -301,20 +301,23 @@ func (c *Controller) onInput(s micropanel.State) {
 		}
 	}
 	if s.Lever != c.prev.Lever {
-		c.moveLocked(&c.iris, core.Iris, leverPos(s.Lever), irisAt, irisPos)
+		c.moveLocked(&c.iris, core.Iris, leverPos(s.Lever), irisAt, irisPos,
+			func(s core.ControlSpec) window { return window{s.Min, s.Max} })
 	}
 	if s.Ring != c.prev.Ring {
-		c.moveLocked(&c.mb, core.MasterBlack, leverPos(s.Ring), mbAt, mbPos)
+		c.moveLocked(&c.mb, core.MasterBlack, leverPos(s.Ring), mbAt, mbPos, mbWindow)
 	}
 	c.prev = s
 }
 
-// moveLocked applies a lever/ring movement with soft takeover.
+// moveLocked applies a lever/ring movement with soft takeover. A camera
+// value outside the control's window cannot be picked up.
 func (c *Controller) moveLocked(p *pickup, id core.ControlID, pos float64,
-	at func(core.ControlSpec, float64) float64, posOf func(core.ControlSpec, float64) float64) {
+	at func(core.ControlSpec, float64) float64, posOf func(core.ControlSpec, float64) float64,
+	win func(core.ControlSpec) window) {
 	spec, cur, known := c.cam.number(id)
 	slot := c.cam.slot
-	if slot == 0 || slot != c.rig.Active || spec.ReadOnly {
+	if slot == 0 || slot != c.rig.Active || spec.ReadOnly || known && !win(spec).reaches(spec, cur) {
 		known = false
 	}
 	target := 0.0

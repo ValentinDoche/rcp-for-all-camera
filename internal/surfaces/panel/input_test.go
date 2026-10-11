@@ -86,6 +86,42 @@ func TestIrisLeverMapping(t *testing.T) {
 	}
 }
 
+// The ring travels over the part of the range the MB display shows as a
+// number: ±0.99 for a range shown x100, ±99 for an integer range.
+func TestMasterBlackRingLimitedTo99(t *testing.T) {
+	bm := rng(core.MasterBlack, -2, 2, 0.01, "") // Blackmagic: shown x100
+	if got := mbAt(bm, 0); got != -0.99 {
+		t.Errorf("ring at start = %v, want -0.99", got)
+	}
+	if got := mbAt(bm, 1); got != 0.99 {
+		t.Errorf("ring at end = %v, want 0.99", got)
+	}
+	if got := mbAt(bm, 0.5); got != 0 {
+		t.Errorf("ring centre = %v, want 0", got)
+	}
+	for _, v := range []float64{-0.99, -0.5, 0.12, 0.99} {
+		if got := mbAt(bm, mbPos(bm, v)); math.Abs(got-v) > 0.005 {
+			t.Errorf("round trip %v = %v", v, got)
+		}
+	}
+	w := mbWindow(bm)
+	if !w.reaches(bm, 0.99) || w.reaches(bm, 1.5) || w.reaches(bm, -1) {
+		t.Error("only values within ±0.99 can be picked up")
+	}
+	big := rng(core.MasterBlack, -300, 300, 1, "")
+	if mbAt(big, 0) != -99 || mbAt(big, 1) != 99 {
+		t.Errorf("integer range ring = %v..%v, want -99..99", mbAt(big, 0), mbAt(big, 1))
+	}
+	small := rng(core.MasterBlack, -15, 15, 1, "") // already inside ±99
+	if mbWindow(small) != (window{-15, 15}) {
+		t.Errorf("window = %+v, want the whole range", mbWindow(small))
+	}
+	frac := rng(core.MasterBlack, 0, 0.5, 0.01, "")
+	if mbWindow(frac) != (window{0, 0.5}) {
+		t.Errorf("window = %+v, want 0..0.5", mbWindow(frac))
+	}
+}
+
 func TestPickupWaitsUntilCrossing(t *testing.T) {
 	// CB-1 example: camera at F10, lever at F4.
 	s := rng(core.Iris, 1.4, 22, 0.1, "f")
