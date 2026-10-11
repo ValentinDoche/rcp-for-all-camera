@@ -105,8 +105,8 @@ func knobStep(ref, pos int) (delta, newRef int) {
 }
 
 // knobControls maps the 0x0E knob indexes (micropanel.AnalogNames) to the
-// controls they drive. Indexes 6..8 (top-right knob, SENS, COARSE) are not
-// mapped.
+// controls they drive. Index 6 (top-right knob) is not mapped; SENS and
+// COARSE (7, 8) set the iris lever window (irisWindow).
 var knobControls = [6]core.ControlID{core.GainR, core.LiftR, core.GainG, core.LiftG, core.GainB, core.LiftB}
 
 // leverPos maps a lever or ring position (-4096..4096) to 0..1.
@@ -115,21 +115,80 @@ func leverPos(raw int32) float64 {
 }
 
 // irisAt maps a lever position (0 = pulled back = closed, 1 = open) to an
-// iris value: logarithmic between Max (closed) and Min (open) for f-stops,
-// linear for a normalized iris (1 = open, TODO(verify) per driver).
-func irisAt(s core.ControlSpec, pos float64) float64 {
-	if isFStop(s) && s.Min > 0 {
-		return quantize(s, s.Max*math.Pow(s.Min/s.Max, pos))
+// iris value inside the lever window w: logarithmic between w.hi (closed)
+// and w.lo (open) for f-stops, linear for a normalized iris (1 = open,
+// TODO(verify) per driver). The result is on the spec's step grid.
+func irisAt(s core.ControlSpec, w window, pos float64) float64 {
+	var v float64
+	if isFStop(s) && w.lo > 0 {
+		v = w.hi * math.Pow(w.lo/w.hi, pos)
+	} else {
+		v = w.lo + pos*(w.hi-w.lo)
 	}
-	return quantize(s, s.Min+pos*(s.Max-s.Min))
+	return min(max(quantize(s, v), s.Min), s.Max)
 }
 
 // irisPos is the lever position matching an iris value (inverse of irisAt).
-func irisPos(s core.ControlSpec, v float64) float64 {
-	if isFStop(s) && s.Min > 0 && s.Max > s.Min {
-		return clamp01(math.Log(v/s.Max) / math.Log(s.Min/s.Max))
+func irisPos(s core.ControlSpec, w window, v float64) float64 {
+	if isFStop(s) && w.lo > 0 && w.hi > w.lo {
+		return clamp01(math.Log(v/w.hi) / math.Log(w.lo/w.hi))
 	}
-	return rangePos(s, v)
+	return rangePos(core.ControlSpec{Min: w.lo, Max: w.hi}, v)
+}
+
+// irisKnobs are the COARSE and SENS positions (0..micropanel.AnalogMax).
+// Until read is true the lever covers the whole iris range.
+type irisKnobs struct {
+	coarse, sens int
+	read         bool
+}
+
+// Knob indexes in report 0x0E (micropanel.AnalogNames).
+const (
+	knobSens   = 7
+	knobCoarse = 8
+)
+
+// irisCentre is the f-stop COARSE points at: logarithmic from Min (knob
+// fully counter-clockwise, 0 = most open) to Max (fully clockwise).
+func irisCentre(s core.ControlSpec, k irisKnobs) float64 {
+	t := clamp01(float64(k.coarse) / micropanel.AnalogMax)
+	return s.Min * math.Pow(s.Max/s.Min, t)
+}
+
+// irisWindowStops is the lever window width in stops set by SENS: 1 stop
+// with the knob fully counter-clockwise up to the whole range (full) fully
+// clockwise, linear in stops.
+func irisWindowStops(full float64, k irisKnobs) float64 {
+	t := clamp01(float64(k.sens) / micropanel.AnalogMax)
+	return 1 + (full-1)*t
+}
+
+// irisWindow is the part of the iris range the lever travels over (broadcast
+// RCP convention: COARSE sets where, SENS how wide). It is centred on
+// irisCentre, W stops wide (one stop = x√2 in f-number, so the window is
+// C / 2^(W/4) .. C x 2^(W/4)), and shifted to keep its width when it hits
+// an end of the range. The whole range when the knobs are unknown or the
+// iris is not in f-stops.
+func irisWindow(s core.ControlSpec, k irisKnobs) window {
+	whole := window{s.Min, s.Max}
+	if !k.read || !isFStop(s) || s.Min <= 0 || s.Max <= s.Min {
+		return whole
+	}
+	full := 2 * math.Log2(s.Max/s.Min) // range width in stops
+	if full <= 1 {
+		return whole
+	}
+	c := irisCentre(s, k)
+	half := math.Pow(2, irisWindowStops(full, k)/4)
+	lo, hi := c/half, c*half
+	if lo < s.Min {
+		hi, lo = hi*s.Min/lo, s.Min
+	}
+	if hi > s.Max {
+		lo, hi = lo*s.Max/hi, s.Max
+	}
+	return window{max(lo, s.Min), min(hi, s.Max)}
 }
 
 // window is the part of a control's range a lever or ring travels over.
@@ -152,14 +211,13 @@ func mbWindow(s core.ControlSpec) window {
 	return window{s.Min, s.Max}
 }
 
-// mbAt and mbPos map the master black ring linearly onto its window.
-func mbAt(s core.ControlSpec, pos float64) float64 {
-	w := mbWindow(s)
+// mbAt and mbPos map the master black ring linearly onto its window
+// (mbWindow).
+func mbAt(s core.ControlSpec, w window, pos float64) float64 {
 	return min(max(quantize(s, w.lo+pos*(w.hi-w.lo)), w.lo), w.hi)
 }
 
-func mbPos(s core.ControlSpec, v float64) float64 {
-	w := mbWindow(s)
+func mbPos(_ core.ControlSpec, w window, v float64) float64 {
 	return rangePos(core.ControlSpec{Min: w.lo, Max: w.hi}, v)
 }
 

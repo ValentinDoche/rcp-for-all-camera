@@ -70,6 +70,12 @@ type Controller struct {
 	iris, mb  pickup
 	written   map[core.ControlID]float64 // last lever/ring value sent
 	connected bool
+
+	// knobs are COARSE and SENS (the iris lever window); coarseAt and
+	// sensAt are when they last moved (panel previews).
+	knobs            irisKnobs
+	coarseAt, sensAt time.Time
+
 	// alarmUntil is when the ALARM blink after a failed command stops.
 	alarmUntil time.Time
 	now        func() time.Time
@@ -275,6 +281,9 @@ func (c *Controller) onInput(s micropanel.State) {
 		}
 		c.iris.seed(leverPos(s.Lever))
 		c.mb.seed(leverPos(s.Ring))
+		// COARSE/SENS as found at connect, without preview.
+		c.knobs, c.coarseAt, c.sensAt = irisKnobs{}, time.Time{}, time.Time{}
+		c.irisKnobsLocked(s)
 		return
 	}
 	for _, k := range s.Keys {
@@ -300,34 +309,61 @@ func (c *Controller) onInput(s micropanel.State) {
 			}
 		}
 	}
+	c.irisKnobsLocked(s)
 	if s.Lever != c.prev.Lever {
-		c.moveLocked(&c.iris, core.Iris, leverPos(s.Lever), irisAt, irisPos,
-			func(s core.ControlSpec) window { return window{s.Min, s.Max} })
+		c.moveLocked(&c.iris, core.Iris, leverPos(s.Lever), c.irisWindowLocked, irisAt, irisPos)
 	}
 	if s.Ring != c.prev.Ring {
-		c.moveLocked(&c.mb, core.MasterBlack, leverPos(s.Ring), mbAt, mbPos, mbWindow)
+		c.moveLocked(&c.mb, core.MasterBlack, leverPos(s.Ring), mbWindow, mbAt, mbPos)
 	}
 	c.prev = s
 }
 
+// irisKnobsLocked follows COARSE and SENS. Moving them writes nothing to the
+// camera: it moves the lever window, so the lever must pick the iris up
+// again, and starts the panel preview of what was turned.
+func (c *Controller) irisKnobsLocked(s micropanel.State) {
+	if !s.AnalogRead {
+		return
+	}
+	coarse, sens := int(s.Analog[knobCoarse]), int(s.Analog[knobSens])
+	if !c.knobs.read {
+		c.knobs = irisKnobs{coarse: coarse, sens: sens, read: true}
+		c.iris.release()
+		return
+	}
+	var d int
+	if d, c.knobs.coarse = knobStep(c.knobs.coarse, coarse); d != 0 {
+		c.coarseAt = c.now()
+		c.iris.release()
+	}
+	if d, c.knobs.sens = knobStep(c.knobs.sens, sens); d != 0 {
+		c.sensAt = c.now()
+		c.iris.release()
+	}
+}
+
+// irisWindowLocked is the iris lever window for the active camera's iris.
+func (c *Controller) irisWindowLocked(s core.ControlSpec) window { return irisWindow(s, c.knobs) }
+
 // moveLocked applies a lever/ring movement with soft takeover. A camera
 // value outside the control's window cannot be picked up.
-func (c *Controller) moveLocked(p *pickup, id core.ControlID, pos float64,
-	at func(core.ControlSpec, float64) float64, posOf func(core.ControlSpec, float64) float64,
-	win func(core.ControlSpec) window) {
+func (c *Controller) moveLocked(p *pickup, id core.ControlID, pos float64, win func(core.ControlSpec) window,
+	at func(core.ControlSpec, window, float64) float64, posOf func(core.ControlSpec, window, float64) float64) {
 	spec, cur, known := c.cam.number(id)
 	slot := c.cam.slot
-	if slot == 0 || slot != c.rig.Active || spec.ReadOnly || known && !win(spec).reaches(spec, cur) {
+	w := win(spec)
+	if slot == 0 || slot != c.rig.Active || spec.ReadOnly || known && !w.reaches(spec, cur) {
 		known = false
 	}
 	target := 0.0
 	if known {
-		target = posOf(spec, cur)
+		target = posOf(spec, w, cur)
 	}
 	if !p.move(pos, target, known) {
 		return
 	}
-	nv := at(spec, pos)
+	nv := at(spec, w, pos)
 	if nv == cur {
 		return
 	}
@@ -420,10 +456,19 @@ func (c *Controller) frame(now time.Time) frame {
 	return render(view{
 		rig: c.rig, cam: c.cam, tally: c.tally, held: c.held,
 		iris: hint(c.iris, core.Iris), mb: hint(c.mb, core.MasterBlack),
-		blink: now.UnixMilli()/250%2 == 0,
-		alarm: now.Before(c.alarmUntil),
+		blink:  now.UnixMilli()/250%2 == 0,
+		alarm:  now.Before(c.alarmUntil),
+		knobs:  c.knobs,
+		coarse: previewing(c.coarseAt, now),
+		sens:   previewing(c.sensAt, now),
 	})
 }
+
+// previewHold is how long the panel previews COARSE or SENS after the
+// knob last moved.
+const previewHold = 5 * time.Second
+
+func previewing(at, now time.Time) bool { return !at.IsZero() && now.Before(at.Add(previewHold)) }
 
 func slotCamera(r app.Rig, slot int) *app.CameraView {
 	for _, s := range r.Slots {

@@ -183,7 +183,7 @@ func TestRenderAlarmBlinksAfterAFailedCommand(t *testing.T) {
 func TestRenderPickupHints(t *testing.T) {
 	v := baseView()
 	s := sonySpecs()[0]
-	v.iris = pickHint{declared: true, known: true, picked: false, pos: irisPos(s, 11), havePos: true}
+	v.iris = pickHint{declared: true, known: true, picked: false, pos: irisPos(s, whole(s), 11), havePos: true}
 	v.mb = pickHint{declared: true, known: true, picked: true}
 	v.blink = true
 	f := render(v)

@@ -79,3 +79,6 @@ func rigWith(active int, slots ...int) app.Rig {
 	}
 	return r
 }
+
+// whole is the window covering a control's whole range.
+func whole(s core.ControlSpec) window { return window{s.Min, s.Max} }

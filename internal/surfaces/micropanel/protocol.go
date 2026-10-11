@@ -60,8 +60,11 @@ const JoystickMax = 4096
 type State struct {
 	Keys   []Key     // currently held keys
 	Analog [9]uint16 // see AnalogNames
-	Lever  int32     // iris lever, -4096..4096
-	Ring   int32     // master black ring, -4096..4096
+	// AnalogRead is true once Analog holds positions read from the panel
+	// (feature or input report 0x0E); all zero before that.
+	AnalogRead bool
+	Lever      int32 // iris lever, -4096..4096
+	Ring       int32 // master black ring, -4096..4096
 }
 
 // parseReport updates s from one input report. It reports whether the report was understood.
@@ -87,6 +90,7 @@ func (s *State) parseReport(p []byte) bool {
 		for i := range s.Analog {
 			s.Analog[i] = binary.LittleEndian.Uint16(p[1+2*i:])
 		}
+		s.AnalogRead = true
 	case repJoystick:
 		if len(p) < 13 {
 			return false

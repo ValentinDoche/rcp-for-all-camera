@@ -357,7 +357,7 @@ func TestControllerIrisPickup(t *testing.T) {
 	h := start(t, sonyAPI(), Options{}) // camera at F4
 	<-h.status
 	s := sonySpecs()[0]
-	raw := func(f float64) int32 { return int32(irisPos(s, f)*8192 - 4096) }
+	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
 	h.loaded(t)
 
 	h.input(t, lever(raw(11))) // seed far from F4
@@ -406,7 +406,7 @@ func TestControllerExternalChangeReleasesPickup(t *testing.T) {
 	h := start(t, sonyAPI(), Options{})
 	<-h.status
 	s := sonySpecs()[0]
-	raw := func(f float64) int32 { return int32(irisPos(s, f)*8192 - 4096) }
+	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
 	h.loaded(t)
 	h.input(t, lever(raw(5.6)))
 	h.input(t, lever(raw(3.5))) // crosses F4: picked
@@ -623,7 +623,7 @@ func TestControllerIrisLeverStaysInsideTheLens(t *testing.T) {
 	<-h.status
 	h.loaded(t)
 	s := (camState{specs: map[core.ControlID]core.ControlSpec{core.Iris: sonySpecs()[0]}, lens: api.lens}).lensIris(sonySpecs()[0])
-	raw := func(f float64) int32 { return int32(irisPos(s, f)*8192 - 4096) }
+	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
 	h.input(t, lever(raw(5.6)))
 	h.input(t, lever(raw(3.5))) // crosses F4: picked
 	for r := raw(3.5); r <= 4096; r += 64 {

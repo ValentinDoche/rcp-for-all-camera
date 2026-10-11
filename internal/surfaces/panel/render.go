@@ -40,6 +40,9 @@ type view struct {
 	held  map[string]bool
 	blink bool // blink phase, toggles a few times a second
 	alarm bool // a command failed a moment ago
+	knobs irisKnobs
+	// coarse and sens: the knob moved a moment ago, preview its effect.
+	coarse, sens bool
 }
 
 // frame is one complete panel image.
@@ -83,7 +86,18 @@ func render(v view) frame {
 	c := v.cam
 	micropanel.EncodeText(&f.digits, micropanel.DispND, sectionText(c, micropanel.DispND, []core.ControlID{core.ND}, ndText))
 	micropanel.EncodeText(&f.digits, micropanel.DispGain, sectionText(c, micropanel.DispGain, gainIDs, gainText))
-	micropanel.EncodeText(&f.digits, micropanel.DispShutter, sectionText(c, micropanel.DispShutter, shutterIDs, shutterText))
+	irisSpec, _, irisDeclared, _ := c.get(core.Iris)
+	coarseView := v.coarse && irisDeclared && irisSpec.Kind == core.KindRange && isFStop(irisSpec) && irisSpec.Min > 0
+	if coarseView {
+		// COARSE preview: the window centre blinks on the SHUTTER display.
+		text := ""
+		if v.blink {
+			text = fstopText(irisCentre(irisSpec, v.knobs))
+		}
+		micropanel.EncodeText(&f.digits, micropanel.DispShutter, text)
+	} else {
+		micropanel.EncodeText(&f.digits, micropanel.DispShutter, sectionText(c, micropanel.DispShutter, shutterIDs, shutterText))
+	}
 	micropanel.EncodeText(&f.digits, micropanel.DispIris, sectionText(c, micropanel.DispIris, []core.ControlID{core.Iris}, irisText))
 	micropanel.EncodeText(&f.digits, micropanel.DispMasterBlack, sectionText(c, micropanel.DispMasterBlack, []core.ControlID{core.MasterBlack}, mbText))
 
@@ -98,7 +112,9 @@ func render(v view) frame {
 	}
 	arrows([]core.ControlID{core.ND}, micropanel.LEDNDUp, micropanel.LEDNDDown)
 	arrows(gainIDs, micropanel.LEDGainUp, micropanel.LEDGainDown)
-	arrows(shutterIDs, micropanel.LEDShutterUp, micropanel.LEDShutterDown)
+	if !coarseView {
+		arrows(shutterIDs, micropanel.LEDShutterUp, micropanel.LEDShutterDown)
+	}
 
 	if _, bars, _, known := c.get(core.ColorBars); known && bars.On {
 		f.leds.Set(micropanel.LEDBars, true)
@@ -115,15 +131,48 @@ func render(v view) frame {
 		f.leds.Set(micropanel.LEDIrisMBWhite, !drives)
 	}
 
-	if s, iris, ok := c.number(core.Iris); ok {
-		f.leds.SetIrisBar(irisSegment(s, iris))
+	switch s, iris, ok := c.number(core.Iris); {
+	case irisDeclared && v.sens && irisSpec.Kind == core.KindRange && isFStop(irisSpec):
+		// SENS preview: the window itself, every reachable segment lit.
+		reach := irisReach(irisSpec, irisWindow(irisSpec, v.knobs))
+		for i := range micropanel.LEDIrisBarCount {
+			f.leds.Set(micropanel.LEDIrisBar0+i, reach[i])
+		}
+	case ok:
+		// The camera iris as a bar down to CLS, masked to the window.
+		w := irisWindow(s, v.knobs)
+		reach := irisReach(s, w)
+		from := irisSegment(s, iris)
+		for i := range micropanel.LEDIrisBarCount {
+			f.leds.Set(micropanel.LEDIrisBar0+i, i >= from && reach[i])
+		}
 		// Waiting for pickup: the lever position blinks on the scale.
 		if v.iris.waiting() && v.iris.havePos && v.blink {
-			n := micropanel.LEDIrisBar0 + irisSegment(s, irisAt(s, v.iris.pos))
+			n := micropanel.LEDIrisBar0 + irisSegment(s, irisAt(s, w, v.iris.pos))
 			f.leds.Set(n, !ledOn(&f.leds, n))
 		}
 	}
 	return f
+}
+
+// irisReach tells which iris scale segments the lever can reach in window
+// w: those from the window's open end to its closed end, plus everything
+// down to CLS when the window reaches the range's closed end (Max). A
+// normalized iris has no window: every segment.
+func irisReach(s core.ControlSpec, w window) [micropanel.LEDIrisBarCount]bool {
+	var r [micropanel.LEDIrisBarCount]bool
+	if !isFStop(s) || w.lo <= 0 {
+		for i := range r {
+			r[i] = true
+		}
+		return r
+	}
+	lo, hi := irisSegment(s, w.lo), irisSegment(s, w.hi)
+	toCLS := w.hi >= s.Max-max(s.Step/2, 1e-9)
+	for i := range r {
+		r[i] = i >= lo && (i <= hi || toCLS)
+	}
+	return r
 }
 
 // irisSegment is the iris scale segment (0 = top/open .. 15 = CLS) of an

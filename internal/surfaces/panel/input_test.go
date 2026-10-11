@@ -62,14 +62,14 @@ func TestKnobValueIsRelativeAndClamped(t *testing.T) {
 
 func TestIrisLeverMapping(t *testing.T) {
 	s := rng(core.Iris, 1.4, 22, 0.1, "f")
-	if got := irisAt(s, 0); got != 22 {
+	if got := irisAt(s, whole(s), 0); got != 22 {
 		t.Errorf("lever closed = %v, want 22", got)
 	}
-	if got := irisAt(s, 1); got != 1.4 {
+	if got := irisAt(s, whole(s), 1); got != 1.4 {
 		t.Errorf("lever open = %v, want 1.4", got)
 	}
 	for _, f := range []float64{2.8, 4, 11} {
-		if got := irisAt(s, irisPos(s, f)); math.Abs(got-f) > 0.05 {
+		if got := irisAt(s, whole(s), irisPos(s, whole(s), f)); math.Abs(got-f) > 0.05 {
 			t.Errorf("round trip %v = %v", f, got)
 		}
 	}
@@ -77,11 +77,11 @@ func TestIrisLeverMapping(t *testing.T) {
 		t.Error("leverPos")
 	}
 	n := rng(core.Iris, 0, 1, 0.01, "")
-	if irisAt(n, 0.5) != 0.5 || irisPos(n, 0.25) != 0.25 {
+	if irisAt(n, whole(n), 0.5) != 0.5 || irisPos(n, whole(n), 0.25) != 0.25 {
 		t.Error("normalized iris must be linear")
 	}
 	mb := rng(core.MasterBlack, -15, 15, 1, "")
-	if mbAt(mb, 0.5) != 0 || mbAt(mb, 1) != 15 || mbPos(mb, -15) != 0 {
+	if mbAt(mb, mbWindow(mb), 0.5) != 0 || mbAt(mb, mbWindow(mb), 1) != 15 || mbPos(mb, mbWindow(mb), -15) != 0 {
 		t.Error("master black mapping")
 	}
 }
@@ -90,17 +90,17 @@ func TestIrisLeverMapping(t *testing.T) {
 // number: ±0.99 for a range shown x100, ±99 for an integer range.
 func TestMasterBlackRingLimitedTo99(t *testing.T) {
 	bm := rng(core.MasterBlack, -2, 2, 0.01, "") // Blackmagic: shown x100
-	if got := mbAt(bm, 0); got != -0.99 {
+	if got := mbAt(bm, mbWindow(bm), 0); got != -0.99 {
 		t.Errorf("ring at start = %v, want -0.99", got)
 	}
-	if got := mbAt(bm, 1); got != 0.99 {
+	if got := mbAt(bm, mbWindow(bm), 1); got != 0.99 {
 		t.Errorf("ring at end = %v, want 0.99", got)
 	}
-	if got := mbAt(bm, 0.5); got != 0 {
+	if got := mbAt(bm, mbWindow(bm), 0.5); got != 0 {
 		t.Errorf("ring centre = %v, want 0", got)
 	}
 	for _, v := range []float64{-0.99, -0.5, 0.12, 0.99} {
-		if got := mbAt(bm, mbPos(bm, v)); math.Abs(got-v) > 0.005 {
+		if got := mbAt(bm, mbWindow(bm), mbPos(bm, mbWindow(bm), v)); math.Abs(got-v) > 0.005 {
 			t.Errorf("round trip %v = %v", v, got)
 		}
 	}
@@ -109,8 +109,8 @@ func TestMasterBlackRingLimitedTo99(t *testing.T) {
 		t.Error("only values within ±0.99 can be picked up")
 	}
 	big := rng(core.MasterBlack, -300, 300, 1, "")
-	if mbAt(big, 0) != -99 || mbAt(big, 1) != 99 {
-		t.Errorf("integer range ring = %v..%v, want -99..99", mbAt(big, 0), mbAt(big, 1))
+	if mbAt(big, mbWindow(big), 0) != -99 || mbAt(big, mbWindow(big), 1) != 99 {
+		t.Errorf("integer range ring = %v..%v, want -99..99", mbAt(big, mbWindow(big), 0), mbAt(big, mbWindow(big), 1))
 	}
 	small := rng(core.MasterBlack, -15, 15, 1, "") // already inside ±99
 	if mbWindow(small) != (window{-15, 15}) {
@@ -125,23 +125,23 @@ func TestMasterBlackRingLimitedTo99(t *testing.T) {
 func TestPickupWaitsUntilCrossing(t *testing.T) {
 	// CB-1 example: camera at F10, lever at F4.
 	s := rng(core.Iris, 1.4, 22, 0.1, "f")
-	target := irisPos(s, 10)
+	target := irisPos(s, whole(s), 10)
 	var p pickup
-	p.seed(irisPos(s, 4))
-	if p.move(irisPos(s, 4.5), target, true) {
+	p.seed(irisPos(s, whole(s), 4))
+	if p.move(irisPos(s, whole(s), 4.5), target, true) {
 		t.Fatal("took over while moving around F4")
 	}
-	if p.move(irisPos(s, 5.6), target, true) {
+	if p.move(irisPos(s, whole(s), 5.6), target, true) {
 		t.Fatal("took over before reaching F10")
 	}
-	if !p.move(irisPos(s, 11), target, true) {
+	if !p.move(irisPos(s, whole(s), 11), target, true) {
 		t.Fatal("did not take over after crossing F10")
 	}
-	if !p.move(irisPos(s, 4), target, true) {
+	if !p.move(irisPos(s, whole(s), 4), target, true) {
 		t.Fatal("lost control after pickup")
 	}
 	p.release()
-	if p.move(irisPos(s, 4.2), target, true) {
+	if p.move(irisPos(s, whole(s), 4.2), target, true) {
 		t.Fatal("still driving after release")
 	}
 }

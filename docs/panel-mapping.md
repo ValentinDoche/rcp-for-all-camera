@@ -37,14 +37,14 @@ Frames are rendered at ~30 Hz and only the reports that changed are sent.
 | Camera matrix | Active slot number in orange, red when that camera's tally is on. `-` when no slot is selected. |
 | ND (1 digit) | `nd` option index: 0 = clear, 1 = first filter… |
 | GAIN (2 digits) | `gain` in dB: `00`, `06`, `-3`; `Lo`/`Hi` outside −9..99. Else `iso`: hundreds, read ×100 (`1.6` = 160, `16` = 1600), trailing point = thousands (`13.` = 12800). |
-| SHUTTER (4 digits) | `shutterSpeed` without `1/` (`50`, `2000`), else `shutterAngle` in degrees (`180`, `172.8`). The first one whose value is known wins. |
+| SHUTTER (4 digits) | `shutterSpeed` without `1/` (`50`, `2000`), else `shutterAngle` in degrees (`180`, `172.8`). The first one whose value is known wins. **While COARSE is turned** (and 5 s after its last movement): the iris window centre as an f-stop (`F5.6`, `F11`, `F22`), blinking at 2 Hz, with the SHUTTER ▲▼ LEDs off (see [Iris lever window](#iris-lever-window-coarse-and-sens)). |
 | IRIS (3 digits) | `iris` in f-stops (`F2.8`, `F11`); a normalized iris (range 0..1) as a percentage. |
 | MB (3 digits) | `masterBlack`, signed: `+12`, `-5`, `0` (no sign at zero). Ranges with a step below 1 are shown ×100 (`+12` = 0.12). Beyond ±99 (set from the GUI or the camera, the ring cannot go there) it shows `+Hi` / `-Lo`. The `+` is drawn with segments e, f, g (left half of a cross; TODO(verify) on the panel). |
 | CC (1 digit) | Blank: no standard control yet. |
 | Any display | **Blank** when the camera does not declare the control, **dashes** when the value is unknown (camera not connected; always the case while drivers are placeholders). Blank everywhere when the active slot is empty or no slot is selected. |
-| Iris scale (LEDs 0–15) | Camera iris as a bar from the opening down to CLS (2.0, 2.8 … 16 on segments 1, 3 … 13). Off when unknown. While the lever waits for pickup, the segment under the **lever** blinks (2 Hz). |
+| Iris scale (LEDs 0–15) | Camera iris as a bar from the opening down to CLS (2.0, 2.8 … 16 on segments 1, 3 … 13), **masked to the lever window**: segments the lever cannot reach are always off (CLS too when the window does not reach the closed end). Off when unknown. While the lever waits for pickup, the segment under the **lever** blinks (2 Hz). **While SENS is turned** (and 5 s after): the window itself, every reachable segment lit. |
 | IRIS/MB ACTIVE | Red = lever and ring both drive the camera (picked up). White = at least one is waiting for pickup or its value is unknown. Off = camera has neither control. |
-| ND / GAIN / SHUTTER ▲▼ | Lit when the value can still move that way (off when unknown). |
+| ND / GAIN / SHUTTER ▲▼ | Lit when the value can still move that way (off when unknown). SHUTTER ▲▼ are off during the COARSE preview. |
 | BARS + BARS indicator | `colorBars` is on. |
 | W/B, AUTO IRIS | Lit while the key is held (if the camera has the action). |
 | PANEL ACTIVE (red) | Always on while the app drives the panel. |
@@ -65,11 +65,12 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | AUTO IRIS | `autoIris` action. |
 | W/B | `autoWhiteBalance` action. |
 | BARS | Toggles `colorBars`, **only when its current value is known** (never guess what goes on air). |
-| Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when the camera reports them (`core.Lens`), so the lever never asks for an aperture the lens lacks. Normalized iris: linear, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
+| Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when the camera reports them (`core.Lens`), so the lever never asks for an aperture the lens lacks, then to the **lever window** set by COARSE and SENS (whole range by default). Normalized iris: linear over the whole range, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
 | Master black ring | `masterBlack`, linear, soft takeover. The travel is limited to what the MB display shows as a number: −0.99..+0.99 for ranges shown ×100 (Blackmagic −2..2), −99..+99 for integer ranges, intersected with the range. A value set beyond that elsewhere cannot be picked up by the ring until it comes back inside. |
 | WHITE R/G/B knobs | `gainR/G/B`, relative. |
 | BLACK R/G/B knobs | `liftR/G/B`, relative. |
-| Other keys (SCENE 1–5, STORE, CC ▲▼, ON, BLACK/FLARE, IRIS/MB ACTIVE, CALL, PANEL ACTIVE, PREVIEW), top-right knob, SENS, COARSE | Not mapped; key presses are logged at debug. |
+| COARSE, SENS | Set the iris lever window (below). They never write to the camera. |
+| Other keys (SCENE 1–5, STORE, CC ▲▼, ON, BLACK/FLARE, IRIS/MB ACTIVE, CALL, PANEL ACTIVE, PREVIEW), top-right knob | Not mapped; key presses are logged at debug. |
 
 Rules common to every write:
 
@@ -90,6 +91,32 @@ reconnection, or a change of the value from elsewhere (GUI, camera, another even
 lever only takes control once it **reaches** the camera value (within 1 % of travel) or
 **crosses** it between two reports. Until then nothing is written. With an unknown value
 nothing is ever written.
+
+### Iris lever window (COARSE and SENS)
+
+Broadcast RCP convention: COARSE sets **where** the lever works, SENS **how wide**.
+Only for an iris in f-stops; a normalized iris always uses its whole range.
+
+- **COARSE** (knob index 8) sets the window centre C, logarithmic in f-number from the
+  iris Min (narrowed to the lens) with the knob fully counter-clockwise (0 = most open)
+  to Max fully clockwise (1024 = most closed).
+- **SENS** (knob index 7) sets the window width W in stops, linear from **1 stop** fully
+  counter-clockwise (0) to the **whole range** fully clockwise (1024 = the behaviour
+  without the knobs).
+- Window = C / 2^(W/4) .. C × 2^(W/4) in f-number (one stop = ×√2). When it passes an end
+  of the range it is shifted to keep its width, then clamped.
+- The lever maps logarithmically over the window (back = its closed end, forward = its
+  open end). Turning COARSE or SENS writes nothing to the camera: it releases the iris
+  pickup, so the lever must reach the camera iris again in the new window. **A camera
+  iris outside the window cannot be picked up** until the window is moved over it.
+- The knob positions are read at connect (feature 0x0E) and on every change, with the
+  same ±1 count deadband as the color knobs. Until they have been read the window is the
+  whole range. Knobs found at connect start no preview.
+- Previews last **5 s** after the knob's last movement: COARSE blinks the centre on the
+  SHUTTER display, SENS shows the window on the iris scale.
+
+TODO(verify) on hardware: knob direction (0 = fully counter-clockwise is assumed for both)
+and whether the knobs reach 0 and 1024 at their end-stops.
 
 ### Color knobs
 

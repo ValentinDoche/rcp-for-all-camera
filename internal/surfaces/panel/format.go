@@ -90,15 +90,21 @@ func isFStop(s core.ControlSpec) bool { return s.Unit == "f" || s.Max > 1 }
 // percentage of the range.
 func irisText(s core.ControlSpec, v core.Value) string {
 	if isFStop(s) {
-		switch {
-		case v.Number < 9.95:
-			return "F" + strconv.FormatFloat(v.Number, 'f', 1, 64)
-		case v.Number < 99.5:
-			return "F" + strconv.Itoa(int(math.Round(v.Number)))
-		}
-		return "F--"
+		return fstopText(v.Number)
 	}
 	return strconv.Itoa(int(math.Round(rangePos(s, v.Number) * 100)))
+}
+
+// fstopText: an f-number as "F2.8", "F5.6", "F11", "F22" (one decimal
+// below 10, whole numbers above).
+func fstopText(n float64) string {
+	switch {
+	case n < 9.95:
+		return "F" + strconv.FormatFloat(n, 'f', 1, 64)
+	case n < 99.5:
+		return "F" + strconv.Itoa(int(math.Round(n)))
+	}
+	return "F--"
 }
 
 // mbScale is the factor between a master black value and the number on the
