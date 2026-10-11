@@ -211,3 +211,24 @@ func TestNoEmDashesInStrings(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatRate(t *testing.T) {
+	cases := map[float64]string{
+		0:         "0 o/s",
+		512:       "512 o/s",
+		5329.3:    "5,2 ko/s",
+		1_572_864: "1,5 Mo/s",
+		3.2e9:     "3,0 Go/s",
+	}
+	for in, want := range cases {
+		if got := FormatRate(in); got != want {
+			t.Errorf("FormatRate(%v) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestFormatMemory(t *testing.T) {
+	if got := FormatMemory(23915626496, 67939266560); got != "22,3 / 63,3 Go" {
+		t.Fatalf("FormatMemory = %q", got)
+	}
+}

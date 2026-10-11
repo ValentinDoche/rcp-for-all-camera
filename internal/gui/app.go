@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -16,6 +17,7 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/fr"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
+	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
 // AppID is the Fyne application id (preferences are stored under it).
@@ -49,7 +51,8 @@ type App struct {
 	host      *fyne.Container
 	slotTabs  *widgets.Tabs
 	slotBar   fyne.CanvasObject
-	nav       *widgets.Tabs
+	gear      *widget.Button
+	stats     []*widgets.Text // CPU, RAM, down, up, IP
 	panelDot  *widgets.Dot
 	panelTxt  *widgets.Text
 	noticeTxt *widgets.Text
@@ -94,6 +97,7 @@ func (a *App) Emit(name string, payload any) { a.ctl.Emit(name, payload) }
 // Run shows the window and blocks until it is closed. ctx stops the poller.
 func (a *App) Run(ctx context.Context) {
 	a.ctl.Poll(ctx, 2*time.Second)
+	go a.sampleHost(ctx, time.Second)
 	a.win.ShowAndRun()
 }
 
@@ -123,19 +127,26 @@ func (a *App) build() {
 	a.slotTabs = widgets.NewTabs(items, func(i int) { a.onSlotTab(i + 1) })
 	a.slotBar = a.slotTabs
 
-	// bottom bar
-	gear := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() { a.ShowConfig(0) })
-	gear.Importance = widget.LowImportance
-	a.nav = widgets.NewTabs([]widgets.TabItem{{Text: "Caméras"}, {Text: "Configuration"}}, func(i int) {
-		if i == 0 {
+	// bottom bar: the gear toggles Configuration, the centre shows host stats
+	a.gear = widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
+		if a.page == pageConfig {
 			a.ShowCameras()
 		} else {
 			a.ShowConfig(0)
 		}
 	})
+	a.gear.Importance = widget.LowImportance
+	var statObjs []fyne.CanvasObject
+	for i := 0; i < 5; i++ {
+		t := widgets.NewText("", style.TextMuted, 12).Mono()
+		a.stats = append(a.stats, t)
+		statObjs = append(statObjs, container.New(layout.NewCustomPaddedLayout(0, 0, 10, 10), t))
+	}
+	a.setStats(sysinfo.Stats{})
 	a.noticeTxt = widgets.NewText("", style.TextMuted, 12).Clip().Align(fyne.TextAlignTrailing)
 	bottom := widgets.NewPanel(style.Surface, "", 0, container.New(layout.NewCustomPaddedLayout(2, 2, 10, 14),
-		container.NewBorder(nil, nil, gear, widgets.Sized(460, 0, a.noticeTxt), container.NewCenter(a.nav)))).Flat()
+		container.NewBorder(nil, nil, a.gear, widgets.Sized(460, 0, a.noticeTxt),
+			container.NewCenter(container.NewHBox(statObjs...))))).Flat()
 
 	// pages
 	for i := 1; i <= app.SlotCount; i++ {
@@ -181,8 +192,8 @@ func (a *App) ShowCameras() {
 	a.closeSubpages()
 	a.page = pageCameras
 	a.setPage(a.scroll)
-	a.slotBar.Show()
-	a.nav.SetSelected(0)
+	a.gear.Importance = widget.LowImportance
+	a.gear.Refresh()
 	a.scrollToActive()
 }
 
@@ -200,8 +211,8 @@ func (a *App) ShowDetails(slot int) {
 	}
 	a.details = newDetailsPage(a.ctl, slot, a.ShowCameras)
 	a.setPage(a.details.obj)
-	a.slotBar.Show()
-	a.nav.SetSelected(0)
+	a.gear.Importance = widget.LowImportance
+	a.gear.Refresh()
 }
 
 // ShowConfig shows the configuration page; slot > 0 opens its form.
@@ -213,8 +224,8 @@ func (a *App) ShowConfig(slot int) {
 		a.config.Edit(slot)
 	}
 	a.setPage(a.config.obj)
-	a.slotBar.Hide()
-	a.nav.SetSelected(1)
+	a.gear.Importance = widget.HighImportance
+	a.gear.Refresh()
 }
 
 func (a *App) scrollToActive() {
@@ -245,6 +256,8 @@ func (a *App) onSlotTab(slot int) {
 		a.scrollToActive()
 	case pageDetails:
 		a.ShowDetails(slot)
+	case pageConfig:
+		a.ShowCameras()
 	}
 }
 
@@ -310,4 +323,52 @@ func (a *App) syncChrome() {
 		a.noticeTxt.SetToken(style.TextMuted)
 		a.noticeTxt.SetText(n.Text)
 	}
+}
+
+// --- host statistics ------------------------------------------------------------------
+
+// sampleHost refreshes the status bar every interval until ctx ends. Errors
+// leave the placeholders: the bar is informative only.
+func (a *App) sampleHost(ctx context.Context, interval time.Duration) {
+	s := sysinfo.New()
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		if st, err := s.Sample(); err == nil {
+			fyne.Do(func() { a.setStats(st) })
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+func (a *App) setStats(st sysinfo.Stats) {
+	cpu, down, up, ip := "CPU --", "↓ --", "↑ --", "IP --"
+	if st.HasRates {
+		cpu = "CPU " + fr.FormatNumber(st.CPU, 0) + " %"
+		down = "↓ " + fr.FormatRate(st.DownBps)
+		up = "↑ " + fr.FormatRate(st.UpBps)
+	}
+	ram := "RAM --"
+	if st.MemTotal > 0 {
+		ram = "RAM " + fr.FormatMemory(st.MemUsed, st.MemTotal)
+	}
+	if st.IP != "" {
+		ip = "IP " + st.IP
+	}
+	for i, txt := range []string{cpu, ram, down, up, ip} {
+		a.stats[i].SetText(txt)
+	}
+}
+
+// statsText is the status bar content as one string (tests).
+func (a *App) statsText() string {
+	parts := make([]string, len(a.stats))
+	for i, t := range a.stats {
+		parts[i] = t.Text()
+	}
+	return strings.Join(parts, "  ")
 }

@@ -314,3 +314,24 @@ func ShortLabel(s string) string {
 	}
 	return s
 }
+
+// FormatRate formats a byte rate with French units (o/s, ko/s, Mo/s, Go/s),
+// binary multiples, one decimal above the byte unit.
+func FormatRate(bps float64) string {
+	units := []string{"o/s", "ko/s", "Mo/s", "Go/s"}
+	i := 0
+	for bps >= 1024 && i < len(units)-1 {
+		bps /= 1024
+		i++
+	}
+	if i == 0 {
+		return FormatNumber(bps, 0) + " " + units[0]
+	}
+	return FormatNumber(bps, 1) + " " + units[i]
+}
+
+// FormatMemory formats used / total memory in gigabytes ("22,3 / 63,3 Go").
+func FormatMemory(used, total uint64) string {
+	const gib = 1 << 30
+	return FormatNumber(float64(used)/gib, 1) + " / " + FormatNumber(float64(total)/gib, 1) + " Go"
+}
