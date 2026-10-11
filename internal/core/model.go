@@ -51,6 +51,10 @@ type ModelInfo struct {
 	Auth        AuthMode     `json:"auth"`
 	Support     SupportLevel `json:"support"`
 	Notes       string       `json:"notes,omitempty"`
+	// InterchangeableLens: the lens is the user's choice, so whether it has
+	// a power zoom is a per-camera setting (CameraConfig.PowerZoom). Models
+	// with a built-in zoom lens (PTZ) leave it false.
+	InterchangeableLens bool `json:"interchangeableLens,omitempty"`
 }
 
 // Check reports whether the model declaration is well formed.
@@ -85,6 +89,9 @@ type CameraConfig struct {
 	Host     string  `json:"host"`
 	Port     int     `json:"port,omitempty"` // 0 = model default
 	Username string  `json:"username,omitempty"`
+	// PowerZoom: the mounted lens has a motorised zoom. Only read for models
+	// with an InterchangeableLens; without it the camera declares no zoom.
+	PowerZoom bool `json:"powerZoom,omitempty"`
 	// Password is never serialized; the config package stores it in the OS
 	// secret store.
 	Password string `json:"-"`

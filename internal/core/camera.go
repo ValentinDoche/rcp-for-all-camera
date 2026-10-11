@@ -22,11 +22,13 @@ type Status struct {
 
 // Event is pushed to subscribers. Exactly one of these is set:
 //   - Status, when the connection state changed;
-//   - Control and Value, when a control changed (on the camera or by Set).
+//   - Control and Value, when a control changed (on the camera or by Set);
+//   - Lens, when the lens information changed (LensReporter cameras only).
 type Event struct {
 	Status  *Status   `json:"status,omitempty"`
 	Control ControlID `json:"control,omitempty"`
 	Value   Value     `json:"value"`
+	Lens    *Lens     `json:"lens,omitempty"`
 }
 
 // Camera is one configured camera. Implementations live in
