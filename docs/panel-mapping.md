@@ -49,7 +49,7 @@ Frames are rendered at ~30 Hz and only the reports that changed are sent.
 | W/B, AUTO IRIS | Lit while the key is held (if the camera has the action). |
 | PANEL ACTIVE (red) | Always on while the app drives the panel. |
 | NETWORK | Active camera connected. |
-| ALARM | Active camera in error state. |
+| ALARM | Blinks while the active camera is in error state, and for 3 s after any command failed (`camera:commandFailed` or a failed panel write). A request for confirmation (operator lock) is not an error. |
 | Others (CABLE, CALL, REL/ABS, EXT, scenes, STORE, PREVIEW) | Off. |
 
 ## Input (panel → app)

@@ -574,3 +574,30 @@ func TestControllerIgnoresCameraKeyOfEmptySlot(t *testing.T) {
 		}
 	}
 }
+
+func TestFailedCommandRaisesAlarmForAMoment(t *testing.T) {
+	c := New(Options{})
+	t0 := time.Unix(1000, 0)
+	c.now = func() time.Time { return t0 }
+	c.Emit(app.EventCommandFailed, app.CommandFailed{Slot: 1, Control: core.Gain, Code: app.CodeNotConnected})
+	alarm := func(c *Controller, at time.Time) bool {
+		f := c.frame(at)
+		return ledOn(&f.leds, micropanel.LEDAlarm)
+	}
+	if !alarm(c, t0.Add(time.Second)) && !alarm(c, t0.Add(time.Second+250*time.Millisecond)) {
+		t.Error("ALARM must blink after a failed command")
+	}
+	for ms := int64(0); ms < 1000; ms += 50 {
+		if alarm(c, t0.Add(alarmHold+time.Duration(ms)*time.Millisecond)) {
+			t.Fatal("ALARM must stop after alarmHold")
+		}
+	}
+	c2 := New(Options{})
+	c2.now = func() time.Time { return t0 }
+	c2.Emit(app.EventCommandFailed, app.CommandFailed{Slot: 1, Control: core.Record, Code: app.CodeConfirmRequired})
+	for ms := int64(0); ms < 1000; ms += 50 {
+		if alarm(c2, t0.Add(time.Duration(ms)*time.Millisecond)) {
+			t.Fatal("asking for confirmation is not an error")
+		}
+	}
+}

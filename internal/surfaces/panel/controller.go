@@ -70,6 +70,23 @@ type Controller struct {
 	iris, mb  pickup
 	written   map[core.ControlID]float64 // last lever/ring value sent
 	connected bool
+	// alarmUntil is when the ALARM blink after a failed command stops.
+	alarmUntil time.Time
+	now        func() time.Time
+}
+
+// alarmHold is how long ALARM blinks after a failed command.
+const alarmHold = 3 * time.Second
+
+// raiseAlarm makes ALARM blink for alarmHold. Asking for confirmation
+// (operator lock) is not an error.
+func (c *Controller) raiseAlarm(code string) {
+	if code == app.CodeConfirmRequired {
+		return
+	}
+	c.mu.Lock()
+	c.alarmUntil = c.now().Add(alarmHold)
+	c.mu.Unlock()
 }
 
 var _ app.Surface = (*Controller)(nil)
@@ -96,7 +113,7 @@ func New(o Options) *Controller {
 	def(&o.RetryMax, 10*time.Second)
 	def(&o.BusyEvery, 2*time.Second)
 	return &Controller{opt: o, log: o.Logger, wake: make(chan struct{}, 1),
-		held: map[string]bool{}, written: map[core.ControlID]float64{}}
+		held: map[string]bool{}, written: map[core.ControlID]float64{}, now: time.Now}
 }
 
 // --- events from the app ---------------------------------------------------
@@ -117,6 +134,13 @@ func (c *Controller) Emit(name string, payload any) {
 			c.cameraEvent(e)
 		case *app.CameraEvent:
 			c.cameraEvent(*e)
+		}
+	case app.EventCommandFailed:
+		switch e := payload.(type) {
+		case app.CommandFailed:
+			c.raiseAlarm(e.Code)
+		case *app.CommandFailed:
+			c.raiseAlarm(e.Code)
 		}
 	}
 }
@@ -360,7 +384,13 @@ func (c *Controller) pressLocked(name string) {
 }
 
 // onWriteError resyncs the cache after a failed write (writer goroutine).
-func (c *Controller) onWriteError(o op, _ error) {
+func (c *Controller) onWriteError(o op, err error) {
+	code := app.CodeInternal
+	var ae *app.Error
+	if errors.As(err, &ae) {
+		code = ae.Code
+	}
+	c.raiseAlarm(code)
 	if !o.select_ {
 		c.requestRefresh()
 	}
@@ -379,6 +409,7 @@ func (c *Controller) frame(now time.Time) frame {
 		rig: c.rig, cam: c.cam, tally: c.tally, held: c.held,
 		iris: hint(c.iris, core.Iris), mb: hint(c.mb, core.MasterBlack),
 		blink: now.UnixMilli()/250%2 == 0,
+		alarm: now.Before(c.alarmUntil),
 	})
 }
 

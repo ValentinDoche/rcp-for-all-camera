@@ -148,8 +148,35 @@ func TestRenderStatusLEDsAndBars(t *testing.T) {
 		}
 	}
 	v.rig.Slots[1].Camera.Status.State = core.StateError
+	v.blink = true
 	if f := render(v); !ledOn(&f.leds, micropanel.LEDAlarm) || ledOn(&f.leds, micropanel.LEDNetwork) {
 		t.Error("camera error must light ALARM only")
+	}
+	v.blink = false
+	if f := render(v); ledOn(&f.leds, micropanel.LEDAlarm) {
+		t.Error("ALARM must blink: off in the other phase")
+	}
+}
+
+func TestRenderAlarmBlinksAfterAFailedCommand(t *testing.T) {
+	v := baseView()
+	v.rig.Slots[1].Camera.Status.State = core.StateConnected
+	v.blink = true
+	if f := render(v); ledOn(&f.leds, micropanel.LEDAlarm) {
+		t.Error("no error, no ALARM")
+	}
+	v.alarm = true
+	if f := render(v); !ledOn(&f.leds, micropanel.LEDAlarm) {
+		t.Error("a failed command must light ALARM")
+	}
+	v.blink = false
+	if f := render(v); ledOn(&f.leds, micropanel.LEDAlarm) {
+		t.Error("ALARM must blink")
+	}
+	v.rig.Active = 0
+	v.blink = true
+	if f := render(v); !ledOn(&f.leds, micropanel.LEDAlarm) {
+		t.Error("a failed command lights ALARM even without an active camera")
 	}
 }
 

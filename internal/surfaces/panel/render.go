@@ -39,6 +39,7 @@ type view struct {
 	mb    pickHint
 	held  map[string]bool
 	blink bool // blink phase, toggles a few times a second
+	alarm bool // a command failed a moment ago
 }
 
 // frame is one complete panel image.
@@ -65,16 +66,18 @@ func render(v view) frame {
 	}
 	f.leds.Set(micropanel.LEDPanelRed, true)
 
+	// ALARM blinks while the active camera is in error, and for a moment
+	// after any command failed.
 	active := activeCamera(v.rig)
+	camErr := active != nil && v.cam.slot == v.rig.Active && active.Status.State == core.StateError
+	f.leds.Set(micropanel.LEDAlarm, (camErr || v.alarm) && v.blink)
+
 	f.matrix = matrixFor(v.rig.Active, v.tally[min(max(v.rig.Active, 0), app.SlotCount)])
 	if active == nil || v.cam.slot != v.rig.Active {
 		return f
 	}
-	switch active.Status.State {
-	case core.StateConnected:
+	if active.Status.State == core.StateConnected {
 		f.leds.Set(micropanel.LEDNetwork, true)
-	case core.StateError:
-		f.leds.Set(micropanel.LEDAlarm, true)
 	}
 
 	c := v.cam
