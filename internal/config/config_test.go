@@ -38,6 +38,44 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 	}
 }
 
+func TestPresetsRoundTrip(t *testing.T) {
+	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
+	in := Rig{Version: Version, Presets: []Preset{{
+		Slot: 1, Number: 3, Model: "blackmagic.studio6kpro",
+		Values: map[core.ControlID]core.Value{
+			core.Saturation: core.Number(1.34),
+			core.ISO:        core.Choice("800"),
+			core.Record:     core.Bool(false),
+		},
+	}}}
+	if err := s.Save(in); err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Presets) != 1 {
+		t.Fatalf("presets = %+v", out.Presets)
+	}
+	p := out.Presets[0]
+	if p.Slot != 1 || p.Number != 3 || p.Model != "blackmagic.studio6kpro" ||
+		p.Values[core.Saturation] != core.Number(1.34) || p.Values[core.ISO] != core.Choice("800") {
+		t.Errorf("preset = %+v", p)
+	}
+}
+
+func TestRigWithoutPresetsHasNoPresetsKey(t *testing.T) {
+	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
+	if err := s.Save(Rig{Version: Version}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(s.Path)
+	if strings.Contains(string(b), "presets") {
+		t.Errorf("an empty preset list must not be written: %s", b)
+	}
+}
+
 func TestSaveNeverWritesPasswords(t *testing.T) {
 	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
 	in := Rig{Version: Version}

@@ -41,6 +41,19 @@ type Rig struct {
 	OperatorLock *bool `json:"operatorLock,omitempty"`
 	// LogLevel is "normal" (default) or "debug".
 	LogLevel string `json:"logLevel,omitempty"`
+	// Presets are the stored camera presets. They live here, never on the
+	// camera.
+	Presets []Preset `json:"presets,omitempty"`
+}
+
+// Preset is a snapshot of one camera's control values, stored by the app and
+// recalled by writing the values back. Model is the camera model it was taken
+// on, so it is never applied to another model.
+type Preset struct {
+	Slot   int                           `json:"slot"`   // 1..Slots
+	Number int                           `json:"number"` // 1..n
+	Model  core.ModelID                  `json:"model"`
+	Values map[core.ControlID]core.Value `json:"values"`
 }
 
 // FileStore reads and writes a rig as JSON at Path.
