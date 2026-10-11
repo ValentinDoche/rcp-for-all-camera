@@ -14,6 +14,9 @@ import (
 // SlotCount is the number of camera buttons on the panel.
 const SlotCount = 8
 
+// PresetCount is the number of presets per slot (the panel's scene buttons).
+const PresetCount = 5
+
 // Event names pushed to the GUI through the Emitter.
 const (
 	EventPanelStatus = "panel:status" // payload PanelStatus
@@ -39,9 +42,12 @@ type Rig struct {
 }
 
 // Slot is one camera button. Camera is nil when the slot is empty.
+// Presets lists the stored preset numbers (1..PresetCount), sorted; Rig()
+// never leaves it nil, so it is [] in JSON when there is none.
 type Slot struct {
-	Slot   int         `json:"slot"`
-	Camera *CameraView `json:"camera"`
+	Slot    int         `json:"slot"`
+	Camera  *CameraView `json:"camera"`
+	Presets []int       `json:"presets"`
 }
 
 // CameraView is a configured camera as the GUI sees it. The password is
@@ -127,6 +133,11 @@ const (
 	// written while the operator lock is on; ask the user, then call
 	// ConfirmSetControl.
 	CodeConfirmRequired = "CONFIRM_REQUIRED"
+	// CodeEmptyPreset: no preset is stored under that number.
+	CodeEmptyPreset = "EMPTY_PRESET"
+	// CodeInvalidPreset: the preset number is out of range, or the preset
+	// was taken on another camera model.
+	CodeInvalidPreset = "INVALID_PRESET"
 )
 
 // Error is the only error type Service returns. Error() is the JSON

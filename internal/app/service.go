@@ -63,6 +63,7 @@ type Service struct {
 
 	mu       sync.Mutex
 	slots    [SlotCount]*slotState
+	presets  [SlotCount]slotPresets
 	active   int
 	bindIP   string
 	lock     bool
@@ -128,6 +129,7 @@ func NewService(o Options) (*Service, error) {
 	if s.active > 0 && s.slots[s.active-1] == nil {
 		s.active = 0 // only an assigned slot can be selected
 	}
+	s.loadPresets(rig.Presets)
 	return s, nil
 }
 
@@ -184,9 +186,15 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 		return Slot{}, toAPIError(err)
 	}
 	old := s.slots[slot-1]
+	oldPresets := s.presets[slot-1]
 	s.slots[slot-1] = st
+	// Presets belong to a model: a different camera model starts empty, an
+	// edit of the same model (name, address...) keeps them.
+	if old != nil && old.info.ID != st.info.ID {
+		s.presets[slot-1] = slotPresets{}
+	}
 	if err := s.saveLocked(); err != nil {
-		s.slots[slot-1] = old
+		s.slots[slot-1], s.presets[slot-1] = old, oldPresets
 		// Keep the secret store in line with the rig that stays on disk.
 		oldPassword := ""
 		if old != nil {
@@ -222,13 +230,14 @@ func (s *Service) ClearSlot(slot int) error {
 		s.mu.Unlock()
 		return nil
 	}
-	s.slots[slot-1] = nil
+	oldPresets := s.presets[slot-1]
+	s.slots[slot-1], s.presets[slot-1] = nil, slotPresets{}
 	prevActive := s.active
 	if s.active == slot {
 		s.active = 0
 	}
 	if err := s.saveLocked(); err != nil {
-		s.slots[slot-1], s.active = old, prevActive
+		s.slots[slot-1], s.presets[slot-1], s.active = old, oldPresets, prevActive
 		s.mu.Unlock()
 		return toAPIError(err)
 	}
@@ -427,13 +436,14 @@ func (s *Service) saveLocked() error {
 			rig.Slots[i] = &c
 		}
 	}
+	rig.Presets = s.savedPresetsLocked()
 	return s.store.Save(rig)
 }
 
 func (s *Service) rigLocked() Rig {
 	r := Rig{Slots: make([]Slot, SlotCount), Active: s.active}
 	for i, st := range s.slots {
-		r.Slots[i] = Slot{Slot: i + 1}
+		r.Slots[i] = Slot{Slot: i + 1, Presets: s.presets[i].numbers()}
 		if st != nil {
 			r.Slots[i].Camera = viewOf(st)
 		}

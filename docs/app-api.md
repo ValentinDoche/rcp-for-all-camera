@@ -16,23 +16,51 @@ JSON tags are kept on every type so the API can be exported or logged in a stabl
 |---|---|---|
 | `PanelStatus()` | `PanelStatus` | Panel state: `connected` (plugged in), `active` (driven by the app), `serial`, `detail` (see below) |
 | `Models()` | `[]core.ModelInfo` | Every known camera model, in display order |
-| `Rig()` | `Rig` | Always 8 slots, numbered 1 to 8, and the active slot (0 = none) |
+| `Rig()` | `Rig` | Always 8 slots, numbered 1 to 8, and the active slot (0 = none). Each `Slot` has `presets`: the stored preset numbers, sorted (`[]` when none) |
 | `AssignSlot(slot, SlotInput)` | `Slot` | Create or replace the camera on a slot |
 | `ClearSlot(slot)` | | Remove the camera from a slot. Idempotent |
 | `SelectSlot(slot)` | | Make a slot active (what the panel drives). 0 = none. An empty slot cannot be selected (`EMPTY_SLOT`) |
 | `Controls(slot)` | `[]ControlView` | Every control of the slot's camera with its last known value (nil = unknown) |
 | `SetControl(slot, id, core.Value)` | | Write one control. Validated before any I/O |
 | `ConnectSlot(slot)` | | Start connecting the slot's camera |
+| `StorePreset(slot, n)` | | Snapshot the camera's storable controls as preset `n` (1 to `PresetCount` = 5), replacing any preset there |
+| `RecallPreset(slot, n)` | | Write preset `n` back to the camera |
+| `DeletePreset(slot, n)` | | Remove preset `n`. Idempotent |
 
 `SlotInput.Password`: nil keeps the stored password, `""` clears it, anything else replaces
 it. Passwords are never returned; `CameraView.HasPassword` says whether one is stored.
+
+### Presets
+
+A preset is a snapshot of a camera's control values, stored by the app in `rig.json`
+(`presets`) and recalled by writing the values back with `Camera.Set`. Presets are
+**never stored on the camera** (the Blackmagic camera's own presets drop color
+correction), so they work the same with every driver.
+
+- Storable controls: not read-only, not an action, not guarded, not in the `ptz` group
+  (pan/tilt are speeds and `presetRecall` is a PTZ position: recalling them would move the
+  camera). Guarded controls are never written, so the operator lock does not apply.
+- `StorePreset` needs a connected camera (`NOT_CONNECTED`). It reads every storable
+  control under one 3 s deadline; a control that cannot be read is left out, and if none
+  can be read the call fails with `NOT_CONNECTED`.
+- `RecallPreset` writes in the camera's `Controls()` order, only the controls that still
+  exist and are still storable. A control that fails is skipped and the others are still
+  written; the first error is returned after all were tried. `EMPTY_PRESET` when nothing
+  is stored under `n`, `INVALID_PRESET` when the preset was taken on another model.
+- A preset belongs to the slot and to the camera model. Assigning a different model to the
+  slot, clearing the slot, or importing a configuration that changes the slot's model drops
+  its presets; editing the name, address or credentials of the same model keeps them.
+- Store and delete emit `rig:changed`, so the GUI gets the new `presets` list.
+- At startup, saved presets are dropped with a warning when their slot or number is out of
+  range, the slot is empty, or the model differs; for duplicates the last one wins, and
+  values with an invalid control id or value are dropped.
 
 ## Events (`app.Emitter`)
 
 | Name | Payload | When |
 |---|---|---|
 | `panel:status` | `PanelStatus` | Panel plugged, unplugged, driven or released (sent on change only) |
-| `rig:changed` | `Rig` | A slot was assigned, cleared or selected |
+| `rig:changed` | `Rig` | A slot was assigned, cleared or selected, or a preset was stored or deleted |
 | `camera:event` | `CameraEvent{Slot, Event}` | A camera changed state (`Event.Status`) or a control value (`Event.Control`, `Event.Value`) |
 
 Emit is called from service goroutines; the GUI must hop to its UI thread.
@@ -55,7 +83,9 @@ most 64 bytes. Names and credentials must be printable UTF-8 with no control, bi
 zero-width characters.
 
 `INVALID_SLOT`, `EMPTY_SLOT`, `INVALID_CONFIG`, `UNKNOWN_MODEL`, `UNKNOWN_CONTROL`,
-`INVALID_VALUE`, `READ_ONLY`, `NOT_CONNECTED`, `NOT_IMPLEMENTED`, `INTERNAL`.
+`INVALID_VALUE`, `READ_ONLY`, `NOT_CONNECTED`, `NOT_IMPLEMENTED`, `INTERNAL`,
+`CONFIRM_REQUIRED`, `EMPTY_PRESET` (no preset stored under that number), `INVALID_PRESET`
+(number outside 1 to 5, or preset taken on another camera model).
 
 While camera protocols are not written, `ConnectSlot` and `SetControl` with a valid value
 return `NOT_IMPLEMENTED`; the GUI shows this as "driver in development", not as a failure.

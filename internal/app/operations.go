@@ -185,10 +185,16 @@ func (s *Service) ImportConfig(data []byte) error {
 		}
 		fresh[i] = st
 	}
-	old, prevActive := s.slots, s.active
+	old, prevActive, oldPresets := s.slots, s.active, s.presets
 	s.slots, s.active = fresh, doc.Active
+	// Presets stay only on slots that keep the same camera model.
+	for i := range s.presets {
+		if old[i] == nil || fresh[i] == nil || old[i].info.ID != fresh[i].info.ID {
+			s.presets[i] = slotPresets{}
+		}
+	}
 	if err := s.saveLocked(); err != nil {
-		s.slots, s.active = old, prevActive
+		s.slots, s.active, s.presets = old, prevActive, oldPresets
 		s.mu.Unlock()
 		for _, f := range fresh {
 			if f != nil {
