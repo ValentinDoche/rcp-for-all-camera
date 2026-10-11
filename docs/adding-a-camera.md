@@ -67,6 +67,8 @@ How camera support is organised, and how to add a brand or a model.
 - A model that takes any lens sets `ModelInfo.InterchangeableLens`, and `New` declares
   `core.Zoom` only when `CameraConfig.PowerZoom` is set. A built-in zoom (PTZ) leaves
   both alone.
+- A simulated camera with nothing to reach sets `ModelInfo.NoAddress`: its config needs no
+  host or port, and the form hides them (see [internal/cameras/demo](../internal/cameras/demo)).
 - An iris in f-stops uses unit `"f"`. If the camera knows its lens, implement
   `core.LensReporter` and push `core.Event{Lens: ...}` on change: the GUI then shows the
   focal length, the focus range and keeps the iris inside the lens' limits.
