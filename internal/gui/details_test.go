@@ -3,6 +3,8 @@ package gui
 import (
 	"testing"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -161,23 +163,27 @@ func TestStripShowsTheFStop(t *testing.T) {
 	}
 }
 
-func TestOneSectionTakesTheFullWidth(t *testing.T) {
+// A maximised window on a 1920 x 1080 screen leaves about 1920 x 990 for the
+// canvas (title bar and taskbar).
+func TestDetailsFitAMaximisedFullHDWindowWithoutScrolling(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
-	sized(a)
+	a.Window().Resize(fyne.NewSize(1920, 990))
 	a.ShowDetails(1)
-	if len(a.details.secs) != 1 {
-		t.Skipf("%d sections", len(a.details.secs))
-	}
-	var w float32
-	for _, o := range all(a.details.body) {
-		if txt, ok := o.(*widgets.Text); ok && txt.Text() == "Correction colorimétrique" {
-			w = o.Size().Width
+	a.Window().Resize(fyne.NewSize(1920, 990))
+	var sc *container.Scroll
+	for _, o := range all(a.details.obj) {
+		if s, ok := o.(*container.Scroll); ok && s.Content != nil && s.Direction == container.ScrollVerticalOnly {
+			sc = s
+			break
 		}
 	}
-	if w == 0 {
-		t.Fatal("section title not found")
+	if sc == nil {
+		t.Fatal("details scroll not found")
 	}
-	if body := a.details.body.Size().Width; body > 0 && w < body*0.8 {
-		t.Errorf("section title spans %v of %v: the section must take the full width", w, body)
+	if need, have := sc.Content.MinSize().Height, sc.Size().Height; need > have {
+		t.Errorf("details need %v px of height, the window gives %v", need, have)
+	}
+	if need, have := sc.Content.MinSize().Width, sc.Size().Width; need > have {
+		t.Errorf("details need %v px of width, the window gives %v", need, have)
 	}
 }

@@ -26,6 +26,13 @@ type controlRow struct {
 const labelColWidth = 132
 
 func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow {
+	return buildControlRow(ctl, slot, spec, false)
+}
+
+// buildControlRow builds a row; compact is for a narrow column: a range
+// control puts a small name on a first line and − / slider / + / value on a
+// second.
+func buildControlRow(ctl *Controller, slot int, spec core.ControlSpec, compact bool) *controlRow {
 	r := &controlRow{spec: spec, kind: widgets.ChooseKind(spec)}
 	write := func(v core.Value) { ctl.Write(slot, spec.ID, v) }
 	label := ctl.tx.ControlLabel(spec)
@@ -90,9 +97,20 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 		if n, ok := neutralOf(spec); ok {
 			right = append(right, widgets.NewIconButton(icons.Reset, "", func() { set(n) }))
 		}
-		r.obj = container.NewBorder(nil, nil,
-			container.NewHBox(name(caption), stepButton(icons.Minus, func() { bump(-1) })),
-			container.NewHBox(right...), sl)
+		if compact {
+			var reset []fyne.CanvasObject
+			if len(right) > 2 {
+				reset = right[2:]
+			}
+			r.obj = container.NewVBox(
+				widgets.NewText(label, style.TextMuted, 11).Clip(),
+				container.NewBorder(nil, nil, stepButton(icons.Minus, func() { bump(-1) }),
+					container.NewHBox(append([]fyne.CanvasObject{right[0], widgets.Sized(72, 0, entry)}, reset...)...), sl))
+		} else {
+			r.obj = container.NewBorder(nil, nil,
+				container.NewHBox(name(caption), stepButton(icons.Minus, func() { bump(-1) })),
+				container.NewHBox(right...), sl)
+		}
 		r.apply = func(v *core.Value) {
 			if v != nil && v.Kind == core.KindRange {
 				sl.Set(v.Number)
@@ -226,7 +244,7 @@ type section struct {
 
 // buildSections groups every declared control that is not in skip by its
 // group, in the fixed display order. Groups without controls are omitted.
-func buildSections(ctl *Controller, slot int, skip map[core.ControlID]bool) []*section {
+func buildSections(ctl *Controller, slot int, skip map[core.ControlID]bool, compact bool) []*section {
 	byGroup := map[core.ControlGroup]*section{}
 	norm := func(g core.ControlGroup) core.ControlGroup {
 		for _, k := range texts.GroupOrder {
@@ -246,7 +264,7 @@ func buildSections(ctl *Controller, slot int, skip map[core.ControlID]bool) []*s
 			s = &section{group: g, title: ctl.tx.GroupTitle(g)}
 			byGroup[g] = s
 		}
-		s.rows = append(s.rows, newControlRow(ctl, slot, sp))
+		s.rows = append(s.rows, buildControlRow(ctl, slot, sp, compact))
 	}
 	var out []*section
 	for _, g := range texts.GroupOrder {

@@ -137,9 +137,6 @@ func (p *detailsPage) rebuild() {
 		title := widgets.NewText(p.ctl.tx.T(wheelGroups[g].Key), style.Text, 14).Bold().Align(fyne.TextAlignCenter)
 		cols = append(cols, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(title, wb.obj)))
 	}
-	if len(cols) > 0 {
-		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
-	}
 
 	// the other controls: half-width panels side by side, or one full-width
 	// panel when there is a single section
@@ -154,17 +151,30 @@ func (p *detailsPage) rebuild() {
 	}
 	var lower []fyne.CanvasObject
 
-	// every remaining control
-	p.secs = buildSections(p.ctl, p.slot, skip)
+	// every remaining control. A single section next to the wheels becomes
+	// their fourth column, with compact rows, so the whole page fits the
+	// screen (1920 x 1080) without scrolling.
+	p.secs = buildSections(p.ctl, p.slot, skip, false)
+	besideWheels := len(cols) > 0 && len(p.secs) == 1
+	if besideWheels {
+		p.secs = buildSections(p.ctl, p.slot, skip, true)
+	}
 	for _, s := range p.secs {
 		for _, r := range s.rows {
 			p.rows[r.spec.ID] = r
 		}
 		lower = append(lower, sectionObject(s, 1))
 	}
-	switch len(lower) {
-	case 0:
-	case 1: // a single section takes the full width, two columns of rows
+	switch {
+	case besideWheels:
+		cols = append(cols, lower[0])
+		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
+	case len(cols) > 0:
+		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
+	}
+	switch {
+	case besideWheels || len(lower) == 0:
+	case len(lower) == 1: // a single section takes the full width, two columns of rows
 		blocks = append(blocks, sectionObject(p.secs[0], 2))
 	default:
 		blocks = append(blocks, container.NewGridWithColumns(2, lower...))
