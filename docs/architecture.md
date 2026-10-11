@@ -38,7 +38,7 @@ Rules:
 | Module | State |
 |---|---|
 | `core`, `config`, `app` | Done, unit tested |
-| `cameras/*` | Models and control specs declared; no protocol (Placeholder) |
+| `cameras/*` | Blackmagic Studio 6K Pro: REST + event WebSocket, verified on hardware. Other models: specs declared, no protocol (Placeholder) |
 | `surfaces/micropanel` | Driver done and hardware verified; presence detection used by the GUI |
 | `surfaces/panel` | Panel controller wired in the app: displays, LEDs, camera select, keys, knobs, lever/ring with soft takeover. See [panel-mapping.md](panel-mapping.md) |
 | `gui` | Fyne native GUI |

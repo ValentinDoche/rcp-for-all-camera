@@ -24,7 +24,7 @@ Owner: Valentin (writes in French, so answer in French).
 | `surface-micro-panel` | **Driver done and verified on hardware** (Windows only): [internal/surfaces/micropanel](internal/surfaces/micropanel) |
 | panel controller | **Wired in the app**: [internal/surfaces/panel](internal/surfaces/panel), mapping in [docs/panel-mapping.md](docs/panel-mapping.md). Hardware render check pending owner photo (`go run ./cmd/panelcheck -t 60s`) |
 | `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, settings (bind NIC, autostart, operator lock, logs, export/import), camera event forwarding, `app.Service` API ([docs/app-api.md](docs/app-api.md)) |
-| cameras | **Models + control specs declared, no protocol** (`camerakit.Placeholder` returns `NOT_IMPLEMENTED`). 15 models; Panasonic UE150/UE160 complete from SKAARHOJ lists |
+| cameras | **Blackmagic Studio 6K Pro: real protocol** (REST + event WebSocket, [internal/cameras/blackmagic](internal/cameras/blackmagic)), read and write verified on hardware (`BMD_CAMERA=<ip> [BMD_CAMERA_WRITE=1] go test ./internal/cameras/blackmagic -run Live -v`). Other 14 models: specs declared, `camerakit.Placeholder` returns `NOT_IMPLEMENTED`. Panasonic UE150/UE160 complete from SKAARHOJ lists |
 | `gui` | Native Fyne GUI in [internal/gui](internal/gui), FR/EN via [internal/i18n](internal/i18n) ([docs/i18n.md](docs/i18n.md)), entry point [cmd/rcp](cmd/rcp) |
 | routers | **Not started** |
 
@@ -136,6 +136,14 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
 9. The **Bash tool mangles some heredocs** containing apostrophes; write files with the
    Write tool instead.
 10. The owner wants a **native** GUI. Wails (HTML in WebView2) was built then removed.
+11. **Blackmagic REST API**: the camera serves its own OpenAPI docs at
+    `http://<ip>/control/documentation.html`, but they are not exact. Focus is read
+    and written as `normalised`, not `focus`. The event socket is
+    `/control/api/v1/event/websocket`, and the subscribe answer carries the current
+    values. Numbers come back as float32 (0.1 → 0.10000000149), so the driver rounds
+    them to 6 decimals. The iris snaps to the lens' stops.
+12. The username has a space (`C:\Users\VALENTIN DOCHE`), which breaks the MinGW linker.
+    gcc is copied to `C:\mingw\mingw64\bin`, which is first on the user PATH.
 
 ## 7. What was tried and abandoned
 
