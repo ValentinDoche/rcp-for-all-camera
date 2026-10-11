@@ -66,8 +66,7 @@ Middle-Control-MacOS-4.0.4.dmg    ← third-party app; analysed, useless for USB
 paneltest.exe                     ← local build output, rebuild instead of trusting it
 ```
 
-Git repo on `main`, Conventional Commits (`feat(core): …`, `fix(gui): …`, `refactor`,
-`docs`, `test`, `chore`), each commit ends with the Co-Authored-By line.
+Git repo on `main`. Commit after every action, following the rules in §10.
 
 ## 4. Commands
 
@@ -202,3 +201,61 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
   with a pattern label shown on the SHUTTER display.
 - The owner asked for multi-agent work with the model chosen per task: Opus for
   reverse-engineering and architecture, Sonnet for well-specified UI/boilerplate.
+
+## 10. Commits (owner's standing rule)
+
+**Commit after every action, without being asked.** As soon as a piece of work is done
+and verified (a fix, a feature, a doc update), commit it before moving on or answering.
+Never leave finished work uncommitted. **Do not push** unless the owner asks.
+
+### Message format (Conventional Commits, in English)
+
+```
+<type>(<scope>): <summary>
+
+<body: what changed and why, wrapped at 72 columns>
+
+Co-Authored-By: <the attribution line given by the harness>
+```
+
+- **summary**: imperative or descriptive, lowercase start, no final period, 72 characters
+  at most. It says what the commit brings, e.g.
+  `feat(blackmagic): iris in f-stops, lens limits, zoom only with power zoom`.
+- **body**: optional for a one-line change, otherwise explain the why and anything a
+  future reader would not guess (assumptions, `TODO(verify)`, behaviour changes).
+- **footer**: always the Co-Authored-By line. A breaking change to a contract (app API
+  JSON, `rig.json`, `core` interfaces) adds `!` after the scope and a
+  `BREAKING CHANGE: …` footer.
+
+**Types**
+
+| Type | For |
+|---|---|
+| `feat` | a new capability for the user or another module |
+| `fix` | a bug fix |
+| `refactor` | code change with no behaviour change |
+| `perf` | faster or lighter, same behaviour |
+| `test` | tests only |
+| `docs` | documentation only (AGENTS.md, docs/, README, comments-only changes) |
+| `build` | go.mod, build flags, embedded assets pipeline |
+| `chore` | everything else (tooling, cleanup, renames of non-code files) |
+
+**Scopes**: the module touched, matching the repo layout: `core`, `config`, `app`, `gui`,
+`i18n`, `surface` (micropanel driver and panel controller), `blackmagic`, `sony`,
+`panasonic`, `cameras` (shared camera kits), `router` (later: `videohub`, `atem`, `vmix`),
+`paneltest`, `panelprobe`. Several modules in one commit: the main one, or none
+(`docs: …`).
+
+### What makes a commit clean
+
+1. **One logical change per commit.** Split a session's work into several commits
+   (for example core, then app, then driver, then GUI, then docs), in dependency order.
+2. **Every commit builds and passes on its own**: `gofmt -l internal` empty, `go vet ./...`,
+   `go test ./internal/...`. Check a partial commit with
+   `git stash push --keep-index --include-untracked`, run the checks, then `git stash pop`.
+   If a commit cannot pass alone, move the files it depends on into it.
+3. Docs that describe the change go in the same commit or in a `docs:` commit right
+   after it.
+4. Never commit build outputs (`rcp.exe`, `paneltest.exe`), screenshots, scratch files or
+   secrets. Stage files by name, not with `git add -A`.
+5. Never `--amend` or rewrite a commit that was pushed, never `--no-verify`.
