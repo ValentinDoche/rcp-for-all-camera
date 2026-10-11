@@ -49,6 +49,7 @@ type Camera struct {
 	status  core.Status
 	vals    map[core.ControlID]core.Value
 	raw     map[string]map[string]any // last object seen per property
+	lens    core.Lens
 	fps     float64
 	subs    map[int]func(core.Event)
 	nextSub int
@@ -63,7 +64,10 @@ type Camera struct {
 	firstOnce sync.Once
 }
 
-var _ core.Camera = (*Camera)(nil)
+var (
+	_ core.Camera       = (*Camera)(nil)
+	_ core.LensReporter = (*Camera)(nil)
+)
 
 // newCamera builds a camera; it does no I/O.
 func newCamera(specs []core.ControlSpec, cfg core.CameraConfig, port int) *Camera {
@@ -104,6 +108,13 @@ func (c *Camera) Controls() []core.ControlSpec {
 		out[i] = s
 	}
 	return out
+}
+
+// Lens is what the camera last reported about its lens.
+func (c *Camera) Lens() core.Lens {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lens
 }
 
 func (c *Camera) Status() core.Status {
@@ -437,8 +448,8 @@ func (c *Camera) handle(msg []byte) (subscribed bool, err error) {
 // applyJSON decodes one property object, updates the cache and notifies
 // subscribers of the controls that changed.
 func (c *Camera) applyJSON(path string, raw json.RawMessage) {
-	dec := decoders[path]
-	if dec == nil {
+	dec, lensDec := decoders[path], lensDecoders[path]
+	if dec == nil && lensDec == nil {
 		return
 	}
 	var o map[string]any
@@ -448,6 +459,17 @@ func (c *Camera) applyJSON(path string, raw json.RawMessage) {
 	c.mu.Lock()
 	c.raw[path] = o
 	var events []core.Event
+	if lensDec != nil {
+		old := c.lens
+		lensDec(&c.lens, o)
+		if c.lens != old {
+			l := c.lens
+			events = append(events, core.Event{Lens: &l})
+		}
+	}
+	if dec == nil {
+		dec = func(*Camera, map[string]any) map[core.ControlID]core.Value { return nil }
+	}
 	for id, v := range dec(c, o) {
 		if _, declared := c.byID[id]; !declared {
 			continue
@@ -477,6 +499,7 @@ func (c *Camera) setStatus(state core.ConnState, detail string) {
 	c.status = st
 	if state != core.StateConnected {
 		clear(c.vals) // stale once the link is gone
+		c.lens = core.Lens{}
 	}
 	subs := slices.Collect(maps.Values(c.subs))
 	c.mu.Unlock()

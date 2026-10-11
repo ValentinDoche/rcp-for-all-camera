@@ -55,6 +55,9 @@ func newFakeCamera(t *testing.T) *fakeCamera {
 		pathContrast: {"pivot": 0.5, "adjust": 1.0},
 		pathColor:    {"hue": 0.0, "saturation": 1.0},
 		pathLuma:     {"lumaContribution": 1.0},
+		pathIrisDesc: {"controllable": true, "apertureStop": map[string]any{"min": 2.8, "max": 22.0}},
+		pathZoomDesc: {"controllable": true, "focalLength": map[string]any{"adjustable": true, "min": 24.0, "max": 70.0}},
+		pathFocDesc:  {"controllable": true, "focusDistance": map[string]any{"adjustable": true, "min": 380.0, "max": 1e7}},
 	}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
@@ -252,7 +255,7 @@ func get(t *testing.T, cam *Camera, id core.ControlID) core.Value {
 func TestCameraInitialState(t *testing.T) {
 	cam, _ := connected(t, newFakeCamera(t))
 	for id, want := range map[core.ControlID]core.Value{
-		core.Iris:         core.Number(0.25),
+		core.Iris:         core.Number(4),
 		core.ISO:          core.Choice("400"),
 		core.ShutterSpeed: core.Choice("1/100"),
 		core.ShutterAngle: core.Number(180), // 360 * 50 fps / 100
@@ -274,14 +277,14 @@ func TestCameraSetSendsPutAndEchoes(t *testing.T) {
 	f := newFakeCamera(t)
 	cam, rec := connected(t, f)
 	ctx := context.Background()
-	if err := cam.Set(ctx, core.Iris, core.Number(0.5)); err != nil {
+	if err := cam.Set(ctx, core.Iris, core.Number(5.6)); err != nil {
 		t.Fatal(err)
 	}
-	if p := f.lastPut(); p.path != pathIris || p.body["normalised"] != 0.5 {
+	if p := f.lastPut(); p.path != pathIris || p.body["apertureStop"] != 5.6 {
 		t.Errorf("PUT %+v", p)
 	}
-	rec.waitFor(t, "iris event", hasValue(core.Iris, core.Number(0.5)))
-	if got := get(t, cam, core.Iris); got != core.Number(0.5) {
+	rec.waitFor(t, "iris event", hasValue(core.Iris, core.Number(5.6)))
+	if got := get(t, cam, core.Iris); got != core.Number(5.6) {
 		t.Errorf("cached iris %+v", got)
 	}
 }
@@ -356,12 +359,12 @@ func TestCameraRejectsBeforeIO(t *testing.T) {
 	f := newFakeCamera(t)
 	cam := newCamera(studio6kProSpecs(), core.CameraConfig{Host: "127.0.0.1"}, 1)
 	ctx := context.Background()
-	if err := cam.Set(ctx, core.Iris, core.Number(0.5)); !errors.Is(err, core.ErrNotConnected) {
+	if err := cam.Set(ctx, core.Iris, core.Number(5.6)); !errors.Is(err, core.ErrNotConnected) {
 		t.Errorf("Set before Connect = %v, want ErrNotConnected", err)
 	}
 	cam2, _ := connected(t, f)
 	before := f.putCount()
-	if err := cam2.Set(ctx, core.Iris, core.Number(2)); !errors.Is(err, core.ErrInvalidValue) {
+	if err := cam2.Set(ctx, core.Iris, core.Number(40)); !errors.Is(err, core.ErrInvalidValue) {
 		t.Errorf("out of range = %v", err)
 	}
 	if err := cam2.Set(ctx, core.ND, core.Choice("3")); !errors.Is(err, core.ErrInvalidValue) {
@@ -402,7 +405,7 @@ func TestCameraReconnects(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if got := get(t, cam, core.Iris); got != core.Number(0.25) {
+	if got := get(t, cam, core.Iris); got != core.Number(4) {
 		t.Errorf("iris after reconnect %+v", got)
 	}
 }
@@ -434,5 +437,34 @@ func TestCameraFirstAttemptFails(t *testing.T) {
 	}
 	if st := cam.Status().State; st != core.StateError && st != core.StateConnecting {
 		t.Errorf("status %s, want error or connecting (retrying)", st)
+	}
+}
+
+func TestCameraLens(t *testing.T) {
+	f := newFakeCamera(t)
+	cam, rec := connected(t, f)
+	want := core.Lens{
+		IrisMin: 2.8, IrisMax: 22, FocalLength: 24, FocalMin: 24, FocalMax: 70,
+		FocusNear: 0.38, FocusFar: core.FocusInfinity,
+	}
+	if got := cam.Lens(); got != want {
+		t.Errorf("lens = %+v, want %+v", got, want)
+	}
+	f.push(pathZoom, map[string]any{"focalLength": 35.0, "normalised": 0.2})
+	rec.waitFor(t, "lens event", func(es []core.Event) bool {
+		for _, e := range es {
+			if e.Lens != nil && e.Lens.FocalLength == 35 {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func TestFocusMetres(t *testing.T) {
+	for mm, want := range map[float64]float64{0: 0, -1: 0, 450: 0.45, 2500: 2.5, 1e6: core.FocusInfinity} {
+		if got := focusMetres(mm); got != want {
+			t.Errorf("focusMetres(%v) = %v, want %v", mm, got, want)
+		}
 	}
 }

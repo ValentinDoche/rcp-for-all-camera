@@ -44,7 +44,7 @@ func TestModels(t *testing.T) {
 		if m.ID == "blackmagic.studio6kpro" {
 			want = core.SupportExperimental
 		}
-		if m.Brand != "Blackmagic Design" || m.Auth != core.AuthNone || m.DefaultPort != 80 || m.Support != want {
+		if m.Brand != "Blackmagic Design" || m.Auth != core.AuthNone || m.DefaultPort != 80 || m.Support != want || !m.InterchangeableLens {
 			t.Errorf("%s: unexpected declaration %+v", m.ID, m)
 		}
 	}
@@ -124,5 +124,31 @@ func TestCommonControls(t *testing.T) {
 	}
 	if _, ok := c[core.Pan]; ok {
 		t.Error("blackmagic cameras have no PTZ")
+	}
+}
+
+func TestZoomNeedsPowerZoom(t *testing.T) {
+	d := Driver{}
+	for _, m := range d.Models() {
+		for _, pz := range []bool{false, true} {
+			cam, err := d.New(m, core.CameraConfig{Model: m.ID, Host: "192.0.2.1", PowerZoom: pz})
+			if err != nil {
+				t.Fatal(err)
+			}
+			has := false
+			for _, s := range cam.Controls() {
+				has = has || s.ID == core.Zoom
+			}
+			if has != pz {
+				t.Errorf("%s: power zoom %v, zoom declared %v", m.ID, pz, has)
+			}
+		}
+	}
+}
+
+func TestIrisInFStops(t *testing.T) {
+	s := controls(t, "blackmagic.studio6kpro")[core.Iris]
+	if s.Unit != "f" || s.Min != 1 || s.Max != 22 {
+		t.Errorf("iris spec %+v", s)
 	}
 }

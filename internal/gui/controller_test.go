@@ -90,6 +90,7 @@ func (f *fakeAPI) Controls(slot int) ([]app.ControlView, error) {
 	f.loads++
 	return append([]app.ControlView(nil), f.controls[slot]...), nil
 }
+func (f *fakeAPI) Lens(int) (core.Lens, error) { return core.Lens{}, nil }
 func (f *fakeAPI) SetControl(slot int, id string, v core.Value) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

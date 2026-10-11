@@ -24,6 +24,9 @@ const (
 	pathIris     = "/lens/iris"
 	pathFocus    = "/lens/focus"
 	pathZoom     = "/lens/zoom"
+	pathIrisDesc = "/lens/iris/description"
+	pathFocDesc  = "/lens/focus/description"
+	pathZoomDesc = "/lens/zoom/description"
 	pathGain     = "/video/gain"
 	pathISO      = "/video/iso"
 	pathShutter  = "/video/shutter"
@@ -48,7 +51,7 @@ const (
 var watched = []string{
 	pathFormat, pathIris, pathFocus, pathZoom, pathGain, pathISO, pathShutter, pathND,
 	pathWB, pathTint, pathRecord, pathLift, pathGamma, pathGainCC, pathOffset,
-	pathContrast, pathColor, pathLuma,
+	pathContrast, pathColor, pathLuma, pathIrisDesc, pathFocDesc, pathZoomDesc,
 }
 
 // colorCtl maps one control onto one key of a color correction property.
@@ -94,7 +97,7 @@ type decoder func(c *Camera, o map[string]any) map[core.ControlID]core.Value
 var decoders = func() map[string]decoder {
 	m := map[string]decoder{
 		pathFormat:  decodeFormat,
-		pathIris:    numberOf(core.Iris, "normalised"),
+		pathIris:    numberOf(core.Iris, "apertureStop"),
 		pathFocus:   numberOf(core.Focus, "normalised", "focus"),
 		pathZoom:    numberOf(core.Zoom, "normalised"),
 		pathGain:    numberOf(core.Gain, "gain"),
@@ -245,7 +248,7 @@ func kv(pairs ...any) map[string]any {
 func commandFor(id core.ControlID, v core.Value) (command, error) {
 	switch id {
 	case core.Iris:
-		return command{path: pathIris, body: kv("normalised", v.Number)}, nil
+		return command{path: pathIris, body: kv("apertureStop", v.Number)}, nil
 	case core.AutoIris:
 		return command{path: pathAutoExp, body: kv("mode", "OneShot", "type", "Iris")}, nil
 	case core.Focus:
@@ -291,4 +294,59 @@ func commandFor(id core.ControlID, v core.Value) (command, error) {
 		}
 	}
 	return command{}, fmt.Errorf("%s: %w", id, core.ErrUnknownControl)
+}
+
+// lensDecoders update the lens information from the lens properties. They run
+// with the camera lock held, like decoders.
+var lensDecoders = map[string]func(l *core.Lens, o map[string]any){
+	pathZoom: func(l *core.Lens, o map[string]any) {
+		if f, ok := num(o, "focalLength"); ok && f > 0 {
+			l.FocalLength = f
+		}
+	},
+	// The documented GET has no distance, but the PUT takes focusDistance;
+	// read it when a firmware reports it.
+	pathFocus: func(l *core.Lens, o map[string]any) {
+		if f, ok := num(o, "focusDistance"); ok && f > 0 {
+			l.FocusDistance = focusMetres(f)
+		}
+	},
+	pathIrisDesc: func(l *core.Lens, o map[string]any) {
+		l.IrisMin, l.IrisMax = minMax(o, "apertureStop")
+	},
+	pathZoomDesc: func(l *core.Lens, o map[string]any) {
+		l.FocalMin, l.FocalMax = minMax(o, "focalLength")
+	},
+	pathFocDesc: func(l *core.Lens, o map[string]any) {
+		near, far := minMax(o, "focusDistance")
+		l.FocusNear, l.FocusFar = focusMetres(near), focusMetres(far)
+	},
+}
+
+// minMax reads {"key": {"min": a, "max": b}}; a missing or bad pair is 0, 0.
+func minMax(o map[string]any, key string) (lo, hi float64) {
+	m, _ := o[key].(map[string]any)
+	lo, okLo := num(m, "min")
+	hi, okHi := num(m, "max")
+	if !okLo || !okHi || lo <= 0 || hi < lo {
+		return 0, 0
+	}
+	return lo, hi
+}
+
+// focusInfinityMM is the distance from which the camera means infinity.
+// TODO(verify): the API documents no unit nor infinity encoding for focus
+// distances; millimetres are assumed, as for the integer focusDistance PUT.
+const focusInfinityMM = 1e6
+
+// focusMetres converts a focus distance from the camera (millimetres) to
+// metres; 0 stays unknown.
+func focusMetres(mm float64) float64 {
+	switch {
+	case mm <= 0:
+		return 0
+	case mm >= focusInfinityMM:
+		return core.FocusInfinity
+	}
+	return mm / 1000
 }

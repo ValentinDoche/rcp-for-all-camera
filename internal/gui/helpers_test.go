@@ -106,6 +106,14 @@ type liveCam struct {
 	setErr error
 	refuse bool // Connect fails: the camera stays offline or in error
 	sets   []setCall
+	lens   core.Lens
+}
+
+// Lens makes liveCam a core.LensReporter, with a 24-70 mm f/2.8 zoom.
+func (c *liveCam) Lens() core.Lens {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lens
 }
 
 type setCall struct {
@@ -156,6 +164,9 @@ func (c *liveCam) setCalls() []setCall {
 func sample(sp core.ControlSpec) core.Value {
 	switch sp.ID {
 	case core.Iris:
+		if sp.Unit == "f" {
+			return core.Number(4)
+		}
 		return core.Number(math.Min(sp.Max, math.Max(sp.Min, sp.Min+0.62*(sp.Max-sp.Min))))
 	case core.MasterBlack:
 		return core.Number((sp.Min + sp.Max) / 2)
@@ -217,6 +228,10 @@ func (d liveDriver) New(m core.ModelInfo, cfg core.CameraConfig) (core.Camera, e
 		return nil, err
 	}
 	lc := &liveCam{Camera: inner, values: map[core.ControlID]core.Value{}, state: core.StateConnected}
+	if m.InterchangeableLens {
+		lc.lens = core.Lens{IrisMin: 2.8, IrisMax: 22, FocalLength: 35, FocalMin: 24, FocalMax: 70,
+			FocusNear: 0.38, FocusFar: core.FocusInfinity}
+	}
 	switch {
 	case len(cfg.Host) > 3 && cfg.Host[len(cfg.Host)-3:] == ".44":
 		lc.state, lc.refuse = core.StateDisconnected, true
@@ -301,7 +316,7 @@ func seedRig(t testing.TB, svc *app.Service) {
 	t.Helper()
 	pw := "secret"
 	for i, in := range []app.SlotInput{
-		{Model: "blackmagic.studio6kpro", Name: "Plateau", Host: "192.168.1.41"},
+		{Model: "blackmagic.studio6kpro", Name: "Plateau", Host: "192.168.1.41", PowerZoom: true},
 		{Model: "sony.fx6", Name: "Régie", Host: "192.168.1.42", Username: "admin", Password: &pw},
 		{Model: "panasonic.awue150", Name: "Cyclo", Host: "192.168.1.44"},
 	} {

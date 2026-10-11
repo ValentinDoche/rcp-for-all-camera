@@ -62,7 +62,7 @@ func TestLiveWrite(t *testing.T) {
 		v   core.Value
 		tol float64 // accepted gap: the iris snaps to the lens' stops
 	}{
-		{core.Iris, core.Number(0.3), 0.05},
+		{core.Iris, core.Number(5.6), 1},
 		{core.Focus, core.Number(0.2), 0},
 		{core.Gain, core.Number(6), 0},
 		{core.ISO, core.Choice("800"), 0},

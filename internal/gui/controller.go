@@ -27,6 +27,7 @@ type API interface {
 	ClearSlot(slot int) error
 	SelectSlot(slot int) error
 	Controls(slot int) ([]app.ControlView, error)
+	Lens(slot int) (core.Lens, error)
 	SetControl(slot int, id string, v core.Value) error
 	ConfirmSetControl(slot int, id string, v core.Value) error
 	PanelStatus() app.PanelStatus
@@ -74,6 +75,7 @@ const (
 	ChPanel                    // USB panel detection
 	ChSlot                     // a slot's camera or control list changed
 	ChValue                    // one control value changed (Slot, ID)
+	ChLens                     // the lens information of a slot changed
 	ChNotice                   // status-bar notice
 )
 
@@ -90,6 +92,7 @@ type slotData struct {
 	specs  []core.ControlSpec
 	byID   map[core.ControlID]int
 	values map[core.ControlID]core.Value
+	lens   core.Lens
 	loaded bool
 	gen    int // bumped on every (re)load to drop stale answers
 }
@@ -252,6 +255,25 @@ func (c *Controller) Value(slot int, id core.ControlID) *core.Value {
 	return nil
 }
 
+// Target is the value a control is heading to: the last write still in
+// flight, else the last known value (nil while unknown). Step buttons build
+// on it, so quick repeated taps add up.
+func (c *Controller) Target(slot int, id core.ControlID) *core.Value {
+	if v, ok := c.latest[fmt.Sprintf("%d/%s", slot, id)]; ok {
+		return &v
+	}
+	return c.Value(slot, id)
+}
+
+// Lens returns what the slot's camera reports about its lens (zero fields
+// are unknown).
+func (c *Controller) Lens(slot int) core.Lens {
+	if sd := c.data(slot); sd != nil {
+		return sd.lens
+	}
+	return core.Lens{}
+}
+
 // Loaded reports whether the controls of the slot have been read.
 func (c *Controller) Loaded(slot int) bool {
 	sd := c.data(slot)
@@ -301,7 +323,7 @@ func cameraKey(v *app.CameraView) string {
 	if v == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s|%s|%s|%d|%s|%t", v.Model, v.Name, v.Host, v.Port, v.Username, v.HasPassword)
+	return fmt.Sprintf("%s|%s|%s|%d|%s|%t|%t", v.Model, v.Name, v.Host, v.Port, v.Username, v.HasPassword, v.PowerZoom)
 }
 
 func (c *Controller) applyRig(r app.Rig) {
@@ -333,6 +355,7 @@ func (c *Controller) applyRig(r app.Rig) {
 			} else {
 				// connection lost: the values are no longer current
 				c.slots[i].values = nil
+				c.slots[i].lens = core.Lens{}
 				c.slots[i].gen++
 				c.notify(Change{Kind: ChSlot, Slot: slot})
 			}
@@ -358,6 +381,13 @@ func (c *Controller) applyCameraEvent(e app.CameraEvent) {
 	ev := e.Event
 	if ev.Status != nil {
 		c.RefreshRig()
+		return
+	}
+	if ev.Lens != nil {
+		if sd.lens != *ev.Lens {
+			sd.lens = *ev.Lens
+			c.notify(Change{Kind: ChLens, Slot: e.Slot})
+		}
 		return
 	}
 	if ev.Control == "" {
@@ -407,6 +437,7 @@ func (c *Controller) loadControls(slot int) {
 	g := sd.gen
 	c.async(func() {
 		views, err := c.api.Controls(slot)
+		lens, _ := c.api.Lens(slot)
 		c.ui(func() {
 			cur := c.data(slot)
 			if cur == nil || cur.gen != g {
@@ -426,6 +457,7 @@ func (c *Controller) loadControls(slot int) {
 					cur.values[v.Spec.ID] = *v.Value
 				}
 			}
+			cur.lens = lens
 			cur.loaded = true
 			c.notify(Change{Kind: ChSlot, Slot: slot})
 		})

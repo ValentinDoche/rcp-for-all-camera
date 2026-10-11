@@ -240,8 +240,8 @@ func TestPadDragWritesIrisAndMasterBlack(t *testing.T) {
 		got[c.ID] = c.V
 	}
 	iris, ok := got[core.Iris]
-	if !ok || iris.Number != 1 {
-		t.Errorf("top of the pad is fully open (iris max): %+v", got)
+	if !ok || iris.Number != 2.8 {
+		t.Errorf("top of the pad is fully open (the lens' widest f-stop, f/2.8): %+v", got)
 	}
 }
 
@@ -262,7 +262,8 @@ func TestNotImplementedDriverShowsNoticeAndRestoresValue(t *testing.T) {
 		t.Errorf("iris must stay %v, got %v", before, v)
 	}
 	_, y := pad.Pos()
-	_, wantY := widgets.ValuesToPad(nil, &widgets.Range{Min: 0, Max: 1}, 0, before)
+	sp, _ := a.ctl.Spec(1, core.Iris)
+	wantY := widgets.NewIrisScale(sp, a.ctl.Lens(1)).Open(before)*2 - 1
 	if y != wantY {
 		t.Errorf("pad must return to the last known position: y=%v want %v", y, wantY)
 	}

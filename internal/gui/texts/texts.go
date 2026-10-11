@@ -119,6 +119,9 @@ func (x Texts) FormatValue(s core.ControlSpec, v *core.Value) string {
 	}
 	switch s.Kind {
 	case core.KindRange:
+		if s.Unit == "f" {
+			return Iris(v.Number)
+		}
 		txt := x.Number(v.Number, Decimals(s.Step))
 		if s.Min < 0 && v.Number > 0 {
 			txt = "+" + txt

@@ -13,6 +13,7 @@ package blackmagic
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -49,6 +50,9 @@ func (Driver) New(m core.ModelInfo, cfg core.CameraConfig) (core.Camera, error) 
 	if err != nil {
 		return nil, err
 	}
+	if !cfg.PowerZoom {
+		specs = slices.DeleteFunc(specs, func(s core.ControlSpec) bool { return s.ID == core.Zoom })
+	}
 	if m.ID != "blackmagic.studio6kpro" {
 		return camerakit.NewPlaceholder(specs), nil
 	}
@@ -63,7 +67,7 @@ func pocket(id, name string) core.ModelInfo {
 	return core.ModelInfo{
 		ID: core.ModelID("blackmagic." + id), Brand: "Blackmagic Design", Name: name, Driver: "blackmagic",
 		Transports: []core.Transport{core.TransportUSBEthernet}, DefaultPort: 80,
-		Auth: core.AuthNone, Support: core.SupportPlanned,
+		Auth: core.AuthNone, Support: core.SupportPlanned, InterchangeableLens: true,
 		Notes: "API REST Blackmagic Camera Control via adaptateur USB-C Ethernet ; le Bluetooth n'est pas encore pris en charge et la version de firmware minimale reste à vérifier.",
 	}
 }
@@ -72,7 +76,7 @@ func studio(id, name string) core.ModelInfo {
 	return core.ModelInfo{
 		ID: core.ModelID("blackmagic." + id), Brand: "Blackmagic Design", Name: name, Driver: "blackmagic",
 		Transports: []core.Transport{core.TransportEthernet}, DefaultPort: 80,
-		Auth: core.AuthNone, Support: core.SupportPlanned,
+		Auth: core.AuthNone, Support: core.SupportPlanned, InterchangeableLens: true,
 		Notes: "API REST Blackmagic Camera Control sur le port Ethernet, WebSocket pour les événements ; plages à vérifier sur la caméra réelle.",
 	}
 }

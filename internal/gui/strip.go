@@ -104,7 +104,7 @@ func (s *strip) onChange(ch Change) {
 		if ch.Slot == s.slot {
 			s.refresh(false)
 		}
-	case ChValue:
+	case ChValue, ChLens:
 		if ch.Slot == s.slot && s.content != nil {
 			s.applyContent()
 		}
@@ -374,23 +374,30 @@ func labeledVertical(caption string, sl *widgets.Slider) fyne.CanvasObject {
 		widgets.NewText(caption, style.TextMuted, 10).Align(fyne.TextAlignCenter), nil, nil, nil, sl))
 }
 
-func (s *strip) onPad(c *stripContent, x, y float64) {
-	var irisR, mbR *widgets.Range
-	if sp, ok := s.ctl.Spec(s.slot, core.Iris); ok {
-		r := widgets.RangeOf(sp)
-		irisR = &r
+// irisScale is the iris scale of the slot's camera and lens.
+func (s *strip) irisScale() (widgets.IrisScale, bool) {
+	sp, ok := s.ctl.Spec(s.slot, core.Iris)
+	if !ok {
+		return widgets.IrisScale{}, false
 	}
+	return widgets.NewIrisScale(sp, s.ctl.Lens(s.slot)), true
+}
+
+// onPad: up opens the iris, right raises the master black.
+func (s *strip) onPad(c *stripContent, x, y float64) {
+	if k, ok := s.irisScale(); ok {
+		v := k.At((y + 1) / 2)
+		s.ctl.Write(s.slot, core.Iris, core.Number(v))
+		if c.meter != nil {
+			c.meter.SetLevel(k.Open(v), true)
+		}
+	}
+	var mbR *widgets.Range
 	if sp, ok := s.ctl.Spec(s.slot, core.MasterBlack); ok {
 		r := widgets.RangeOf(sp)
 		mbR = &r
 	}
-	iv, mv := widgets.PadToValues(x, y, irisR, mbR)
-	if iv != nil {
-		s.ctl.Write(s.slot, core.Iris, core.Number(*iv))
-		if c.meter != nil {
-			c.meter.SetLevel(widgets.Norm(*iv, *irisR), true)
-		}
-	}
+	_, mv := widgets.PadToValues(x, y, nil, mbR)
 	if mv != nil {
 		s.ctl.Write(s.slot, core.MasterBlack, core.Number(*mv))
 	}
@@ -416,8 +423,8 @@ func (s *strip) applyContent() {
 	}
 	if c.pad != nil {
 		c.pad.SetActive(s.ctl.Active() == s.slot)
-		var mbR, irisR *widgets.Range
-		var mbV, irisV float64
+		var mbR *widgets.Range
+		var mbV float64
 		if sp, ok := s.ctl.Spec(s.slot, core.MasterBlack); ok {
 			r := widgets.RangeOf(sp)
 			mbR = &r
@@ -427,23 +434,19 @@ func (s *strip) applyContent() {
 				mbV = (sp.Min + sp.Max) / 2
 			}
 		}
-		if sp, ok := s.ctl.Spec(s.slot, core.Iris); ok {
-			r := widgets.RangeOf(sp)
-			irisR = &r
+		x, _ := widgets.ValuesToPad(mbR, nil, mbV, 0)
+		y := 0.0
+		if k, ok := s.irisScale(); ok {
 			if v := s.ctl.Value(s.slot, core.Iris); v != nil {
-				irisV = v.Number
-			} else {
-				irisV = (sp.Min + sp.Max) / 2
+				y = k.Open(v.Number)*2 - 1
 			}
 		}
-		x, y := widgets.ValuesToPad(mbR, irisR, mbV, irisV)
 		c.pad.SetPos(x, y)
 	}
 	if c.meter != nil {
-		if sp, ok := s.ctl.Spec(s.slot, core.Iris); ok {
-			v := s.ctl.Value(s.slot, core.Iris)
-			if v != nil {
-				c.meter.SetLevel(widgets.Norm(v.Number, widgets.RangeOf(sp)), true)
+		if k, ok := s.irisScale(); ok {
+			if v := s.ctl.Value(s.slot, core.Iris); v != nil {
+				c.meter.SetLevel(k.Open(v.Number), true)
 			} else {
 				c.meter.SetLevel(0, false)
 			}

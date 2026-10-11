@@ -93,12 +93,15 @@ func color(s core.ControlSpec, label string) core.ControlSpec {
 
 func lensSpecs() []core.ControlSpec {
 	return []core.ControlSpec{
-		// TODO(verify): lens-dependent; the API reports normalised 0..1 and apertureStop.
-		speckit.Range(core.Iris, 0, 1, 0.01, ""),
+		// f-stops (apertureStop). The camera snaps to the lens' stops and
+		// reports the lens' own limits in /lens/iris/description (core.Lens).
+		// TODO(verify): f/1.0 to f/22 covers the lenses seen so far.
+		speckit.Range(core.Iris, 1, 22, 0.1, "f"),
 		speckit.Action(core.AutoIris),
 		speckit.Range(core.Focus, 0, 1, 0.001, ""),
 		speckit.Action(core.AutoFocus),
-		// TODO(verify): zoom only works with motorised lenses.
+		// Only declared when the camera's config says the lens has a power
+		// zoom (Driver.New drops it otherwise).
 		speckit.Range(core.Zoom, 0, 1, 0.001, ""),
 	}
 }
