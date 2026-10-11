@@ -12,6 +12,7 @@ import (
 type SurfaceAPI interface {
 	Rig() Rig
 	Controls(slot int) ([]ControlView, error)
+	Lens(slot int) (core.Lens, error)
 	SetControl(slot int, id string, v core.Value) error
 	SelectSlot(slot int) error
 }

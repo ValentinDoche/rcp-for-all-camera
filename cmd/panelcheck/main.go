@@ -94,6 +94,8 @@ func (a *fakeAPI) Rig() app.Rig {
 	return a.rig
 }
 
+func (a *fakeAPI) Lens(int) (core.Lens, error) { return core.Lens{}, nil }
+
 func (a *fakeAPI) Controls(slot int) ([]app.ControlView, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

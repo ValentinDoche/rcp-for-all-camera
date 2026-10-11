@@ -14,6 +14,7 @@ type camState struct {
 	slot   int
 	specs  map[core.ControlID]core.ControlSpec
 	values map[core.ControlID]core.Value
+	lens   core.Lens
 }
 
 func newCamState(slot int, views []app.ControlView) camState {
@@ -37,10 +38,26 @@ func (c camState) has(id core.ControlID) bool {
 // does not have the control; known is false when its value is unknown.
 func (c camState) get(id core.ControlID) (spec core.ControlSpec, v core.Value, declared, known bool) {
 	spec, declared = c.specs[id]
+	if id == core.Iris {
+		spec = c.lensIris(spec)
+	}
 	if declared {
 		v, known = c.values[id]
 	}
 	return
+}
+
+// lensIris narrows an f-stop iris to the lens' own limits when the camera
+// reports them, so the lever never asks for an aperture the lens lacks.
+func (c camState) lensIris(s core.ControlSpec) core.ControlSpec {
+	l := c.lens
+	if !isFStop(s) || l.IrisMin <= 0 || l.IrisMax < l.IrisMin {
+		return s
+	}
+	if lo, hi := max(s.Min, l.IrisMin), min(s.Max, l.IrisMax); lo <= hi {
+		s.Min, s.Max = lo, hi
+	}
+	return s
 }
 
 // number returns a range control's known value.

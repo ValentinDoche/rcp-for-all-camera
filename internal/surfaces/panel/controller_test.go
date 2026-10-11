@@ -31,6 +31,7 @@ type fakeAPI struct {
 	values map[core.ControlID]core.Value
 	calls  []call
 	setErr error
+	lens   core.Lens
 	ctl    *Controller // receives rig:changed like app.Host would
 }
 
@@ -44,6 +45,12 @@ func (a *fakeAPI) Controls(slot int) ([]app.ControlView, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return views(a.specs, a.values), nil
+}
+
+func (a *fakeAPI) Lens(int) (core.Lens, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.lens, nil
 }
 
 func (a *fakeAPI) SetControl(slot int, id string, v core.Value) error {
@@ -598,6 +605,30 @@ func TestFailedCommandRaisesAlarmForAMoment(t *testing.T) {
 	for ms := int64(0); ms < 1000; ms += 50 {
 		if alarm(c2, t0.Add(time.Duration(ms)*time.Millisecond)) {
 			t.Fatal("asking for confirmation is not an error")
+		}
+	}
+}
+
+// The lever stops at the lens' widest aperture: pushed fully open on a
+// f/2.8 lens it asks for f/2.8, never a bigger aperture the lens lacks.
+func TestControllerIrisLeverStaysInsideTheLens(t *testing.T) {
+	api := sonyAPI() // camera at F4
+	api.lens = core.Lens{IrisMin: 2.8, IrisMax: 22}
+	h := start(t, api, Options{})
+	<-h.status
+	h.loaded(t)
+	s := (camState{specs: map[core.ControlID]core.ControlSpec{core.Iris: sonySpecs()[0]}, lens: api.lens}).lensIris(sonySpecs()[0])
+	raw := func(f float64) int32 { return int32(irisPos(s, f)*8192 - 4096) }
+	h.input(t, lever(raw(5.6)))
+	h.input(t, lever(raw(3.5))) // crosses F4: picked
+	for r := raw(3.5); r <= 4096; r += 64 {
+		h.input(t, lever(r)) // pushed slowly to the end
+	}
+	h.input(t, lever(4096))
+	h.waitCall(t, "iris", func(v core.Value) bool { return v.Number == 2.8 })
+	for _, c := range h.api.callsCopy() {
+		if c.id == string(core.Iris) && c.v.Number < 2.8 {
+			t.Errorf("lever asked for f/%v, beyond the lens' f/2.8", c.v.Number)
 		}
 	}
 }

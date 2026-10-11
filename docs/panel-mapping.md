@@ -65,7 +65,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | AUTO IRIS | `autoIris` action. |
 | W/B | `autoWhiteBalance` action. |
 | BARS | Toggles `colorBars`, **only when its current value is known** (never guess what goes on air). |
-| Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open). Normalized iris: linear, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
+| Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when the camera reports them (`core.Lens`), so the lever never asks for an aperture the lens lacks. Normalized iris: linear, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
 | Master black ring | `masterBlack`, linear over the range, soft takeover. |
 | WHITE R/G/B knobs | `gainR/G/B`, relative. |
 | BLACK R/G/B knobs | `liftR/G/B`, relative. |

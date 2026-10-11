@@ -183,6 +183,12 @@ func (c *Controller) cameraEvent(e app.CameraEvent) {
 		}
 		return
 	}
+	if ev.Lens != nil {
+		if e.Slot == c.cam.slot {
+			c.cam.lens = *ev.Lens
+		}
+		return
+	}
 	if ev.Control == core.Tally {
 		c.tally[e.Slot] = ev.Value.On
 	}
@@ -223,12 +229,14 @@ func (c *Controller) refresh() {
 		return
 	}
 	var views []app.ControlView
+	var lens core.Lens
 	if slot != 0 {
 		v, err := api.Controls(slot)
 		if err != nil {
 			c.log.Debug("panel: controls not read", "slot", slot, "err", err)
 		}
 		views = v
+		lens, _ = api.Lens(slot)
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -236,6 +244,7 @@ func (c *Controller) refresh() {
 		return // a newer refresh is queued
 	}
 	next := newCamState(slot, views)
+	next.lens = lens
 	for id, p := range map[core.ControlID]*pickup{core.Iris: &c.iris, core.MasterBlack: &c.mb} {
 		old, oldOK := c.cam.values[id]
 		nv, ok := next.values[id]
