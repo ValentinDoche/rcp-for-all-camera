@@ -48,6 +48,8 @@ type view struct {
 	wb bool
 	// armed: Store is armed (the next SCENE key stores).
 	armed bool
+	// off: PANEL ACTIVE turned panel control off.
+	off bool
 }
 
 // frame is one complete panel image.
@@ -72,7 +74,10 @@ func render(v view) frame {
 		}
 		f.leds.SetCamera(s.Slot, c)
 	}
-	f.leds.Set(micropanel.LEDPanelRed, true)
+	// PANEL ACTIVE: red while the panel controls the cameras, white when
+	// turned off.
+	f.leds.Set(micropanel.LEDPanelRed, !v.off)
+	f.leds.Set(micropanel.LEDPanelWhite, v.off)
 	// STORE: red while armed, off at rest.
 	f.leds.Set(micropanel.LEDStoreRed, v.armed)
 
@@ -147,9 +152,10 @@ func render(v view) frame {
 	f.leds.Set(micropanel.LEDAutoIris, v.held["AUTO_IRIS"] && c.has(core.AutoIris))
 
 	// IRIS/MB ACTIVE: red = the lever/ring drive the camera, white = waiting
-	// for pickup (or value unknown), off = neither control exists.
+	// for pickup, value unknown or panel control off, off = neither control
+	// exists.
 	if v.iris.declared || v.mb.declared {
-		drives := (v.iris.picked || !v.iris.declared) && (v.mb.picked || !v.mb.declared)
+		drives := !v.off && (v.iris.picked || !v.iris.declared) && (v.mb.picked || !v.mb.declared)
 		f.leds.Set(micropanel.LEDIrisMBRed, drives)
 		f.leds.Set(micropanel.LEDIrisMBWhite, !drives)
 	}
@@ -170,7 +176,7 @@ func render(v view) frame {
 			f.leds.Set(micropanel.LEDIrisBar0+i, i >= from && reach[i])
 		}
 		// Waiting for pickup: the lever position blinks on the scale.
-		if v.iris.waiting() && v.iris.havePos && v.blink {
+		if !v.off && v.iris.waiting() && v.iris.havePos && v.blink {
 			n := micropanel.LEDIrisBar0 + irisSegment(s, irisAt(s, w, v.iris.pos))
 			f.leds.Set(n, !ledOn(&f.leds, n))
 		}

@@ -43,12 +43,12 @@ Frames are rendered at ~30 Hz and only the reports that changed are sent.
 | CC (1 digit) | Blank: no standard control yet. |
 | Any display | **Blank** when the camera does not declare the control, **dashes** when the value is unknown (camera not connected; always the case while drivers are placeholders). Blank everywhere when the active slot is empty or no slot is selected. |
 | Iris scale (LEDs 0–15) | Camera iris as a bar from the opening down to CLS (2.0, 2.8 … 16 on segments 1, 3 … 13), **masked to the lever window**: segments the lever cannot reach are always off (CLS too when the window does not reach the closed end). Off when unknown. While the lever waits for pickup, the segment under the **lever** blinks (2 Hz). **While SENS is turned** (and 5 s after): the window itself, every reachable segment lit. |
-| IRIS/MB ACTIVE | Red = lever and ring both drive the camera (picked up). White = at least one is waiting for pickup or its value is unknown. Off = camera has neither control. |
+| IRIS/MB ACTIVE | Red = lever and ring both drive the camera (picked up). White = at least one is waiting for pickup or its value is unknown, or panel control is off. Off = camera has neither control. |
 | ND / GAIN / SHUTTER ▲▼ | Lit when the value can still move that way (off when unknown). In W/B mode GAIN ▲▼ follow `tint` and SHUTTER ▲▼ `whiteBalance`. SHUTTER ▲▼ are off during the COARSE preview. |
 | BARS + BARS indicator | `colorBars` is on. |
 | W/B | Lit while the white balance mode is on. |
 | AUTO IRIS | Lit while the key is held (if the camera has the action). |
-| PANEL ACTIVE (red) | Always on while the app drives the panel. |
+| PANEL ACTIVE | **Red** while the panel controls the cameras (default at start), **white only** when turned off with the key (see [Panel control off](#panel-control-off-panel-active)). |
 | NETWORK | Active camera connected. |
 | ALARM | Blinks while the active camera is in error state, and for 3 s after any command failed (`camera:commandFailed` or a failed panel write). A request for confirmation (operator lock) is not an error. |
 | STORE | **Red** while Store is armed (shared with the GUI's Store button), off at rest (the white LED is never used). |
@@ -67,6 +67,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | SHUTTER ▲▼ | Next/previous `shutterSpeed` option, else `shutterAngle` through 11.25, 15, 22.5, 45, 72, 90, 144, 172.8, 180, 216, 270, 360. **W/B mode**: `whiteBalance` ± max(its step, 100 K). |
 | AUTO IRIS | `autoIris` action. |
 | W/B | Toggles the **white balance mode** (below). It no longer triggers `autoWhiteBalance`: auto white balance stays available in the app. |
+| PANEL ACTIVE | Turns panel control off and on (below). |
 | STORE | Toggles the app's shared Store arming: `SetStoreArmed(!StoreArmed())`. Works with or without an active camera. |
 | SCENE 1–5 | Store armed: `StorePreset(active slot, n)` (the app disarms). Otherwise `RecallPreset(active slot, n)` if preset *n* is stored on the active slot, else nothing. No active camera: nothing. See [Presets](#presets-store-and-scene-15). |
 | BARS | Toggles `colorBars`, **only when its current value is known** (never guess what goes on air). |
@@ -75,7 +76,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | WHITE R/G/B knobs | `gainR/G/B`, relative. |
 | BLACK R/G/B knobs | `liftR/G/B`, relative. |
 | COARSE, SENS | Set the iris lever window (below). They never write to the camera. |
-| Other keys (CC ▲▼, ON, BLACK/FLARE, IRIS/MB ACTIVE, CALL, PANEL ACTIVE, PREVIEW), top-right knob | Not mapped; key presses are logged at debug. |
+| Other keys (CC ▲▼, ON, BLACK/FLARE, IRIS/MB ACTIVE, CALL, PREVIEW), top-right knob | Not mapped; key presses are logged at debug. |
 
 Rules common to every write:
 
@@ -96,6 +97,20 @@ reconnection, or a change of the value from elsewhere (GUI, camera, another even
 lever only takes control once it **reaches** the camera value (within 1 % of travel) or
 **crosses** it between two reports. Until then nothing is written. With an unknown value
 nothing is ever written.
+
+### Panel control off (PANEL ACTIVE)
+
+PANEL ACTIVE toggles whether the panel controls the cameras. It is **on** at start and
+not persisted (each app start is on).
+
+- **Off**: every input is ignored except PANEL ACTIVE itself: keys (CAMERA, ▲▼, W/B,
+  STORE, SCENE, BARS, AUTO IRIS…), color knobs, iris lever, master black ring, COARSE and
+  SENS. Nothing is written. The panel still renders the active camera and follows the
+  app (camera selected in the GUI, tally, Store arming). PANEL ACTIVE is white, IRIS/MB
+  ACTIVE white, the lever pickup hint does not blink. Turning off leaves the W/B mode.
+- **Back on**: nothing jumps. The color knobs count from their current position, the
+  lever and ring wait for pickup again (soft takeover), and the iris lever window is taken
+  from where COARSE and SENS are now (no preview, nothing written).
 
 ### Presets (STORE and SCENE 1–5)
 

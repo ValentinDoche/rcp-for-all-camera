@@ -541,6 +541,71 @@ func TestControllerSceneWithoutActiveSlotDoesNothing(t *testing.T) {
 	}
 }
 
+func TestControllerPanelActiveOff(t *testing.T) {
+	api := sonyAPI() // gainR = 1, iris F4
+	h := start(t, api, Options{})
+	<-h.status
+	h.loaded(t)
+	s := sonySpecs()[0]
+	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
+	var st micropanel.State
+	st.Analog[0], st.Lever = 500, raw(11)
+	h.input(t, st) // seed
+	send := func(keys ...micropanel.Key) {
+		st.Keys = keys
+		h.input(t, st)
+		st.Keys = nil
+		h.input(t, st)
+	}
+	send(0x57) // W/B mode on, to check it is left
+	waitFor(t, "W/B lit", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDWB) })
+	send(0x5D) // PANEL ACTIVE: off
+	waitFor(t, "PANEL ACTIVE white, W/B off", func() bool {
+		_, _, l := h.dev.snapshot()
+		return ledOn(&l, micropanel.LEDPanelWhite) && !ledOn(&l, micropanel.LEDPanelRed) && !ledOn(&l, micropanel.LEDWB)
+	})
+	before := len(api.callsCopy())
+	for _, k := range []micropanel.Key{0x4E, 0x54, 0x52, 0x58, 0x5B, 0x57, 0x4D, 0x48, 0x40} {
+		send(k)
+	}
+	st.Analog[0] = 900 // knob turned while off
+	h.input(t, st)
+	st.Lever = raw(2.8) // lever crosses the camera iris while off
+	h.input(t, st)
+	st.Ring = 4096
+	h.input(t, st)
+	time.Sleep(40 * time.Millisecond)
+	if c := api.callsCopy()[before:]; len(c) != 0 {
+		t.Fatalf("panel off wrote %+v", c)
+	}
+
+	send(0x5D) // back on: references re-taken
+	waitFor(t, "PANEL ACTIVE red", func() bool {
+		_, _, l := h.dev.snapshot()
+		return ledOn(&l, micropanel.LEDPanelRed) && !ledOn(&l, micropanel.LEDPanelWhite)
+	})
+	time.Sleep(20 * time.Millisecond)
+	if c := api.callsCopy()[before:]; len(c) != 0 {
+		t.Fatalf("turning the panel on wrote %+v", c)
+	}
+	// The knob counts from where it is now: +64 = +1, not +400.
+	st.Analog[0] = 964
+	h.input(t, st)
+	h.waitCall(t, "gainR", func(v core.Value) bool { return v.Number > 1.99 && v.Number < 2.01 })
+	// The lever must pick up the camera iris (F4) again.
+	st.Lever = raw(2.4)
+	h.input(t, st)
+	time.Sleep(30 * time.Millisecond)
+	for _, c := range api.callsCopy() {
+		if c.id == string(core.Iris) {
+			t.Fatalf("lever wrote %v without picking up again", c.v.Number)
+		}
+	}
+	st.Lever = raw(5.6) // crosses F4
+	h.input(t, st)
+	h.waitCall(t, "iris", func(v core.Value) bool { return v.Number > 5.5 && v.Number < 5.7 })
+}
+
 func TestControllerBarsUnknownDoesNothing(t *testing.T) {
 	api := sonyAPI()
 	delete(api.values, core.ColorBars)

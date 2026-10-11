@@ -76,6 +76,10 @@ type Controller struct {
 	knobs            irisKnobs
 	coarseAt, sensAt time.Time
 
+	// off: PANEL ACTIVE turned panel control off. Only PANEL ACTIVE acts;
+	// the panel still shows the cameras. Not persisted (on at start).
+	off bool
+
 	// storeArmed is the app's shared Store arming (EventStoreArmed).
 	storeArmed bool
 
@@ -321,12 +325,33 @@ func (c *Controller) onInput(s micropanel.State) {
 		c.irisKnobsLocked(s)
 		return
 	}
+	toggled := false
 	for _, k := range s.Keys {
-		if name := micropanel.KeyName(k); !c.held[name] {
+		name := micropanel.KeyName(k)
+		switch {
+		case c.held[name]:
+		case name == "PANEL_ACTIVE":
+			c.off, toggled = !c.off, true
+		case !c.off:
 			c.pressLocked(name)
 		}
 	}
 	c.held = now
+	if c.off {
+		// Panel control off: knobs, lever, ring, COARSE and SENS do nothing.
+		if toggled {
+			c.wbMode = false
+		}
+		c.prev = s
+		return
+	}
+	if toggled {
+		// Back on: re-take every reference from where the controls are now,
+		// so nothing jumps; the lever and ring must pick up again.
+		c.retakeLocked(s)
+		c.prev = s
+		return
+	}
 
 	slot := c.cam.slot
 	if slot != 0 && slot == c.rig.Active {
@@ -352,6 +377,21 @@ func (c *Controller) onInput(s micropanel.State) {
 		c.moveLocked(&c.mb, core.MasterBlack, leverPos(s.Ring), mbWindow, mbAt, mbPos)
 	}
 	c.prev = s
+}
+
+// retakeLocked takes the current positions as references: knobs relative
+// from here, lever and ring waiting for pickup, the iris lever window
+// where COARSE and SENS are now (without preview).
+func (c *Controller) retakeLocked(s micropanel.State) {
+	for i := range c.knobRef {
+		c.knobRef[i] = int(s.Analog[i])
+	}
+	c.iris.seed(leverPos(s.Lever))
+	c.mb.seed(leverPos(s.Ring))
+	if s.AnalogRead {
+		c.knobs = irisKnobs{coarse: int(s.Analog[knobCoarse]), sens: int(s.Analog[knobSens]), read: true}
+	}
+	c.coarseAt, c.sensAt = time.Time{}, time.Time{}
 }
 
 // irisKnobsLocked follows COARSE and SENS. Moving them writes nothing to the
@@ -532,6 +572,7 @@ func (c *Controller) frame(now time.Time) frame {
 		sens:   previewing(c.sensAt, now),
 		wb:     c.wbMode,
 		armed:  c.storeArmed,
+		off:    c.off,
 	})
 }
 

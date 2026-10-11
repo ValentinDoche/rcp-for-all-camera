@@ -220,9 +220,11 @@ func TestRenderNeverSetsLEDsAbove74(t *testing.T) {
 	all.cam.values[core.ColorBars] = core.Bool(true)
 	all.held = map[string]bool{"AUTO_IRIS": true}
 	all.wb, all.armed = true, true
+	off := baseView()
+	off.off = true
 	all.iris = pickHint{declared: true, known: true, havePos: true, pos: 1}
 	all.blink = true
-	for _, v := range []view{baseView(), {rig: rigWith(0), held: map[string]bool{}}, all} {
+	for _, v := range []view{baseView(), {rig: rigWith(0), held: map[string]bool{}}, all, off} {
 		f := render(v)
 		for n := maxLED + 1; n < len(f.leds)*8; n++ {
 			if ledOn(&f.leds, n) {
@@ -300,6 +302,32 @@ func TestRenderStoreAndScenes(t *testing.T) {
 		if ledOn(&f.leds, micropanel.LEDScene1+n-1) {
 			t.Errorf("armed, blink off: SCENE %d on", n)
 		}
+	}
+}
+
+func TestRenderPanelOff(t *testing.T) {
+	v := baseView()
+	s := sonySpecs()[0]
+	v.iris = pickHint{declared: true, known: true, picked: true, pos: irisPos(s, whole(s), 4), havePos: true}
+	v.mb = pickHint{declared: true, known: true, picked: true}
+	f := render(v)
+	if !ledOn(&f.leds, micropanel.LEDPanelRed) || ledOn(&f.leds, micropanel.LEDPanelWhite) {
+		t.Error("PANEL ACTIVE must be red while on")
+	}
+	v.off = true
+	f = render(v)
+	if ledOn(&f.leds, micropanel.LEDPanelRed) || !ledOn(&f.leds, micropanel.LEDPanelWhite) {
+		t.Error("PANEL ACTIVE must be white only while off")
+	}
+	if ledOn(&f.leds, micropanel.LEDIrisMBRed) || !ledOn(&f.leds, micropanel.LEDIrisMBWhite) {
+		t.Error("IRIS/MB ACTIVE must not be red while the panel is off")
+	}
+	want := digitsOf(map[micropanel.Display]string{
+		micropanel.DispND: "2", micropanel.DispGain: "06", micropanel.DispShutter: "50",
+		micropanel.DispIris: "F4.0", micropanel.DispMasterBlack: "+3",
+	})
+	if f.digits != want {
+		t.Error("the panel still shows the camera while off")
 	}
 }
 
