@@ -73,6 +73,10 @@ func newDetailsPage(ctl *Controller, win fyne.Window, slot int, back func()) *de
 			if p.presets != nil {
 				p.presets.refresh()
 			}
+		case ChStore:
+			if p.presets != nil {
+				p.presets.refresh()
+			}
 		}
 	})
 	p.rebuild()

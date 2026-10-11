@@ -23,7 +23,6 @@ type presetsBlock struct {
 	obj   fyne.CanvasObject
 	nums  [app.PresetCount]*widget.Button
 	store *widgets.IconButton
-	armed bool
 }
 
 func newPresetsBlock(ctl *Controller, slot int) *presetsBlock {
@@ -34,25 +33,20 @@ func newPresetsBlock(ctl *Controller, slot int) *presetsBlock {
 		b.nums[i] = widget.NewButton(strconv.Itoa(n), func() { b.press(n) })
 		cells[i] = b.nums[i]
 	}
-	b.store = widgets.NewIconButton(icons.Save, ctl.tx.T("preset.store"), func() { b.arm(!b.armed) })
+	b.store = widgets.NewIconButton(icons.Save, ctl.tx.T("preset.store"), func() { b.ctl.ArmStore(!b.ctl.StoreArmed()) })
 	b.obj = card(icons.Bookmarks, ctl.tx.T("preset.title"), true, b.store, container.NewGridWithColumns(app.PresetCount, cells...))
 	b.refresh()
 	return b
 }
 
-// press recalls preset n, or stores it when Store is armed.
+// press recalls preset n, or stores it when Store is armed (the service
+// disarms it after the store).
 func (b *presetsBlock) press(n int) {
-	if b.armed {
-		b.arm(false)
+	if b.ctl.StoreArmed() {
 		b.ctl.StorePreset(b.slot, n)
 		return
 	}
 	b.ctl.RecallPreset(b.slot, n)
-}
-
-func (b *presetsBlock) arm(on bool) {
-	b.armed = on
-	b.refresh()
 }
 
 func (b *presetsBlock) has(n int) bool {
@@ -67,17 +61,18 @@ func (b *presetsBlock) has(n int) bool {
 // refresh: a stored preset can be recalled; while Store is armed every
 // number can be pressed and stands out.
 func (b *presetsBlock) refresh() {
-	b.store.SetSelected(b.armed)
+	armed := b.ctl.StoreArmed()
+	b.store.SetSelected(armed)
 	for i, btn := range b.nums {
 		imp := widget.MediumImportance
-		if b.armed {
+		if armed {
 			imp = widget.HighImportance
 		}
 		if btn.Importance != imp {
 			btn.Importance = imp
 			btn.Refresh()
 		}
-		setEnabled(btn, b.armed || b.has(i+1))
+		setEnabled(btn, armed || b.has(i+1))
 	}
 }
 

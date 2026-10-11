@@ -52,7 +52,7 @@ func TestStoreArmsThenTheNumberStores(t *testing.T) {
 	if got := svc.Rig().Slots[0].Presets; len(got) != 1 || got[0] != 2 {
 		t.Fatalf("service presets = %v, want [2]", got)
 	}
-	if pb.armed {
+	if a.ctl.StoreArmed() || svc.StoreArmed() {
 		t.Error("storing disarms Store")
 	}
 	if !enabled(pb.nums[1]) || enabled(pb.nums[0]) {
@@ -107,7 +107,7 @@ func TestArmedStoreReplacesWithoutDialogAndCanBeCancelled(t *testing.T) {
 
 	test.Tap(pb.store)
 	test.Tap(pb.store) // pressed again: disarmed
-	if pb.armed || enabled(pb.nums[3]) {
+	if a.ctl.StoreArmed() || svc.StoreArmed() || enabled(pb.nums[3]) {
 		t.Error("a second press on Store cancels it")
 	}
 	if len(svc.Rig().Slots[0].Presets) != 1 {
@@ -130,5 +130,36 @@ func TestPresetErrorsBecomeNotices(t *testing.T) {
 	}
 	if n := tx.NoticeFor(&app.Error{Code: app.CodeInvalidPreset}); n.Text == "" || n.Text == tx.T("error.internal") {
 		t.Errorf("INVALID_PRESET notice = %+v", n)
+	}
+}
+
+func TestStoreArmedFromTheServiceLightsTheButton(t *testing.T) {
+	a, svc, _ := newTestApp(t, true)
+	sized(a)
+	a.ShowDetails(1)
+	pb := a.details.presets
+	if pb.store.Selected() || enabled(pb.nums[0]) {
+		t.Fatal("Store starts disarmed")
+	}
+	// The panel's STORE key arms the service; the event reaches the GUI.
+	svc.SetStoreArmed(true)
+	a.ctl.Emit(app.EventStoreArmed, app.StoreArmedState{Armed: true})
+	if !a.ctl.StoreArmed() || !pb.store.Selected() || !enabled(pb.nums[0]) {
+		t.Fatal("an armed service must light the Store button and enable the numbers")
+	}
+	// Pressing Store in the app disarms the service too.
+	test.Tap(pb.store)
+	if svc.StoreArmed() || pb.store.Selected() {
+		t.Fatal("tapping Store while armed must disarm everywhere")
+	}
+	// And the other way round.
+	test.Tap(pb.store)
+	if !svc.StoreArmed() || !pb.store.Selected() {
+		t.Fatal("tapping Store must arm the service")
+	}
+	svc.SetStoreArmed(false)
+	a.ctl.Emit(app.EventStoreArmed, app.StoreArmedState{Armed: false})
+	if pb.store.Selected() {
+		t.Fatal("disarming from the service must clear the button")
 	}
 }

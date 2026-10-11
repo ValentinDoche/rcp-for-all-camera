@@ -131,6 +131,9 @@ func (b *IconButton) SetIcon(s string) {
 	}
 }
 
+// Selected reports whether the button is shown as selected (armed).
+func (b *IconButton) Selected() bool { return b.selected }
+
 func (b *IconButton) SetSelected(on bool) {
 	if b.selected != on {
 		b.selected = on

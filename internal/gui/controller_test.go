@@ -15,6 +15,7 @@ import (
 
 // fakeAPI is a scriptable service for controller tests.
 type fakeAPI struct {
+	armed      bool
 	mu         sync.Mutex
 	rig        app.Rig
 	controls   map[int][]app.ControlView
@@ -112,6 +113,8 @@ func (f *fakeAPI) PanelStatus() app.PanelStatus { return f.panel }
 func (f *fakeAPI) StorePreset(int, int) error   { return nil }
 func (f *fakeAPI) RecallPreset(int, int) error  { return nil }
 func (f *fakeAPI) DeletePreset(int, int) error  { return nil }
+func (f *fakeAPI) SetStoreArmed(on bool)        { f.armed = on }
+func (f *fakeAPI) StoreArmed() bool             { return f.armed }
 func (f *fakeAPI) setCalls() []setCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()

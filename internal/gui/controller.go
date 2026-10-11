@@ -34,6 +34,8 @@ type API interface {
 	StorePreset(slot, n int) error
 	RecallPreset(slot, n int) error
 	DeletePreset(slot, n int) error
+	SetStoreArmed(on bool)
+	StoreArmed() bool
 }
 
 // SettingsAPI is the part of app.Service behind Configuration > General.
@@ -77,6 +79,7 @@ const (
 	ChValue                    // one control value changed (Slot, ID)
 	ChLens                     // the lens information of a slot changed
 	ChNotice                   // status-bar notice
+	ChStore                    // the shared Store arming changed
 )
 
 // Change is passed to subscribers.
@@ -129,11 +132,12 @@ type Controller struct {
 	thr   *widgets.Throttler
 	ttl   time.Duration
 
-	rig    app.Rig
-	panel  app.PanelStatus
-	models []core.ModelInfo
-	slots  [app.SlotCount]*slotData
-	notice texts.Notice
+	rig        app.Rig
+	panel      app.PanelStatus
+	models     []core.ModelInfo
+	slots      [app.SlotCount]*slotData
+	notice     texts.Notice
+	storeArmed bool // shared "Store" arming (the panel's STORE key too)
 	// latest write requested per slot/control, to tell stale answers apart.
 	latest  map[string]core.Value
 	confirm func(ConfirmRequest)
@@ -170,6 +174,7 @@ func NewController(api API, o Options) *Controller {
 func (c *Controller) Load() {
 	c.models = c.api.Models()
 	c.panel = c.api.PanelStatus()
+	c.storeArmed = c.api.StoreArmed()
 	c.applyRig(c.api.Rig())
 }
 
@@ -308,7 +313,29 @@ func (c *Controller) handle(name string, payload any) {
 		c.applyCameraEvent(p)
 	case *app.CameraEvent:
 		c.applyCameraEvent(*p)
+	case app.StoreArmedState:
+		c.applyStoreArmed(p.Armed)
+	case *app.StoreArmedState:
+		c.applyStoreArmed(p.Armed)
 	}
+}
+
+func (c *Controller) applyStoreArmed(on bool) {
+	if c.storeArmed == on {
+		return
+	}
+	c.storeArmed = on
+	c.notify(Change{Kind: ChStore})
+}
+
+// StoreArmed reports whether Store is armed (shared with the panel).
+func (c *Controller) StoreArmed() bool { return c.storeArmed }
+
+// ArmStore arms or disarms Store in the service. The local state follows
+// at once; the service event confirms it.
+func (c *Controller) ArmStore(on bool) {
+	c.applyStoreArmed(on)
+	c.async(func() { c.api.SetStoreArmed(on) })
 }
 
 func (c *Controller) applyPanel(p app.PanelStatus) {
@@ -557,7 +584,9 @@ func (c *Controller) Decline(r ConfirmRequest) {
 }
 
 // StorePreset snapshots the camera of slot as preset n (replacing it).
+// The service disarms Store afterwards, so the local state does too.
 func (c *Controller) StorePreset(slot, n int) {
+	c.applyStoreArmed(false)
 	c.async(func() {
 		err := c.api.StorePreset(slot, n)
 		c.ui(func() {
