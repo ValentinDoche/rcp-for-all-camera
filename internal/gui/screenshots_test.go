@@ -1,0 +1,80 @@
+package gui
+
+import (
+	"image"
+	"image/png"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/software"
+	"fyne.io/fyne/v2/test"
+
+	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
+)
+
+// TestScreenshots renders the main pages offscreen in both themes. It only
+// runs when RCP_SHOTS_DIR points to an output folder (never inside the repo).
+func TestScreenshots(t *testing.T) {
+	dir := os.Getenv("RCP_SHOTS_DIR")
+	if dir == "" {
+		t.Skip("set RCP_SHOTS_DIR to render screenshots")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	size := fyne.NewSize(1440, 810)
+	if os.Getenv("RCP_SHOTS_SMALL") != "" {
+		size = fyne.NewSize(1280, 720)
+	}
+
+	fa := test.NewTempApp(t)
+	svc, _, cams := newLiveService(t)
+	seedRig(t, svc)
+	(*cams)[0].values[core.Tally] = core.Bool(true)
+	a := New(fa, svc, syncOptions())
+	a.Window().Resize(size)
+	save := func(name string, mode style.Mode) {
+		img := software.RenderCanvas(a.Window().Canvas(), style.NewTheme(mode))
+		writePNG(t, filepath.Join(dir, name+"-"+string(mode)+".png"), img)
+	}
+	for _, mode := range []style.Mode{style.ModeDark, style.ModeLight} {
+		a.SetMode(mode)
+		a.ShowCameras()
+		a.Window().Resize(size)
+		save("1-cameras", mode)
+
+		a.ShowDetails(1)
+		a.Window().Resize(size)
+		save("2-details", mode)
+
+		a.ShowConfig(2)
+		a.Window().Resize(size)
+		save("3-config-edit", mode)
+
+		a.ShowConfig(3)
+		save("3b-config-edit-offline-cam", mode)
+		a.ShowCameras()
+	}
+	if os.Getenv("RCP_SHOTS_EMPTY") != "" {
+		// empty rig for the first-run look
+		a2, _, _ := newTestApp(t, false)
+		a2.Window().Resize(size)
+		img := software.RenderCanvas(a2.Window().Canvas(), style.NewTheme(style.ModeDark))
+		writePNG(t, filepath.Join(dir, "4-empty-dark.png"), img)
+	}
+}
+
+func writePNG(t *testing.T, path string, img image.Image) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
