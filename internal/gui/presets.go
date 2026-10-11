@@ -5,63 +5,54 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/icons"
-	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
-// presetButtonWidth keeps the 1..5 buttons compact.
-const presetButtonWidth = 34
-
-// presetsBlock is the "Presets" bar of the details page: on one line, buttons
-// 1..PresetCount to recall, store and delete the presets the app keeps for the
-// slot's camera.
+// presetsBlock is the "Presets" card of the details page. It works like the
+// panel's scene buttons: 1..PresetCount recall a stored preset; to store,
+// press Store first (it lights up), then the number. Arming Store is the
+// confirmation, so replacing a preset asks nothing more.
 type presetsBlock struct {
 	ctl  *Controller
-	win  fyne.Window
 	slot int
 
-	obj    fyne.CanvasObject
-	recall [app.PresetCount]*widget.Button
-	store  [app.PresetCount]*widget.Button
-	del    [app.PresetCount]*widget.Button
+	obj   fyne.CanvasObject
+	nums  [app.PresetCount]*widget.Button
+	store *widgets.IconButton
+	armed bool
 }
 
-func newPresetsBlock(ctl *Controller, win fyne.Window, slot int) *presetsBlock {
-	b := &presetsBlock{ctl: ctl, win: win, slot: slot}
-	tx := ctl.tx
-	group := func(icon, key string, btns *[app.PresetCount]*widget.Button, onTap func(n int)) fyne.CanvasObject {
-		cells := []fyne.CanvasObject{
-			widgets.NewIcon(icon, style.TextMuted, 16),
-			widgets.NewText(tx.T(key), style.TextMuted, 12),
-		}
-		for i := range btns {
-			n := i + 1
-			btn := widget.NewButton(strconv.Itoa(n), func() { onTap(n) })
-			btns[i] = btn
-			cells = append(cells, widgets.Sized(presetButtonWidth, 0, btn))
-		}
-		return container.NewHBox(cells...)
+func newPresetsBlock(ctl *Controller, slot int) *presetsBlock {
+	b := &presetsBlock{ctl: ctl, slot: slot}
+	cells := make([]fyne.CanvasObject, app.PresetCount)
+	for i := range b.nums {
+		n := i + 1
+		b.nums[i] = widget.NewButton(strconv.Itoa(n), func() { b.press(n) })
+		cells[i] = b.nums[i]
 	}
-	gap := func() fyne.CanvasObject { return widgets.Sized(18, 0, layout.NewSpacer()) }
-	row := container.NewHBox(
-		widgets.NewIcon(icons.Bookmarks, style.AccentText, 18),
-		widgets.NewText(tx.T("preset.title"), style.Text, 14).Bold(),
-		gap(),
-		group(icons.Bookmarks, "preset.recall", &b.recall, func(n int) { ctl.RecallPreset(slot, n) }),
-		gap(),
-		group(icons.Save, "preset.store", &b.store, b.onStore),
-		gap(),
-		group(icons.Trash, "preset.delete", &b.del, b.onDelete),
-	)
-	// No scroll container here: it would swallow the mouse wheel of the page.
-	b.obj = widgets.NewPanel(style.Surface, style.Border, 8, row)
+	b.store = widgets.NewIconButton(icons.Save, ctl.tx.T("preset.store"), func() { b.arm(!b.armed) })
+	b.obj = card(icons.Bookmarks, ctl.tx.T("preset.title"), b.store, container.NewGridWithColumns(app.PresetCount, cells...))
 	b.refresh()
 	return b
+}
+
+// press recalls preset n, or stores it when Store is armed.
+func (b *presetsBlock) press(n int) {
+	if b.armed {
+		b.arm(false)
+		b.ctl.StorePreset(b.slot, n)
+		return
+	}
+	b.ctl.RecallPreset(b.slot, n)
+}
+
+func (b *presetsBlock) arm(on bool) {
+	b.armed = on
+	b.refresh()
 }
 
 func (b *presetsBlock) has(n int) bool {
@@ -73,13 +64,20 @@ func (b *presetsBlock) has(n int) bool {
 	return false
 }
 
-// refresh enables the buttons that make sense for the stored presets.
+// refresh: a stored preset can be recalled; while Store is armed every
+// number can be pressed and stands out.
 func (b *presetsBlock) refresh() {
-	for i := range b.recall {
-		on := b.has(i + 1)
-		setEnabled(b.recall[i], on)
-		setEnabled(b.del[i], on)
-		setEnabled(b.store[i], true)
+	b.store.SetSelected(b.armed)
+	for i, btn := range b.nums {
+		imp := widget.MediumImportance
+		if b.armed {
+			imp = widget.HighImportance
+		}
+		if btn.Importance != imp {
+			btn.Importance = imp
+			btn.Refresh()
+		}
+		setEnabled(btn, b.armed || b.has(i+1))
 	}
 }
 
@@ -92,34 +90,4 @@ func setEnabled(btn *widget.Button, on bool) {
 	} else {
 		btn.Disable()
 	}
-}
-
-// ask shows a confirmation dialog, or runs yes at once without a window.
-func (b *presetsBlock) ask(title, body, yes string, run func()) {
-	if b.win == nil {
-		run()
-		return
-	}
-	tx := b.ctl.tx
-	showConfirm(b.win, title, body, yes, tx.T("confirm.no"), func(ok bool) {
-		if ok {
-			run()
-		}
-	})
-}
-
-func (b *presetsBlock) onStore(n int) {
-	if !b.has(n) {
-		b.ctl.StorePreset(b.slot, n)
-		return
-	}
-	tx := b.ctl.tx
-	b.ask(tx.T("preset.replaceTitle"), tx.T("preset.replaceBody", "n", n), tx.T("preset.replaceYes"),
-		func() { b.ctl.StorePreset(b.slot, n) })
-}
-
-func (b *presetsBlock) onDelete(n int) {
-	tx := b.ctl.tx
-	b.ask(tx.T("preset.deleteTitle"), tx.T("preset.deleteBody", "n", n), tx.T("preset.deleteYes"),
-		func() { b.ctl.DeletePreset(b.slot, n) })
 }

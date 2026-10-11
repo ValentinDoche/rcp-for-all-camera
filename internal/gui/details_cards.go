@@ -164,7 +164,8 @@ func (p *detailsPage) askValue(sp core.ControlSpec) {
 // exposureBlock lays the cards out in two halves of equal height: on the
 // left the iris, then the lens (focus and zoom) under it; on the right
 // compact half-height cards in two columns: gain, shutter, ND, white
-// balance, then contrast, saturation and hue. nil when there is none.
+// balance, contrast, saturation, hue and the presets. nil when there is
+// none.
 func (p *detailsPage) exposureBlock() fyne.CanvasObject {
 	var left, right []fyne.CanvasObject
 	for _, f := range []func() fyne.CanvasObject{p.irisCard, p.lensCard} {
@@ -181,6 +182,9 @@ func (p *detailsPage) exposureBlock() fyne.CanvasObject {
 		if c := p.imageCard(id); c != nil {
 			right = append(right, c)
 		}
+	}
+	if p.presets != nil {
+		right = append(right, p.presets.obj)
 	}
 	switch {
 	case len(left) == 0 && len(right) == 0:

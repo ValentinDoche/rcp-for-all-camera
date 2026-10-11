@@ -115,7 +115,8 @@ func (p *detailsPage) rebuild() {
 
 	var blocks []fyne.CanvasObject
 
-	// exposure and lens cards, then the presets
+	// exposure, lens, image and presets cards
+	p.presets = newPresetsBlock(p.ctl, p.slot)
 	if b := p.exposureBlock(); b != nil {
 		blocks = append(blocks, b)
 	}
@@ -123,8 +124,6 @@ func (p *detailsPage) rebuild() {
 	if sp, ok := p.ctl.Spec(p.slot, core.Record); ok && !sp.ReadOnly {
 		p.cards[core.Record] = true
 	}
-	p.presets = newPresetsBlock(p.ctl, p.win, p.slot)
-	blocks = append(blocks, p.presets.obj)
 
 	// three wheels
 	var cols []fyne.CanvasObject
