@@ -1,6 +1,7 @@
 package blackmagic
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/cameratest"
@@ -39,8 +40,50 @@ func TestModels(t *testing.T) {
 		t.Fatalf("%d models, want 6", n)
 	}
 	for _, m := range d.Models() {
-		if m.Brand != "Blackmagic Design" || m.Auth != core.AuthNone || m.DefaultPort != 80 || m.Support != core.SupportPlanned {
+		want := core.SupportPlanned
+		if m.ID == "blackmagic.studio6kpro" {
+			want = core.SupportExperimental
+		}
+		if m.Brand != "Blackmagic Design" || m.Auth != core.AuthNone || m.DefaultPort != 80 || m.Support != want {
 			t.Errorf("%s: unexpected declaration %+v", m.ID, m)
+		}
+	}
+}
+
+func TestOnlyStudio6kProHasProtocol(t *testing.T) {
+	d := Driver{}
+	for _, m := range d.Models() {
+		cam, err := d.New(m, core.CameraConfig{Model: m.ID, Host: "192.0.2.1"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, real := cam.(*Camera)
+		if real != (m.ID == "blackmagic.studio6kpro") {
+			t.Errorf("%s: real protocol = %v", m.ID, real)
+		}
+	}
+}
+
+func TestStudio6kProControls(t *testing.T) {
+	c := controls(t, "blackmagic.studio6kpro")
+	for _, id := range []core.ControlID{core.Iris, core.Gain, core.ISO, core.ND, core.MasterBlack, OffsetR, ContrastPivot, LumaContribution, core.Record} {
+		if _, ok := c[id]; !ok {
+			t.Errorf("studio6kpro lacks %s", id)
+		}
+	}
+	// The camera's REST API has no endpoint for these.
+	for _, id := range []core.ControlID{core.Tally, core.ColorBars, core.Detail} {
+		if _, ok := c[id]; ok {
+			t.Errorf("studio6kpro declares %s, which its API does not expose", id)
+		}
+	}
+	// Every writable control must map to a REST command.
+	for id, s := range c {
+		if s.ReadOnly {
+			continue
+		}
+		if _, err := commandFor(id, core.Value{Kind: s.Kind}); err != nil && !errors.Is(err, core.ErrInvalidValue) {
+			t.Errorf("%s: no command: %v", id, err)
 		}
 	}
 }
@@ -70,10 +113,10 @@ func TestND(t *testing.T) {
 }
 
 func TestCommonControls(t *testing.T) {
-	c := controls(t, "blackmagic.studio6kpro")
+	c := controls(t, "blackmagic.studio4kprog2")
 	for _, id := range []core.ControlID{core.Iris, core.Focus, core.WhiteBalance, core.LiftR, core.GainY, core.Record, core.ColorBars} {
 		if _, ok := c[id]; !ok {
-			t.Errorf("studio6kpro lacks %s", id)
+			t.Errorf("studio4kprog2 lacks %s", id)
 		}
 	}
 	if !c[core.Tally].ReadOnly {

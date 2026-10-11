@@ -1,0 +1,294 @@
+package blackmagic
+
+import (
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+
+	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+)
+
+// Driver-specific control ids: the camera exposes them, no standard id fits.
+const (
+	OffsetR          core.ControlID = "blackmagic.offsetR"
+	OffsetG          core.ControlID = "blackmagic.offsetG"
+	OffsetB          core.ControlID = "blackmagic.offsetB"
+	OffsetY          core.ControlID = "blackmagic.offsetY"
+	ContrastPivot    core.ControlID = "blackmagic.contrastPivot"
+	LumaContribution core.ControlID = "blackmagic.lumaContribution"
+)
+
+const (
+	pathFormat   = "/system/format"
+	pathIris     = "/lens/iris"
+	pathFocus    = "/lens/focus"
+	pathZoom     = "/lens/zoom"
+	pathGain     = "/video/gain"
+	pathISO      = "/video/iso"
+	pathShutter  = "/video/shutter"
+	pathND       = "/video/ndFilter"
+	pathWB       = "/video/whiteBalance"
+	pathTint     = "/video/whiteBalanceTint"
+	pathAutoExp  = "/video/autoExposure"
+	pathAutoWB   = "/video/whiteBalance/doAuto"
+	pathAutoFoc  = "/lens/focus/doAutoFocus"
+	pathRecord   = "/transports/0/record"
+	pathLift     = "/colorCorrection/lift"
+	pathGamma    = "/colorCorrection/gamma"
+	pathGainCC   = "/colorCorrection/gain"
+	pathOffset   = "/colorCorrection/offset"
+	pathContrast = "/colorCorrection/contrast"
+	pathColor    = "/colorCorrection/color"
+	pathLuma     = "/colorCorrection/lumaContribution"
+)
+
+// watched are the properties the driver subscribes to on the event socket.
+// The camera answers the subscription with their current values.
+var watched = []string{
+	pathFormat, pathIris, pathFocus, pathZoom, pathGain, pathISO, pathShutter, pathND,
+	pathWB, pathTint, pathRecord, pathLift, pathGamma, pathGainCC, pathOffset,
+	pathContrast, pathColor, pathLuma,
+}
+
+// colorCtl maps one control onto one key of a color correction property.
+type colorCtl struct {
+	id   core.ControlID
+	path string
+	key  string
+}
+
+// colorCtls is the single source of truth for the color correction controls,
+// used both to decode what the camera reports and to build what we send.
+var colorCtls = func() []colorCtl {
+	var t []colorCtl
+	ch := []string{"red", "green", "blue", "luma"}
+	for _, g := range []struct {
+		path string
+		ids  [4]core.ControlID
+	}{
+		{pathLift, [4]core.ControlID{core.LiftR, core.LiftG, core.LiftB, core.LiftY}},
+		{pathGamma, [4]core.ControlID{core.GammaR, core.GammaG, core.GammaB, core.GammaY}},
+		{pathGainCC, [4]core.ControlID{core.GainR, core.GainG, core.GainB, core.GainY}},
+		{pathOffset, [4]core.ControlID{OffsetR, OffsetG, OffsetB, OffsetY}},
+	} {
+		for i, id := range g.ids {
+			t = append(t, colorCtl{id, g.path, ch[i]})
+		}
+	}
+	return append(t,
+		// TODO(verify): the panel's master black ring is lift luma on ATEM cameras.
+		colorCtl{core.MasterBlack, pathLift, "luma"},
+		colorCtl{core.Contrast, pathContrast, "adjust"},
+		colorCtl{ContrastPivot, pathContrast, "pivot"},
+		colorCtl{core.Saturation, pathColor, "saturation"},
+		colorCtl{core.Hue, pathColor, "hue"},
+		colorCtl{LumaContribution, pathLuma, "lumaContribution"},
+	)
+}()
+
+// decoder turns the JSON object of one property into control values. It runs
+// with the camera lock held and must not call back into the camera.
+type decoder func(c *Camera, o map[string]any) map[core.ControlID]core.Value
+
+var decoders = func() map[string]decoder {
+	m := map[string]decoder{
+		pathFormat:  decodeFormat,
+		pathIris:    numberOf(core.Iris, "normalised"),
+		pathFocus:   numberOf(core.Focus, "normalised", "focus"),
+		pathZoom:    numberOf(core.Zoom, "normalised"),
+		pathGain:    numberOf(core.Gain, "gain"),
+		pathWB:      numberOf(core.WhiteBalance, "whiteBalance"),
+		pathTint:    numberOf(core.Tint, "whiteBalanceTint"),
+		pathISO:     decodeISO,
+		pathND:      decodeND,
+		pathShutter: decodeShutter,
+		pathRecord:  decodeRecord,
+	}
+	for _, cc := range colorCtls {
+		if _, ok := m[cc.path]; !ok {
+			m[cc.path] = decodeColor(cc.path)
+		}
+	}
+	return m
+}()
+
+// idPath is the property that holds each readable control.
+var idPath = func() map[core.ControlID]string {
+	m := map[core.ControlID]string{
+		core.Iris: pathIris, core.Focus: pathFocus, core.Zoom: pathZoom, core.Gain: pathGain,
+		core.ISO: pathISO, core.ShutterSpeed: pathShutter, core.ShutterAngle: pathShutter,
+		core.ND: pathND, core.WhiteBalance: pathWB, core.Tint: pathTint, core.Record: pathRecord,
+	}
+	for _, cc := range colorCtls {
+		m[cc.id] = cc.path
+	}
+	return m
+}()
+
+// num reads a number. The camera stores float32, so 0.1 comes back as
+// 0.10000000149; rounding to 6 decimals gives back the value that was sent.
+func num(o map[string]any, key string) (float64, bool) {
+	f, ok := o[key].(float64)
+	if !ok || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return math.Round(f*1e6) / 1e6, true
+}
+
+// numberOf reads the first of keys that is present.
+func numberOf(id core.ControlID, keys ...string) decoder {
+	return func(_ *Camera, o map[string]any) map[core.ControlID]core.Value {
+		for _, k := range keys {
+			if f, ok := num(o, k); ok {
+				return map[core.ControlID]core.Value{id: core.Number(f)}
+			}
+		}
+		return nil
+	}
+}
+
+func decodeColor(path string) decoder {
+	return func(_ *Camera, o map[string]any) map[core.ControlID]core.Value {
+		out := map[core.ControlID]core.Value{}
+		for _, cc := range colorCtls {
+			if cc.path != path {
+				continue
+			}
+			if f, ok := num(o, cc.key); ok {
+				out[cc.id] = core.Number(f)
+			}
+		}
+		return out
+	}
+}
+
+func decodeISO(_ *Camera, o map[string]any) map[core.ControlID]core.Value {
+	if f, ok := num(o, "iso"); ok {
+		return map[core.ControlID]core.Value{core.ISO: core.Choice(strconv.Itoa(int(math.Round(f))))}
+	}
+	return nil
+}
+
+func decodeND(_ *Camera, o map[string]any) map[core.ControlID]core.Value {
+	if f, ok := num(o, "stop"); ok {
+		return map[core.ControlID]core.Value{core.ND: core.Choice(strconv.FormatFloat(math.Round(f*100)/100, 'f', -1, 64))}
+	}
+	return nil
+}
+
+func decodeRecord(_ *Camera, o map[string]any) map[core.ControlID]core.Value {
+	if b, ok := o["recording"].(bool); ok {
+		return map[core.ControlID]core.Value{core.Record: core.Bool(b)}
+	}
+	return nil
+}
+
+// decodeFormat only records the frame rate, which the shutter conversion needs;
+// it then re-decodes the last shutter reading with it.
+func decodeFormat(c *Camera, o map[string]any) map[core.ControlID]core.Value {
+	fps := 0.0
+	if on, _ := o["offSpeedEnabled"].(bool); on {
+		fps, _ = num(o, "offSpeedFrameRate")
+	} else if s, ok := o["frameRate"].(string); ok {
+		fps, _ = strconv.ParseFloat(s, 64)
+	}
+	c.fps = fps
+	if sh := c.raw[pathShutter]; sh != nil {
+		return decodeShutter(c, sh)
+	}
+	return nil
+}
+
+// decodeShutter exposes both the speed and the angle, whichever the camera is
+// set to report, converting with the frame rate: angle = 360 * fps / speed.
+func decodeShutter(c *Camera, o map[string]any) map[core.ControlID]core.Value {
+	speed, hasSpeed := num(o, "shutterSpeed")
+	angle, hasAngle := num(o, "shutterAngle")
+	hasSpeed = hasSpeed && speed > 0
+	hasAngle = hasAngle && angle > 0
+	angle /= 100 // the API sends hundredths of a degree
+	switch {
+	case hasSpeed && !hasAngle && c.fps > 0:
+		angle, hasAngle = 360*c.fps/speed, true
+	case hasAngle && !hasSpeed && c.fps > 0:
+		speed, hasSpeed = 360*c.fps/angle, true
+	}
+	out := map[core.ControlID]core.Value{}
+	if hasSpeed {
+		out[core.ShutterSpeed] = core.Choice("1/" + strconv.Itoa(int(math.Round(speed))))
+	}
+	if hasAngle {
+		out[core.ShutterAngle] = core.Number(math.Round(angle*10) / 10)
+	}
+	return out
+}
+
+// command is one write to the camera.
+type command struct {
+	path string
+	body map[string]any
+	// composite marks a property whose body must carry every key (color
+	// correction); the camera merges the other keys from its cached state.
+	composite bool
+}
+
+func kv(pairs ...any) map[string]any {
+	m := make(map[string]any, len(pairs)/2)
+	for i := 0; i+1 < len(pairs); i += 2 {
+		m[pairs[i].(string)] = pairs[i+1]
+	}
+	return m
+}
+
+// commandFor builds the REST call for a validated value.
+func commandFor(id core.ControlID, v core.Value) (command, error) {
+	switch id {
+	case core.Iris:
+		return command{path: pathIris, body: kv("normalised", v.Number)}, nil
+	case core.AutoIris:
+		return command{path: pathAutoExp, body: kv("mode", "OneShot", "type", "Iris")}, nil
+	case core.Focus:
+		return command{path: pathFocus, body: kv("normalised", v.Number)}, nil
+	case core.AutoFocus:
+		return command{path: pathAutoFoc, body: kv()}, nil
+	case core.Zoom:
+		return command{path: pathZoom, body: kv("normalised", v.Number)}, nil
+	case core.Gain:
+		return command{path: pathGain, body: kv("gain", int(math.Round(v.Number)))}, nil
+	case core.ISO:
+		n, err := strconv.Atoi(v.Choice)
+		if err != nil {
+			return command{}, fmt.Errorf("%s: bad ISO: %w", id, core.ErrInvalidValue)
+		}
+		return command{path: pathISO, body: kv("iso", n)}, nil
+	case core.ShutterSpeed:
+		n, err := strconv.Atoi(strings.TrimPrefix(v.Choice, "1/"))
+		if err != nil || n <= 0 {
+			return command{}, fmt.Errorf("%s: bad shutter speed: %w", id, core.ErrInvalidValue)
+		}
+		return command{path: pathShutter, body: kv("shutterSpeed", n)}, nil
+	case core.ShutterAngle:
+		return command{path: pathShutter, body: kv("shutterAngle", int(math.Round(v.Number*100)))}, nil
+	case core.ND:
+		f, err := strconv.ParseFloat(v.Choice, 64)
+		if err != nil {
+			return command{}, fmt.Errorf("%s: bad ND stop: %w", id, core.ErrInvalidValue)
+		}
+		return command{path: pathND, body: kv("stop", f)}, nil
+	case core.WhiteBalance:
+		return command{path: pathWB, body: kv("whiteBalance", int(math.Round(v.Number)))}, nil
+	case core.Tint:
+		return command{path: pathTint, body: kv("whiteBalanceTint", int(math.Round(v.Number)))}, nil
+	case core.AutoWhiteBalance:
+		return command{path: pathAutoWB, body: kv()}, nil
+	case core.Record:
+		return command{path: pathRecord, body: kv("recording", v.On)}, nil
+	}
+	for _, cc := range colorCtls {
+		if cc.id == id {
+			return command{path: cc.path, body: kv(cc.key, v.Number), composite: true}, nil
+		}
+	}
+	return command{}, fmt.Errorf("%s: %w", id, core.ErrUnknownControl)
+}

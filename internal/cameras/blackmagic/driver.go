@@ -1,11 +1,14 @@
 // Package blackmagic declares the Blackmagic Design cameras (Pocket Cinema
 // Camera and Studio Camera families) and the controls each model exposes.
 //
-// Intended protocol: Blackmagic Camera Control REST API over HTTP (port 80),
-// no authentication. Studio cameras use their Ethernet port; Pocket cameras
-// need a USB-C to Ethernet adapter (Bluetooth is the classic Pocket link and
-// is not a supported transport yet). Until the protocol is written every
-// model uses camerakit.Placeholder.
+// Protocol: Blackmagic Camera Control REST API over HTTP (port 80), no
+// authentication. Writes are PUTs under /control/api/v1; state comes from the
+// event WebSocket at /control/api/v1/event/websocket. Studio cameras use their
+// Ethernet port; Pocket cameras need a USB-C to Ethernet adapter (Bluetooth is
+// the classic Pocket link and is not a supported transport yet).
+//
+// Only the Studio Camera 6K Pro uses the real protocol (Camera), verified on
+// hardware. The other models keep camerakit.Placeholder until checked.
 package blackmagic
 
 import (
@@ -29,17 +32,31 @@ func (Driver) Models() []core.ModelInfo {
 		pocket("pocket6kpro", "Pocket Cinema Camera 6K Pro"),
 		studio("studio4kplusg2", "Studio Camera 4K Plus G2"),
 		studio("studio4kprog2", "Studio Camera 4K Pro G2"),
-		studio("studio6kpro", "Studio Camera 6K Pro"),
+		studio6kPro(),
 	}
 }
 
-// New builds a placeholder camera; it does no I/O.
-func (Driver) New(m core.ModelInfo, _ core.CameraConfig) (core.Camera, error) {
+func studio6kPro() core.ModelInfo {
+	m := studio("studio6kpro", "Studio Camera 6K Pro")
+	m.Support = core.SupportExperimental
+	m.Notes = "API REST Blackmagic Camera Control et WebSocket d'événements sur le port Ethernet ; protocole testé sur une vraie caméra, plages de gain, ISO et obturateur à confirmer."
+	return m
+}
+
+// New builds the camera; it does no I/O.
+func (Driver) New(m core.ModelInfo, cfg core.CameraConfig) (core.Camera, error) {
 	specs, err := specsFor(m.ID)
 	if err != nil {
 		return nil, err
 	}
-	return camerakit.NewPlaceholder(specs), nil
+	if m.ID != "blackmagic.studio6kpro" {
+		return camerakit.NewPlaceholder(specs), nil
+	}
+	port := cfg.Port
+	if port == 0 {
+		port = m.DefaultPort
+	}
+	return newCamera(specs, cfg, port), nil
 }
 
 func pocket(id, name string) core.ModelInfo {
@@ -70,8 +87,10 @@ func specsFor(id core.ModelID) ([]core.ControlSpec, error) {
 		return pocketSpecs(true), nil
 	case "blackmagic.studio4kplusg2":
 		return studioSpecs(false), nil
-	case "blackmagic.studio4kprog2", "blackmagic.studio6kpro":
+	case "blackmagic.studio4kprog2":
 		return studioSpecs(true), nil
+	case "blackmagic.studio6kpro":
+		return studio6kProSpecs(), nil
 	}
 	return nil, fmt.Errorf("%q: %w", id, core.ErrUnknownModel)
 }

@@ -129,9 +129,9 @@ func TestHeaderStates(t *testing.T) {
 	if got := a.strips[3].stateTxt.Text(); got != "Libre" {
 		t.Errorf("state = %q", got)
 	}
-	// tally on: on-air label
-	a.ctl.Emit(app.EventCamera, app.CameraEvent{Slot: 1, Event: core.Event{Control: core.Tally, Value: core.Bool(true)}})
-	if got := a.strips[0].stateTxt.Text(); got != "À l'antenne" {
+	// tally on: on-air label (slot 2, the Sony; the Studio 6K Pro API has no tally)
+	a.ctl.Emit(app.EventCamera, app.CameraEvent{Slot: 2, Event: core.Event{Control: core.Tally, Value: core.Bool(true)}})
+	if got := a.strips[1].stateTxt.Text(); got != "À l'antenne" {
 		t.Errorf("tally state = %q", got)
 	}
 	_ = cams

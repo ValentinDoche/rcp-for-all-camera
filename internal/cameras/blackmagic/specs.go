@@ -37,6 +37,60 @@ func studioSpecs(hasND bool) []core.ControlSpec {
 	return append(s, statusSpecs()...)
 }
 
+// Studio Camera 6K Pro, from the REST API the camera serves itself
+// (/control/documentation.html, firmware read on 2026-10-11). Its API has no
+// tally, color bars or detail endpoint, so those controls are not declared.
+func studio6kProSpecs() []core.ControlSpec {
+	s := lensSpecs()
+	s = append(s,
+		// TODO(verify): the API accepts any dB value; the usable range is the camera's.
+		speckit.Range(core.Gain, -12, 36, 2, "dB"),
+		speckit.Enum(core.ISO, speckit.Opts(
+			// TODO(verify): the API takes any integer; these are the menu steps.
+			"100", "125", "160", "200", "250", "320", "400", "500", "640", "800",
+			"1000", "1250", "1600", "2000", "2500", "3200", "4000", "5000", "6400", "8000",
+			"10000", "12800", "16000", "20000", "25600")),
+		// TODO(verify): the minimum angle depends on the frame rate.
+		speckit.Range(core.ShutterAngle, 11.2, 360, 0.1, "°"),
+		speckit.Enum(core.ShutterSpeed, speckit.Opts(
+			"1/24", "1/25", "1/30", "1/48", "1/50", "1/60", "1/100", "1/120", "1/125",
+			"1/200", "1/250", "1/500", "1/1000", "1/2000")),
+		ndSpec(),
+		speckit.Range(core.WhiteBalance, 2500, 10000, 50, "K"),
+		speckit.Range(core.Tint, -50, 50, 1, ""),
+		speckit.Action(core.AutoWhiteBalance),
+	)
+	for _, id := range []core.ControlID{core.LiftR, core.LiftG, core.LiftB, core.LiftY, core.MasterBlack} {
+		s = append(s, speckit.Range(id, -2, 2, 0.01, ""))
+	}
+	for _, id := range []core.ControlID{core.GammaR, core.GammaG, core.GammaB, core.GammaY} {
+		s = append(s, speckit.Range(id, -4, 4, 0.01, ""))
+	}
+	for _, id := range []core.ControlID{core.GainR, core.GainG, core.GainB, core.GainY} {
+		s = append(s, speckit.Range(id, 0, 16, 0.01, ""))
+	}
+	for _, o := range []struct {
+		id    core.ControlID
+		label string
+	}{{OffsetR, "Offset R"}, {OffsetG, "Offset G"}, {OffsetB, "Offset B"}, {OffsetY, "Offset Y"}} {
+		s = append(s, color(speckit.Range(o.id, -8, 8, 0.01, ""), o.label))
+	}
+	return append(s,
+		speckit.Range(core.Contrast, 0, 2, 0.01, ""),
+		color(speckit.Range(ContrastPivot, 0, 1, 0.01, ""), "Contrast pivot"),
+		speckit.Range(core.Saturation, 0, 2, 0.01, ""),
+		speckit.Range(core.Hue, -1, 1, 0.01, ""),
+		color(speckit.Range(LumaContribution, 0, 1, 0.01, ""), "Luma mix"),
+		speckit.Toggle(core.Record),
+	)
+}
+
+// color labels a driver-specific color correction control.
+func color(s core.ControlSpec, label string) core.ControlSpec {
+	s.Label, s.Group = label, core.GroupColor
+	return s
+}
+
 func lensSpecs() []core.ControlSpec {
 	return []core.ControlSpec{
 		// TODO(verify): lens-dependent; the API reports normalised 0..1 and apertureStop.
