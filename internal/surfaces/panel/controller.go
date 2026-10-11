@@ -86,6 +86,11 @@ type Controller struct {
 	// wbMode: W/B toggled the white balance mode (SHUTTER keys = Kelvin,
 	// GAIN keys = tint). Left on a camera switch.
 	wbMode bool
+	// wbDownAt: when W/B was pressed (zero when it is not held). A short
+	// press toggles the mode on release; held wbLongPress it triggers the
+	// auto white balance once (wbFired).
+	wbDownAt time.Time
+	wbFired  bool
 
 	// alarmUntil is when the ALARM blink after a failed command stops.
 	alarmUntil time.Time
@@ -181,6 +186,7 @@ func (c *Controller) setRig(r app.Rig) {
 		c.releaseLocked()
 		c.cam = camState{slot: r.Active}
 		c.wbMode = false
+		c.wbDownAt, c.wbFired = time.Time{}, false
 	}
 	c.rig = r
 	for i := range c.tally {
@@ -335,6 +341,14 @@ func (c *Controller) onInput(s micropanel.State) {
 		case !c.off:
 			c.pressLocked(name)
 		}
+	}
+	if c.held["WB"] && !now["WB"] && !c.wbDownAt.IsZero() {
+		// W/B released: a short press toggles the mode, a long one did
+		// (or, without auto white balance, did nothing) already.
+		if !c.off && !c.wbFired && c.now().Sub(c.wbDownAt) < wbLongPress {
+			c.wbMode = !c.wbMode && c.wbAvailableLocked()
+		}
+		c.wbDownAt, c.wbFired = time.Time{}, false
 	}
 	c.held = now
 	if c.off {
@@ -510,8 +524,9 @@ func (c *Controller) pressLocked(name string) {
 	case "AUTO_IRIS":
 		trigger(core.AutoIris)
 	case "WB":
-		// The white balance mode; auto white balance stays in the app.
-		c.wbMode = !c.wbMode && c.wbAvailableLocked()
+		// Short press: white balance mode (on release). Long press: auto
+		// white balance (fired from the render tick, see wbTickLocked).
+		c.wbDownAt, c.wbFired = c.now(), false
 	case "BARS":
 		// Toggle only from a known state: never guess what goes on air.
 		if s, v, _, known := c.cam.get(core.ColorBars); known && s.Kind == core.KindToggle && !s.ReadOnly {
@@ -555,9 +570,32 @@ func (c *Controller) onWriteError(o op, err error) {
 
 // --- rendering -------------------------------------------------------------
 
+// wbLongPress is how long W/B must be held to run the auto white balance.
+const wbLongPress = time.Second
+
+// wbAWBLocked reports whether the active camera has the auto white balance.
+func (c *Controller) wbAWBLocked() bool {
+	s, _, declared, _ := c.cam.get(core.AutoWhiteBalance)
+	return declared && s.Kind == core.KindAction && c.cam.slot != 0 && c.cam.slot == c.rig.Active
+}
+
+// wbTickLocked fires the auto white balance once W/B has been held long
+// enough, on a camera that has it.
+func (c *Controller) wbTickLocked(now time.Time) {
+	if c.wbDownAt.IsZero() || c.wbFired || c.off || now.Sub(c.wbDownAt) < wbLongPress {
+		return
+	}
+	c.wbFired = true
+	if c.wbAWBLocked() {
+		c.w.do(op{slot: c.cam.slot, id: core.AutoWhiteBalance, v: core.Trigger()})
+	}
+}
+
 func (c *Controller) frame(now time.Time) frame {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.wbTickLocked(now)
+	awb := c.wbAWBLocked()
 	hint := func(p pickup, id core.ControlID) pickHint {
 		_, _, declared, known := c.cam.get(id)
 		return pickHint{declared: declared, known: known, picked: p.picked, pos: p.pos, havePos: p.havePos}
@@ -571,8 +609,11 @@ func (c *Controller) frame(now time.Time) frame {
 		coarse: previewing(c.coarseAt, now),
 		sens:   previewing(c.sensAt, now),
 		wb:     c.wbMode,
-		armed:  c.storeArmed,
-		off:    c.off,
+		// held W/B on a camera with AWB: blink, then steady once fired
+		wbHolding: !c.wbDownAt.IsZero() && !c.wbFired && awb,
+		wbFired:   !c.wbDownAt.IsZero() && c.wbFired && awb,
+		armed:     c.storeArmed,
+		off:       c.off,
 	})
 }
 

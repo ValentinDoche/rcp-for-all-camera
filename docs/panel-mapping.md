@@ -46,7 +46,7 @@ Frames are rendered at ~30 Hz and only the reports that changed are sent.
 | IRIS/MB ACTIVE | Red = lever and ring both drive the camera (picked up). White = at least one is waiting for pickup or its value is unknown, or panel control is off. Off = camera has neither control. |
 | ND / GAIN / SHUTTER ▲▼ | Lit when the value can still move that way (off when unknown). In W/B mode GAIN ▲▼ follow `tint` and SHUTTER ▲▼ `whiteBalance`. SHUTTER ▲▼ are off during the COARSE preview. |
 | BARS + BARS indicator | `colorBars` is on. |
-| W/B | Lit while the white balance mode is on. |
+| W/B | Lit while the white balance mode is on. **While W/B is held** on a camera with `autoWhiteBalance`: blinks (2 Hz), then steady once the auto white balance is triggered (after 1 s), until released. |
 | AUTO IRIS | Lit while the key is held (if the camera has the action). |
 | PANEL ACTIVE | **Red** while the panel controls the cameras (default at start), **white only** when turned off with the key (see [Panel control off](#panel-control-off-panel-active)). |
 | NETWORK | Active camera connected. |
@@ -66,7 +66,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | MASTER GAIN ▲▼ | `gain` ± its step (step 0 → range/20), else next/previous `iso` option. **W/B mode**: `tint` ± its step. |
 | SHUTTER ▲▼ | Next/previous `shutterSpeed` option, else `shutterAngle` through 11.25, 15, 22.5, 45, 72, 90, 144, 172.8, 180, 216, 270, 360. **W/B mode**: `whiteBalance` ± max(its step, 100 K). |
 | AUTO IRIS | `autoIris` action. |
-| W/B | Toggles the **white balance mode** (below). It no longer triggers `autoWhiteBalance`: auto white balance stays available in the app. |
+| W/B | **Short press** (released within 1 s): toggles the **white balance mode** (below). **Long press** (held 1 s): runs `autoWhiteBalance` once, and the release then does not toggle the mode. A camera without `autoWhiteBalance`: the long press does nothing. |
 | PANEL ACTIVE | Turns panel control off and on (below). |
 | STORE | Toggles the app's shared Store arming: `SetStoreArmed(!StoreArmed())`. Works with or without an active camera. |
 | SCENE 1–5 | Store armed: `StorePreset(active slot, n)` (the app disarms). Otherwise `RecallPreset(active slot, n)` if preset *n* is stored on the active slot, else nothing. No active camera: nothing. See [Presets](#presets-store-and-scene-15). |
@@ -128,8 +128,11 @@ in the GUI lights the panel's STORE and vice versa.
 
 ### White balance mode (W/B)
 
-W/B toggles a mode where the SHUTTER and MASTER GAIN keys and displays set the white
-balance instead of shutter and gain. The W/B LED is lit while the mode is on.
+A short press on W/B (released within 1 s) toggles a mode where the SHUTTER and MASTER
+GAIN keys and displays set the white balance instead of shutter and gain, e.g. `5600`
+and `+3`. The W/B LED is lit while the mode is on. Holding W/B for 1 s runs the auto
+white balance instead (the LED blinks while held, then stays on once triggered); a
+camera without auto white balance ignores the long press.
 
 - SHUTTER ▲▼: `whiteBalance` ± one step of at least **100 K** (max(spec step, 100 K)),
   quantized to the spec step. The SHUTTER display shows the Kelvin value: `5600`, and

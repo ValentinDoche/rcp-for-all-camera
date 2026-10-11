@@ -46,6 +46,9 @@ type view struct {
 	coarse, sens bool
 	// wb: white balance mode, GAIN shows the tint and SHUTTER the Kelvin.
 	wb bool
+	// wbHolding: W/B is held towards an auto white balance (LED blinks);
+	// wbFired: it was triggered and W/B is still held (LED steady).
+	wbHolding, wbFired bool
 	// armed: Store is armed (the next SCENE key stores).
 	armed bool
 	// off: PANEL ACTIVE turned panel control off.
@@ -148,7 +151,14 @@ func render(v view) frame {
 		f.leds.Set(micropanel.LEDBars, true)
 		f.leds.Set(micropanel.LEDBarsInd, true)
 	}
-	f.leds.Set(micropanel.LEDWB, v.wb)
+	switch {
+	case v.wbFired:
+		f.leds.Set(micropanel.LEDWB, true)
+	case v.wbHolding:
+		f.leds.Set(micropanel.LEDWB, v.blink)
+	default:
+		f.leds.Set(micropanel.LEDWB, v.wb)
+	}
 	f.leds.Set(micropanel.LEDAutoIris, v.held["AUTO_IRIS"] && c.has(core.AutoIris))
 
 	// IRIS/MB ACTIVE: red = the lever/ring drive the camera, white = waiting

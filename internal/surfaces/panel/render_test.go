@@ -153,6 +153,24 @@ func TestRenderStatusLEDsAndBars(t *testing.T) {
 			t.Errorf("LED %d off", n)
 		}
 	}
+	// W/B held towards an auto white balance: the LED blinks, then stays
+	// on once it is triggered, whatever the mode.
+	v.wb, v.wbHolding = false, true
+	for _, ph := range []bool{true, false} {
+		v.blink = ph
+		if f := render(v); ledOn(&f.leds, micropanel.LEDWB) != ph {
+			t.Errorf("W/B held: LED must follow the blink phase (%v)", ph)
+		}
+	}
+	v.wbHolding, v.wbFired = false, true
+	for _, ph := range []bool{true, false} {
+		v.blink = ph
+		if f := render(v); !ledOn(&f.leds, micropanel.LEDWB) {
+			t.Error("AWB triggered: W/B steady on")
+		}
+	}
+	v.wbFired = false
+
 	v.rig.Slots[1].Camera.Status.State = core.StateError
 	v.blink = true
 	if f := render(v); !ledOn(&f.leds, micropanel.LEDAlarm) || ledOn(&f.leds, micropanel.LEDNetwork) {

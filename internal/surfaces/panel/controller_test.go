@@ -950,3 +950,74 @@ func TestControllerRingLimitedTo99(t *testing.T) {
 	want := digitsOf(map[micropanel.Display]string{micropanel.DispMasterBlack: "+Hi"})
 	waitFor(t, "+Hi shown", func() bool { d, _, _ := h.dev.snapshot(); return [3]byte(d[11:14]) == [3]byte(want[11:14]) })
 }
+
+// Held for a second, W/B runs the auto white balance once: its LED blinks
+// while held, then stays on; the release does not toggle the mode.
+func TestControllerWBLongPressRunsAWB(t *testing.T) {
+	h := start(t, sonyAPI(), Options{})
+	<-h.status
+	h.loaded(t)
+	h.input(t, micropanel.State{})
+	h.input(t, micropanel.State{Keys: []micropanel.Key{0x57}}) // hold W/B
+	var on, off bool
+	deadline := time.Now().Add(wbLongPress - 200*time.Millisecond)
+	for time.Now().Before(deadline) {
+		_, _, l := h.dev.snapshot()
+		on, off = on || ledOn(&l, micropanel.LEDWB), off || !ledOn(&l, micropanel.LEDWB)
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !on || !off {
+		t.Errorf("W/B must blink while held (seen on %v, off %v)", on, off)
+	}
+	h.waitCall(t, "autoWhiteBalance", func(v core.Value) bool { return v.Kind == core.KindAction })
+	time.Sleep(300 * time.Millisecond) // a few blink phases
+	if _, _, l := h.dev.snapshot(); !ledOn(&l, micropanel.LEDWB) {
+		t.Error("AWB triggered: W/B must be steady on while still held")
+	}
+	h.input(t, micropanel.State{}) // release
+	waitFor(t, "W/B off, mode not toggled", func() bool { _, _, l := h.dev.snapshot(); return !ledOn(&l, micropanel.LEDWB) })
+	n := 0
+	for _, c := range h.api.callsCopy() {
+		if c.id == "autoWhiteBalance" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("auto white balance ran %d times, want once", n)
+	}
+}
+
+// A camera without auto white balance: the long press does nothing (no
+// blink, no call, no mode).
+func TestControllerWBLongPressWithoutAWB(t *testing.T) {
+	api := sonyAPI()
+	var specs []core.ControlSpec
+	for _, s := range sonySpecs() {
+		if s.ID != core.AutoWhiteBalance {
+			specs = append(specs, s)
+		}
+	}
+	api.specs = specs
+	h := start(t, api, Options{})
+	<-h.status
+	h.loaded(t)
+	h.input(t, micropanel.State{})
+	h.input(t, micropanel.State{Keys: []micropanel.Key{0x57}})
+	deadline := time.Now().Add(wbLongPress + 300*time.Millisecond)
+	for time.Now().Before(deadline) {
+		if _, _, l := h.dev.snapshot(); ledOn(&l, micropanel.LEDWB) {
+			t.Fatal("no AWB: the W/B LED stays off while held")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	h.input(t, micropanel.State{})
+	time.Sleep(100 * time.Millisecond)
+	if _, _, l := h.dev.snapshot(); ledOn(&l, micropanel.LEDWB) {
+		t.Error("a long press must not toggle the mode")
+	}
+	for _, c := range h.api.callsCopy() {
+		if c.id == "autoWhiteBalance" {
+			t.Error("no AWB call expected")
+		}
+	}
+}
