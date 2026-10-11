@@ -21,10 +21,11 @@ Owner: Valentin (writes in French, so answer in French).
 
 | Module (SPEC id) | State |
 |---|---|
-| `surface-micro-panel` | **Driver done and verified on hardware** (Windows only): [internal/surfaces/micropanel](internal/surfaces/micropanel). `Present()` used by the GUI for detection; not yet wired to cameras |
-| `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, `app.Service` API ([docs/app-api.md](docs/app-api.md)) |
-| cameras | **Models + control specs declared, no protocol** (`camerakit.Placeholder` returns `NOT_IMPLEMENTED`). 15 models |
-| `gui` | Native Fyne GUI in [internal/gui](internal/gui), entry point [cmd/rcp](cmd/rcp) |
+| `surface-micro-panel` | **Driver done and verified on hardware** (Windows only): [internal/surfaces/micropanel](internal/surfaces/micropanel) |
+| panel controller | **Wired in the app**: [internal/surfaces/panel](internal/surfaces/panel), mapping in [docs/panel-mapping.md](docs/panel-mapping.md). Hardware render check pending owner photo (`go run ./cmd/panelcheck -t 60s`) |
+| `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, settings (bind NIC, autostart, operator lock, logs, export/import), camera event forwarding, `app.Service` API ([docs/app-api.md](docs/app-api.md)) |
+| cameras | **Models + control specs declared, no protocol** (`camerakit.Placeholder` returns `NOT_IMPLEMENTED`). 15 models; Panasonic UE150/UE160 complete from SKAARHOJ lists |
+| `gui` | Native Fyne GUI in [internal/gui](internal/gui), FR/EN via [internal/i18n](internal/i18n) ([docs/i18n.md](docs/i18n.md)), entry point [cmd/rcp](cmd/rcp) |
 | routers | **Not started** |
 
 Architecture overview: [docs/architecture.md](docs/architecture.md). Security model: [docs/security.md](docs/security.md).
@@ -161,13 +162,13 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
    - feature 0x04
    - input 0x0D
 6. No non-Windows build of the driver yet (`*_windows.go` only). Keep the HID layer behind the `Surface` interface.
-7. **Owner requirement CB-1 (see SPEC.md "Control Behaviour Requirements")**: iris lever pickup / soft takeover.
+7. **Owner requirement CB-1 (see SPEC.md "Control Behaviour Requirements")**: iris lever pickup / soft takeover. Implemented in internal/surfaces/panel (to verify on hardware).
    After a camera switch, the lever only takes control once it reaches the camera's
    current iris (camera at F10, lever at F4 → nothing until the lever reaches F10).
-   The same applies to the master-black ring. Not implemented yet: `paneltest` still jumps the iris.
-8. Next: wire the panel (`micropanel.Open` + `Run`) into `app` (slot buttons → `SelectSlot`,
-   knobs/lever → `SetControl` with CB-1 pickup), then the first real protocol
-   (`camera-blackmagic` REST), then routers. Every control range marked `TODO(verify)` in
+   The same applies to the master-black ring. `paneltest` (old bench) still jumps the iris.
+8. Next: confirm the panel rendering with owner photos (`cmd/panelcheck`, and
+   `-layers` for the brightness question: no hardware brightness found so far), then the
+   first real protocol (`camera-blackmagic` REST, or Panasonic AW CGI), then routers. Every control range marked `TODO(verify)` in
    `internal/cameras/*/specs.go` must be checked against official docs or hardware.
 
 ## 9. Working rules (from SPEC.md boundaries, plus the owner's preferences)
