@@ -118,3 +118,38 @@ func interfaceIPs() []net.IP {
 	}
 	return out
 }
+
+// Interface is one local IPv4 address.
+type Interface struct {
+	Name string
+	IP   string
+}
+
+// LocalIPv4s lists the IPv4 addresses of the interfaces that are up,
+// loopback and link-local excluded, in interface order.
+func LocalIPv4s() []Interface {
+	ifs, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var out []Interface
+	for _, ifc := range ifs {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := ifc.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			n, ok := a.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			if v4 := n.IP.To4(); v4 != nil && v4.IsGlobalUnicast() && !v4.IsLinkLocalUnicast() {
+				out = append(out, Interface{Name: ifc.Name, IP: v4.String()})
+			}
+		}
+	}
+	return out
+}

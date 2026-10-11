@@ -20,3 +20,12 @@ func TestLiveSampleOnThisMachine(t *testing.T) {
 	}
 	t.Logf("%+v", st)
 }
+
+func TestLocalIPv4sOnThisMachine(t *testing.T) {
+	for _, n := range LocalIPv4s() {
+		if n.IP == "" || n.Name == "" {
+			t.Fatalf("bad interface %+v", n)
+		}
+		t.Logf("%s %s", n.Name, n.IP)
+	}
+}

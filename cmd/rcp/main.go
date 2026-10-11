@@ -16,6 +16,7 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
+	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
 func main() {
@@ -56,6 +57,14 @@ func run() error {
 		Store:    config.FileStore{Path: cfgPath},
 		Secrets:  secrets,
 		Logger:   log,
+		Interfaces: func() []appsvc.NetInterface {
+			var out []appsvc.NetInterface
+			for _, n := range sysinfo.LocalIPv4s() {
+				out = append(out, appsvc.NetInterface{Name: n.Name, IP: n.IP})
+			}
+			return out
+		},
+		AutoStart: autoStarter(),
 	})
 	if err != nil {
 		return err

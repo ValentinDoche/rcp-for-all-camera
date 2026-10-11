@@ -35,6 +35,8 @@ type Rig struct {
 	Version int                       `json:"version"`
 	Slots   [Slots]*core.CameraConfig `json:"slots"`
 	Active  int                       `json:"active"`
+	// BindIP is the local address used to reach cameras ("" = OS default).
+	BindIP string `json:"bindIp,omitempty"`
 }
 
 // FileStore reads and writes a rig as JSON at Path.

@@ -29,6 +29,10 @@ type Options struct {
 	Store    Store
 	Secrets  config.Secrets
 	Logger   *slog.Logger
+	// Interfaces lists the local IPv4 addresses (sysinfo.LocalIPv4s).
+	Interfaces func() []NetInterface
+	// AutoStart controls start with Windows; nil = not available.
+	AutoStart AutoStarter
 }
 
 // commandTimeout bounds every camera call made from the GUI (a variable only
@@ -44,9 +48,13 @@ type Service struct {
 	secrets config.Secrets
 	log     *slog.Logger
 
+	interfaces func() []NetInterface
+	autoStart  AutoStarter
+
 	mu     sync.Mutex
 	slots  [SlotCount]*slotState
 	active int
+	bindIP string
 	panel  PanelStatus
 	emit   Emitter
 }
@@ -67,12 +75,14 @@ func NewService(o Options) (*Service, error) {
 	if o.Logger == nil {
 		o.Logger = slog.Default()
 	}
-	s := &Service{reg: o.Registry, store: o.Store, secrets: o.Secrets, log: o.Logger, emit: nopEmitter{}}
+	s := &Service{reg: o.Registry, store: o.Store, secrets: o.Secrets, log: o.Logger, emit: nopEmitter{},
+		interfaces: o.Interfaces, autoStart: o.AutoStart}
 	rig, err := o.Store.Load()
 	if err != nil {
 		s.log.Warn("config not loaded, starting with an empty rig", "err", err)
 		rig = config.Rig{Version: config.Version}
 	}
+	s.bindIP = rig.BindIP
 	for i, cfg := range rig.Slots {
 		if cfg == nil {
 			continue
@@ -337,6 +347,7 @@ func (s *Service) build(cfg core.CameraConfig) (*slotState, error) {
 	if cfg.Port == 0 {
 		cfg.Port = info.DefaultPort
 	}
+	cfg.BindIP = s.bindIP
 	cam, err := s.reg.New(cfg)
 	if err != nil {
 		return nil, err
@@ -352,7 +363,7 @@ func (s *Service) storePassword(slot int, pw string) error {
 }
 
 func (s *Service) saveLocked() error {
-	rig := config.Rig{Version: config.Version, Active: s.active}
+	rig := config.Rig{Version: config.Version, Active: s.active, BindIP: s.bindIP}
 	for i, st := range s.slots {
 		if st != nil {
 			c := st.cfg
