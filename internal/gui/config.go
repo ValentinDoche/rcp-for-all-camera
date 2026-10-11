@@ -161,9 +161,9 @@ type slotForm struct {
 	cam  *app.CameraView
 	obj  fyne.CanvasObject
 
-	brand, model, transport *widget.Select
-	name, host, port, user  *widget.Entry
-	pass                    *widget.Entry
+	brand, model           *widget.Select
+	name, host, port, user *widget.Entry
+	pass                   *widget.Entry
 
 	userBox, passBox fyne.CanvasObject
 	userLabel        *widgets.Text
@@ -206,8 +206,6 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 	f.brand.PlaceHolder = "Choisir une marque"
 	f.model = widget.NewSelect(nil, nil)
 	f.model.PlaceHolder = "Choisir un modèle"
-	f.transport = widget.NewSelect(nil, nil)
-	f.transport.PlaceHolder = "Choisir une liaison"
 	f.name = widget.NewEntry()
 	f.name.PlaceHolder = fmt.Sprintf("Cam%d", slot)
 	f.host = widget.NewEntry()
@@ -267,7 +265,7 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 		widgets.Sized(0, 1, widgets.NewHairline()),
 		container.NewGridWithColumns(2, fieldBlock("Marque", f.brand), fieldBlock("Modèle", f.model)),
 		container.NewVBox(container.NewHBox(f.support), f.notes, f.supportHelp),
-		container.NewGridWithColumns(2, fieldBlock("Nom affiché", f.name), fieldBlock("Liaison", f.transport)),
+		fieldBlock("Nom affiché", f.name),
 		container.NewGridWithColumns(2, fieldBlock("Adresse de la caméra", f.host), fieldBlock("Port", f.port)),
 		container.NewGridWithColumns(2, f.userBox, f.passBox),
 		f.errTxt,
@@ -285,7 +283,6 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 			f.port.SetText(strconv.Itoa(f.cam.Port))
 		}
 		f.user.SetText(f.cam.Username)
-		f.transport.SetSelected(fr.TransportLabel(f.cam.Transport))
 	} else {
 		f.updateAuth()
 	}
@@ -328,20 +325,6 @@ func (f *slotForm) setModel(m *core.ModelInfo) {
 	f.current = m
 	f.port.PlaceHolder = strconv.Itoa(m.DefaultPort)
 	f.port.Refresh()
-	var labels []string
-	for _, t := range m.Transports {
-		labels = append(labels, fr.TransportLabel(t))
-	}
-	prev := f.transport.Selected
-	f.transport.Options = labels
-	f.transport.ClearSelected()
-	f.transport.Refresh()
-	switch {
-	case prev != "" && contains(labels, prev):
-		f.transport.SetSelected(prev)
-	case len(labels) > 0:
-		f.transport.SetSelected(labels[0])
-	}
 	f.notes.SetText(m.Notes)
 	f.support.SetText("Prise en charge : " + fr.SupportLabel(m.Support))
 	switch m.Support {
@@ -354,15 +337,6 @@ func (f *slotForm) setModel(m *core.ModelInfo) {
 	}
 	f.supportHelp.SetText(fr.SupportHelp(m.Support))
 	f.updateAuth()
-}
-
-func contains(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // updateAuth shows the credential fields only when the model uses them.
@@ -420,17 +394,8 @@ func (f *slotForm) input() (app.SlotInput, string) {
 		}
 		port = n
 	}
-	var tr core.Transport
-	for _, t := range m.Transports {
-		if fr.TransportLabel(t) == f.transport.Selected {
-			tr = t
-		}
-	}
-	if tr == "" {
-		return in, "Choisissez une liaison."
-	}
 	in = app.SlotInput{
-		Model: m.ID, Name: strings.TrimSpace(f.name.Text), Host: host, Port: port, Transport: tr,
+		Model: m.ID, Name: strings.TrimSpace(f.name.Text), Host: host, Port: port,
 	}
 	if m.Auth != core.AuthNone {
 		in.Username = strings.TrimSpace(f.user.Text)

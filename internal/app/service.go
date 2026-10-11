@@ -129,7 +129,7 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 	s.mu.Lock()
 	cfg := core.CameraConfig{
 		Model: in.Model, Name: in.Name, Host: in.Host, Port: in.Port,
-		Transport: in.Transport, Username: in.Username,
+		Username: in.Username,
 	}
 	switch {
 	case in.Password != nil:
@@ -337,9 +337,6 @@ func (s *Service) build(cfg core.CameraConfig) (*slotState, error) {
 	if cfg.Port == 0 {
 		cfg.Port = info.DefaultPort
 	}
-	if cfg.Transport == "" {
-		cfg.Transport = info.Transports[0]
-	}
 	cam, err := s.reg.New(cfg)
 	if err != nil {
 		return nil, err
@@ -380,7 +377,7 @@ func (s *Service) rigLocked() Rig {
 func viewOf(st *slotState) *CameraView {
 	return &CameraView{
 		Model: st.info.ID, Brand: st.info.Brand, ModelName: st.info.Name, Support: st.info.Support,
-		Name: st.cfg.Name, Host: st.cfg.Host, Port: st.cfg.Port, Transport: st.cfg.Transport,
+		Name: st.cfg.Name, Host: st.cfg.Host, Port: st.cfg.Port,
 		Username: st.cfg.Username, HasPassword: st.cfg.Password != "",
 		Status: st.cam.Status(),
 	}

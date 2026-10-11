@@ -386,9 +386,6 @@ func TestConfigAssignFlow(t *testing.T) {
 	if f.port.PlaceHolder != "80" {
 		t.Errorf("port placeholder = %q (model default)", f.port.PlaceHolder)
 	}
-	if len(f.transport.Options) != 2 || f.transport.Options[0] != "Wi-Fi" || f.transport.Options[1] != "Adaptateur USB-C Ethernet" {
-		t.Errorf("transports limited to the model: %v", f.transport.Options)
-	}
 	if !f.userBox.Visible() || !f.passBox.Visible() {
 		t.Error("FX6 needs credentials")
 	}

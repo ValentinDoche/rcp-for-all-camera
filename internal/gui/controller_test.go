@@ -46,7 +46,7 @@ func (f *fakeAPI) assign(slot int, model string, state core.ConnState, ctls ...a
 	defer f.mu.Unlock()
 	f.rig.Slots[slot-1].Camera = &app.CameraView{
 		Model: core.ModelID(model), Brand: "Acme", ModelName: "Cam", Name: fmt.Sprintf("C%d", slot),
-		Host: "10.0.0.1", Port: 80, Transport: core.TransportEthernet, Status: core.Status{State: state},
+		Host: "10.0.0.1", Port: 80, Status: core.Status{State: state},
 	}
 	f.controls[slot] = ctls
 }

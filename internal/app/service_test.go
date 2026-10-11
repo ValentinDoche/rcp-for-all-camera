@@ -178,7 +178,7 @@ func TestAssignSlotFillsModelDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := s.Camera
-	if s.Slot != 3 || c == nil || c.Port != 80 || c.Transport != core.TransportEthernet || c.Brand != "Acme" || c.ModelName != "Cam" {
+	if s.Slot != 3 || c == nil || c.Port != 80 || c.Brand != "Acme" || c.ModelName != "Cam" {
 		t.Fatalf("AssignSlot = %+v / %+v", s, c)
 	}
 	if c.Status.State != core.StateDisconnected {

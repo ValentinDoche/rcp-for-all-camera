@@ -68,7 +68,7 @@ func (r *Registry) Model(id ModelID) (ModelInfo, bool) {
 }
 
 // New validates cfg and builds a camera with the model's driver. Empty Port
-// and Transport are filled with the model defaults.
+// is filled with the model default.
 func (r *Registry) New(cfg CameraConfig) (Camera, error) {
 	r.mu.RLock()
 	e, ok := r.models[cfg.Model]
@@ -81,9 +81,6 @@ func (r *Registry) New(cfg CameraConfig) (Camera, error) {
 	}
 	if cfg.Port == 0 {
 		cfg.Port = e.info.DefaultPort
-	}
-	if cfg.Transport == "" {
-		cfg.Transport = e.info.Transports[0]
 	}
 	return e.driver.New(e.info, cfg)
 }

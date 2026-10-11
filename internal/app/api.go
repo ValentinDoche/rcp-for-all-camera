@@ -50,7 +50,6 @@ type CameraView struct {
 	Name        string            `json:"name"`
 	Host        string            `json:"host"`
 	Port        int               `json:"port"`
-	Transport   core.Transport    `json:"transport"`
 	Username    string            `json:"username,omitempty"`
 	HasPassword bool              `json:"hasPassword"`
 	Status      core.Status       `json:"status"`
@@ -58,12 +57,11 @@ type CameraView struct {
 
 // SlotInput is what the GUI sends to assign or edit a slot.
 type SlotInput struct {
-	Model     core.ModelID   `json:"model"`
-	Name      string         `json:"name"`
-	Host      string         `json:"host"`
-	Port      int            `json:"port"` // 0 = model default
-	Transport core.Transport `json:"transport"`
-	Username  string         `json:"username"`
+	Model    core.ModelID `json:"model"`
+	Name     string       `json:"name"`
+	Host     string       `json:"host"`
+	Port     int          `json:"port"` // 0 = model default
+	Username string       `json:"username"`
 	// Password: null keeps the stored one, "" clears it, any other value
 	// replaces it.
 	Password *string `json:"password"`
@@ -71,8 +69,8 @@ type SlotInput struct {
 
 // String, GoString and LogValue keep the password out of fmt verbs and slog.
 func (in SlotInput) String() string {
-	return fmt.Sprintf("{Model:%s Name:%s Host:%s Port:%d Transport:%s Username:%s Password:%s}",
-		in.Model, in.Name, in.Host, in.Port, in.Transport, in.Username, in.passwordState())
+	return fmt.Sprintf("{Model:%s Name:%s Host:%s Port:%d Username:%s Password:%s}",
+		in.Model, in.Name, in.Host, in.Port, in.Username, in.passwordState())
 }
 
 func (in SlotInput) GoString() string { return "app.SlotInput" + in.String() }
@@ -81,7 +79,7 @@ func (in SlotInput) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("model", string(in.Model)), slog.String("name", in.Name),
 		slog.String("host", in.Host), slog.Int("port", in.Port),
-		slog.String("transport", string(in.Transport)), slog.String("username", in.Username),
+		slog.String("username", in.Username),
 		slog.String("password", in.passwordState()),
 	)
 }

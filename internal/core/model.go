@@ -12,7 +12,8 @@ import (
 // ModelID identifies a camera model: "<driver>.<model>", e.g. "sony.fx6".
 type ModelID string
 
-// Transport is the physical link used to reach the camera.
+// Transport is a physical link the camera supports. It is informational
+// (shown to the user); control always goes over IP, whatever the link.
 type Transport string
 
 const (
@@ -79,15 +80,17 @@ func (m ModelInfo) Check() error {
 
 // CameraConfig is what the user enters for one camera.
 type CameraConfig struct {
-	Model     ModelID   `json:"model"`
-	Name      string    `json:"name"`
-	Host      string    `json:"host"`
-	Port      int       `json:"port,omitempty"` // 0 = model default
-	Transport Transport `json:"transport,omitempty"`
-	Username  string    `json:"username,omitempty"`
+	Model    ModelID `json:"model"`
+	Name     string  `json:"name"`
+	Host     string  `json:"host"`
+	Port     int     `json:"port,omitempty"` // 0 = model default
+	Username string  `json:"username,omitempty"`
 	// Password is never serialized; the config package stores it in the OS
 	// secret store.
 	Password string `json:"-"`
+	// BindIP is the local address drivers must dial from ("" = let the OS
+	// choose). It is an app-wide setting filled in by the app, not per camera.
+	BindIP string `json:"-"`
 }
 
 // redacted is CameraConfig without its password, for logs and %v output.
@@ -95,13 +98,13 @@ type redacted struct {
 	Model       ModelID
 	Name, Host  string
 	Port        int
-	Transport   Transport
+	BindIP      string
 	Username    string
 	HasPassword bool
 }
 
 func (c CameraConfig) redacted() redacted {
-	return redacted{c.Model, c.Name, c.Host, c.Port, c.Transport, c.Username, c.Password != ""}
+	return redacted{c.Model, c.Name, c.Host, c.Port, c.BindIP, c.Username, c.Password != ""}
 }
 
 // String, GoString and LogValue keep the password out of fmt verbs and slog,
@@ -112,7 +115,7 @@ func (c CameraConfig) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("model", string(c.Model)), slog.String("name", c.Name),
 		slog.String("host", c.Host), slog.Int("port", c.Port),
-		slog.String("transport", string(c.Transport)), slog.String("username", c.Username),
+		slog.String("bindIp", c.BindIP), slog.String("username", c.Username),
 		slog.Bool("hasPassword", c.Password != ""),
 	)
 }
@@ -140,9 +143,6 @@ func ValidateConfig(m ModelInfo, c CameraConfig) error {
 	if c.Port < 0 || c.Port > 65535 {
 		return bad("port %d out of range", c.Port)
 	}
-	if c.Transport != "" && !hasTransport(m, c.Transport) {
-		return bad("transport %q not available on this model", c.Transport)
-	}
 	if len(c.Username) > maxCredLen || len(c.Password) > maxCredLen ||
 		!printable(c.Username) || !printable(c.Password) {
 		return bad("credentials must be at most %d printable characters", maxCredLen)
@@ -151,15 +151,6 @@ func ValidateConfig(m ModelInfo, c CameraConfig) error {
 		return bad("username is required")
 	}
 	return nil
-}
-
-func hasTransport(m ModelInfo, t Transport) bool {
-	for _, x := range m.Transports {
-		if x == t {
-			return true
-		}
-	}
-	return false
 }
 
 // printable reports whether s is valid UTF-8 without control or format

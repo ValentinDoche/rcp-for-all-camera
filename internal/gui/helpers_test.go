@@ -252,7 +252,7 @@ func seedRig(t testing.TB, svc *app.Service) {
 	pw := "secret"
 	for i, in := range []app.SlotInput{
 		{Model: "blackmagic.studio6kpro", Name: "Plateau", Host: "192.168.1.41"},
-		{Model: "sony.fx6", Name: "Régie", Host: "192.168.1.42", Transport: core.TransportWiFi, Username: "admin", Password: &pw},
+		{Model: "sony.fx6", Name: "Régie", Host: "192.168.1.42", Username: "admin", Password: &pw},
 		{Model: "panasonic.awue150", Name: "Cyclo", Host: "192.168.1.44"},
 	} {
 		slot := i + 1

@@ -258,7 +258,7 @@ func cameraKey(v *app.CameraView) string {
 	if v == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s|%s|%s|%d|%s|%s|%t", v.Model, v.Name, v.Host, v.Port, v.Transport, v.Username, v.HasPassword)
+	return fmt.Sprintf("%s|%s|%s|%d|%s|%t", v.Model, v.Name, v.Host, v.Port, v.Username, v.HasPassword)
 }
 
 func (c *Controller) applyRig(r app.Rig) {
