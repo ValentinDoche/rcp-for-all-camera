@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/icons"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
@@ -46,45 +47,52 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 	case widgets.KindSlider:
 		rng := widgets.RangeOf(spec)
 		step := stepOf(spec)
-		dec := texts.Decimals(spec.Step)
 		sl := widgets.NewSlider(spec.Min, spec.Max)
 		sl.Step = step
 		entry := widget.NewEntry()
 		entry.Text = texts.Missing
-		unit := ""
-		if spec.Unit != "" {
-			unit = spec.Unit
+		show := func(v float64) { entry.SetText(ctl.tx.Explicit(spec, v)) }
+		set := func(v float64) {
+			v = widgets.Quantize(v, rng)
+			sl.Set(v)
+			show(v)
+			write(core.Number(v))
 		}
-		show := func(v float64) { entry.SetText(ctl.tx.FormatNumber(v, dec)) }
 		sl.OnChanged = func(v float64) {
 			v = widgets.Quantize(v, rng)
 			show(v)
 			write(core.Number(v))
 		}
 		entry.OnSubmitted = func(s string) {
-			v, ok := texts.ParseNumber(s)
+			v, ok := texts.ParseExplicit(spec, s)
 			if !ok {
 				ctl.SetNotice(texts.Notice{Text: ctl.tx.T("controlrow.numberExpected", "label", label), Level: texts.LevelError})
 				r.apply(ctl.Value(slot, spec.ID))
 				return
 			}
-			v = widgets.Quantize(v, rng)
-			sl.Set(v)
-			show(v)
-			write(core.Number(v))
+			set(v)
 		}
-		caption := ctl.tx.T("controlrow.range", "min", ctl.tx.FormatNumber(spec.Min, dec), "max", ctl.tx.FormatNumber(spec.Max, dec))
-		if unit != "" {
-			caption += " " + unit
+		// − / + move by one step (ten for fine ranges), from where the
+		// control is heading so quick taps add up.
+		nudge := step
+		if (spec.Max-spec.Min)/step > 200 {
+			nudge = step * 10
 		}
-		if spec.Step > 0 {
-			caption += ", " + ctl.tx.T("controlrow.step", "step", ctl.tx.FormatNumber(spec.Step, dec))
+		bump := func(dir float64) {
+			base := (spec.Min + spec.Max) / 2
+			if v := ctl.Target(slot, spec.ID); v != nil && v.Kind == core.KindRange {
+				base = v.Number
+			}
+			set(base + dir*nudge)
 		}
-		right := []fyne.CanvasObject{widgets.Sized(76, 0, entry)}
-		if unit != "" {
-			right = append(right, widgets.Sized(22, 0, widgets.NewText(unit, style.TextMuted, 12)))
+		caption := ctl.tx.T("controlrow.range", "min", ctl.tx.Explicit(spec, spec.Min), "max", ctl.tx.Explicit(spec, spec.Max))
+		right := []fyne.CanvasObject{stepButton(icons.Plus, func() { bump(1) }), widgets.Sized(84, 0, entry)}
+		if n, ok := neutralOf(spec); ok {
+			right = append(right, widgets.NewIconButton(icons.Reset, "", func() { set(n) }))
 		}
-		r.obj = container.NewBorder(nil, nil, name(caption), container.NewHBox(right...), sl)
+		r.obj = container.NewBorder(nil, nil,
+			container.NewHBox(name(caption), stepButton(icons.Minus, func() { bump(-1) })),
+			container.NewHBox(right...), sl)
 		r.apply = func(v *core.Value) {
 			if v != nil && v.Kind == core.KindRange {
 				sl.Set(v.Number)
@@ -178,6 +186,23 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 	}
 	r.apply(ctl.Value(slot, spec.ID))
 	return r
+}
+
+// neutralOf is the "no correction" value of an image control, for its reset
+// button: contrast and saturation 1, hue 0.
+func neutralOf(spec core.ControlSpec) (float64, bool) {
+	n := 0.0
+	switch spec.ID {
+	case core.Contrast, core.Saturation:
+		n = 1
+	case core.Hue:
+	default:
+		return 0, false
+	}
+	if n < spec.Min || n > spec.Max {
+		return 0, false
+	}
+	return n, true
 }
 
 func optionIndex(spec core.ControlSpec, v *core.Value) int {

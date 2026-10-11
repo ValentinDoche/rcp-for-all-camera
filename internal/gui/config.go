@@ -12,6 +12,7 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/icons"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
@@ -185,6 +186,8 @@ type slotForm struct {
 	pass                   *widget.Entry
 
 	userBox, passBox fyne.CanvasObject
+	powerZoom        *widget.Check
+	powerZoomBox     fyne.CanvasObject
 	userLabel        *widgets.Text
 	pwHint           *widgets.Text
 	clearBtn         *widget.Button
@@ -252,6 +255,13 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 		f.updatePwHint()
 	}
 
+	f.powerZoom = widget.NewCheck(f.tx.T("config.powerZoom"), nil)
+	pzHint := widget.NewLabel(f.tx.T("config.powerZoomHint"))
+	pzHint.Wrapping = fyne.TextWrapWord
+	pzHint.Importance = widget.LowImportance
+	f.powerZoomBox = container.NewVBox(
+		container.NewHBox(widgets.NewIcon(icons.ZoomIn, style.TextMuted, 16), f.powerZoom), pzHint)
+
 	f.notes = widget.NewLabel("")
 	f.notes.Wrapping = fyne.TextWrapWord
 	f.support = widgets.NewText("", style.Text, 12).Bold()
@@ -287,6 +297,7 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 		fieldBlock(f.tx.T("config.name"), f.name),
 		container.NewGridWithColumns(2, fieldBlock(f.tx.T("config.host"), f.host), fieldBlock(f.tx.T("config.port"), f.port)),
 		container.NewGridWithColumns(2, f.userBox, f.passBox),
+		f.powerZoomBox,
 		f.errTxt,
 		container.NewHBox(buttons...),
 	})...)
@@ -302,6 +313,7 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 			f.port.SetText(strconv.Itoa(f.cam.Port))
 		}
 		f.user.SetText(f.cam.Username)
+		f.powerZoom.SetChecked(f.cam.PowerZoom)
 	} else {
 		f.updateAuth()
 	}
@@ -358,8 +370,14 @@ func (f *slotForm) setModel(m *core.ModelInfo) {
 	f.updateAuth()
 }
 
-// updateAuth shows the credential fields only when the model uses them.
+// updateAuth shows the credential fields only when the model uses them, and
+// the power zoom box only for a model with an interchangeable lens.
 func (f *slotForm) updateAuth() {
+	if f.current != nil && f.current.InterchangeableLens {
+		f.powerZoomBox.Show()
+	} else {
+		f.powerZoomBox.Hide()
+	}
 	auth := core.AuthNone
 	if f.current != nil {
 		auth = f.current.Auth
@@ -415,6 +433,7 @@ func (f *slotForm) input() (app.SlotInput, string) {
 	}
 	in = app.SlotInput{
 		Model: m.ID, Name: strings.TrimSpace(f.name.Text), Host: host, Port: port,
+		PowerZoom: m.InterchangeableLens && f.powerZoom.Checked,
 	}
 	if m.Auth != core.AuthNone {
 		in.Username = strings.TrimSpace(f.user.Text)

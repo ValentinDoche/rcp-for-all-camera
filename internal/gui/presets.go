@@ -5,19 +5,21 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/icons"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
-// presetButtonWidth keeps the 1..5 buttons compact and aligned across rows.
-const presetButtonWidth = 44
+// presetButtonWidth keeps the 1..5 buttons compact.
+const presetButtonWidth = 34
 
-// presetsBlock is the "Presets" panel of the details page: three rows of
-// buttons 1..PresetCount to recall, store and delete the presets the app keeps
-// for the slot's camera.
+// presetsBlock is the "Presets" bar of the details page: on one line, buttons
+// 1..PresetCount to recall, store and delete the presets the app keeps for the
+// slot's camera.
 type presetsBlock struct {
 	ctl  *Controller
 	win  fyne.Window
@@ -32,25 +34,31 @@ type presetsBlock struct {
 func newPresetsBlock(ctl *Controller, win fyne.Window, slot int) *presetsBlock {
 	b := &presetsBlock{ctl: ctl, win: win, slot: slot}
 	tx := ctl.tx
-	row := func(key string, btns *[app.PresetCount]*widget.Button, onTap func(n int)) fyne.CanvasObject {
-		cells := make([]fyne.CanvasObject, app.PresetCount)
+	group := func(icon, key string, btns *[app.PresetCount]*widget.Button, onTap func(n int)) fyne.CanvasObject {
+		cells := []fyne.CanvasObject{
+			widgets.NewIcon(icon, style.TextMuted, 16),
+			widgets.NewText(tx.T(key), style.TextMuted, 12),
+		}
 		for i := range btns {
 			n := i + 1
 			btn := widget.NewButton(strconv.Itoa(n), func() { onTap(n) })
 			btns[i] = btn
-			cells[i] = widgets.Sized(presetButtonWidth, 0, btn)
+			cells = append(cells, widgets.Sized(presetButtonWidth, 0, btn))
 		}
-		name := widgets.Sized(labelColWidth, 0, widgets.NewText(tx.T(key), style.Text, 13).Clip())
-		return container.NewBorder(nil, nil, name, nil, container.NewHBox(cells...))
+		return container.NewHBox(cells...)
 	}
-	rows := container.NewVBox(
+	gap := func() fyne.CanvasObject { return widgets.Sized(18, 0, layout.NewSpacer()) }
+	row := container.NewHBox(
+		widgets.NewIcon(icons.Bookmarks, style.AccentText, 18),
 		widgets.NewText(tx.T("preset.title"), style.Text, 14).Bold(),
-		widgets.Sized(0, 1, widgets.NewHairline()),
-		row("preset.recall", &b.recall, func(n int) { ctl.RecallPreset(slot, n) }),
-		row("preset.store", &b.store, b.onStore),
-		row("preset.delete", &b.del, b.onDelete),
+		gap(),
+		group(icons.Bookmarks, "preset.recall", &b.recall, func(n int) { ctl.RecallPreset(slot, n) }),
+		gap(),
+		group(icons.Save, "preset.store", &b.store, b.onStore),
+		gap(),
+		group(icons.Trash, "preset.delete", &b.del, b.onDelete),
 	)
-	b.obj = widgets.NewPanel(style.Surface, style.Border, 12, rows)
+	b.obj = widgets.NewPanel(style.Surface, style.Border, 8, container.NewHScroll(row))
 	b.refresh()
 	return b
 }

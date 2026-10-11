@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"fmt"
 	"image"
 	"image/png"
 	"os"
@@ -28,6 +29,11 @@ func TestScreenshots(t *testing.T) {
 	size := fyne.NewSize(1440, 810)
 	if os.Getenv("RCP_SHOTS_SMALL") != "" {
 		size = fyne.NewSize(1280, 720)
+	}
+	// RCP_SHOTS_SIZE=WxH overrides the size, e.g. 1440x2400 to see a whole page.
+	var w, h float32
+	if _, err := fmt.Sscanf(os.Getenv("RCP_SHOTS_SIZE"), "%fx%f", &w, &h); err == nil && w > 0 && h > 0 {
+		size = fyne.NewSize(w, h)
 	}
 
 	fa := test.NewTempApp(t)

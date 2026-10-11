@@ -6,10 +6,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/icons"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
@@ -17,8 +16,11 @@ import (
 // imageSliderIDs get a dedicated block under the wheels.
 var imageSliderIDs = []core.ControlID{core.Contrast, core.Saturation, core.Hue}
 
-// detailsPage shows one camera in full: its strip on the left, three large
-// wheels, the image sliders and a generated section for every other control.
+// detailsPage shows one camera in full: its strip on the left; on the right a
+// header with the camera's state, the exposure cards (iris, gain, shutter,
+// ND, white balance), the lens cards (focus, zoom), the presets, the three
+// wheels with the image sliders, and a generated section for every other
+// control.
 type detailsPage struct {
 	ctl  *Controller
 	win  fyne.Window
@@ -29,6 +31,7 @@ type detailsPage struct {
 	obj    *fyne.Container
 	body   *fyne.Container
 	cancel func()
+	head   *detailsHeader
 
 	sig     string
 	wheels  []*wheelBlock
@@ -36,47 +39,48 @@ type detailsPage struct {
 	secs    []*section
 	sliders []*controlRow
 	presets *presetsBlock
+	// cards lists the controls the exposure and lens cards drive; appliers
+	// push the controller's values into those cards.
+	cards    map[core.ControlID]bool
+	appliers []func()
 }
 
 func newDetailsPage(ctl *Controller, win fyne.Window, slot int, back func()) *detailsPage {
 	p := &detailsPage{ctl: ctl, win: win, slot: slot, back: back}
 	p.strip = newStrip(ctl, slot, stripActions{})
 	p.body = container.NewStack()
-	backBtn := widget.NewButtonWithIcon(ctl.tx.T("details.back"), theme.NavigateBackIcon(), func() {
+	p.head = newDetailsHeader(ctl, slot, func() {
 		if p.back != nil {
 			p.back()
 		}
 	})
-	title := widgets.NewText("", style.Text, 16).Bold()
-	sub := widgets.NewText("", style.TextMuted, 12)
-	setTitle := func() {
-		title.SetText(ctl.tx.T("details.title", "slot", slot))
-		if cam := ctl.Camera(slot); cam != nil {
-			sub.SetText(fmt.Sprintf("%s %s", cam.Brand, cam.ModelName))
-		}
-	}
-	setTitle()
-	head := container.NewBorder(nil, nil, backBtn, nil,
-		container.New(layout.NewCustomPaddedLayout(0, 0, 8, 0), container.NewHBox(title, sub)))
-	right := container.NewBorder(head, nil, nil, nil, container.NewVScroll(container.New(layout.NewCustomPaddedLayout(8, 8, 0, 8), p.body)))
+	right := container.NewBorder(p.head.obj, nil, nil, nil, container.NewVScroll(container.New(layout.NewCustomPaddedLayout(8, 8, 0, 8), p.body)))
 	p.obj = container.NewBorder(nil, nil, container.New(layout.NewCustomPaddedLayout(0, 0, 0, 8), p.strip.Object()), nil, right)
 	p.cancel = ctl.Subscribe(func(ch Change) {
 		switch ch.Kind {
 		case ChSlot:
 			if ch.Slot == slot {
 				p.rebuild()
+				p.head.apply()
 			}
 		case ChValue:
 			if ch.Slot == slot {
 				p.apply(ch.ID)
+				p.head.apply()
+			}
+		case ChLens:
+			if ch.Slot == slot {
+				p.applyCards()
 			}
 		case ChRig:
+			p.head.apply()
 			if p.presets != nil {
 				p.presets.refresh()
 			}
 		}
 	})
 	p.rebuild()
+	p.head.apply()
 	return p
 }
 
@@ -111,8 +115,20 @@ func (p *detailsPage) rebuild() {
 	p.rows = map[core.ControlID]*controlRow{}
 	p.wheels = nil
 	p.sliders = nil
+	p.cards = map[core.ControlID]bool{}
+	p.appliers = nil
 
 	var blocks []fyne.CanvasObject
+
+	// exposure and lens cards, then the presets
+	if b := p.exposureBlock(); b != nil {
+		blocks = append(blocks, b)
+	}
+	if b := p.lensBlock(); b != nil {
+		blocks = append(blocks, b)
+	}
+	p.presets = newPresetsBlock(p.ctl, p.win, p.slot)
+	blocks = append(blocks, p.presets.obj)
 
 	// three wheels
 	var cols []fyne.CanvasObject
@@ -132,6 +148,9 @@ func (p *detailsPage) rebuild() {
 
 	// contrast, saturation, hue
 	skip := wheelControlIDs()
+	for id := range p.cards {
+		skip[id] = true
+	}
 	var sl []fyne.CanvasObject
 	for _, id := range imageSliderIDs {
 		if sp, ok := p.ctl.Spec(p.slot, id); ok {
@@ -144,9 +163,9 @@ func (p *detailsPage) rebuild() {
 	}
 	if len(sl) > 0 {
 		blocks = append(blocks, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(
-			widgets.NewText(p.ctl.tx.T("details.image"), style.Text, 14).Bold(),
+			cardTitle(icons.Palette, p.ctl.tx.T("details.image"), nil),
 			widgets.Sized(0, 1, widgets.NewHairline()),
-			container.NewGridWithColumns(len(sl), sl...),
+			container.NewVBox(sl...),
 		)))
 	}
 
@@ -158,14 +177,12 @@ func (p *detailsPage) rebuild() {
 		}
 		blocks = append(blocks, sectionObject(s))
 	}
-	if len(blocks) == 0 {
+	if len(p.cards) == 0 && len(p.rows) == 0 && len(p.wheels) == 0 {
 		blocks = append(blocks, container.NewCenter(widgets.NewText(p.ctl.tx.T("details.noControl"), style.TextMuted, 13)))
 	}
-	// local presets come first, so they are reachable without scrolling
-	p.presets = newPresetsBlock(p.ctl, p.win, p.slot)
-	blocks = append([]fyne.CanvasObject{p.presets.obj}, blocks...)
 	p.body.Objects = []fyne.CanvasObject{container.NewVBox(spaced(blocks)...)}
 	p.body.Refresh()
+	p.applyCards()
 }
 
 // spaced inserts a gap between blocks.
@@ -184,6 +201,15 @@ func (p *detailsPage) apply(id core.ControlID) {
 	if r := p.rows[id]; r != nil {
 		r.apply(p.ctl.Value(p.slot, id))
 	}
+	if p.cards[id] {
+		p.applyCards()
+	}
+}
+
+func (p *detailsPage) applyCards() {
+	for _, f := range p.appliers {
+		f()
+	}
 }
 
 func (p *detailsPage) applyAll() {
@@ -193,4 +219,84 @@ func (p *detailsPage) applyAll() {
 	for id, r := range p.rows {
 		r.apply(p.ctl.Value(p.slot, id))
 	}
+	p.applyCards()
+}
+
+// --- header -----------------------------------------------------------------------
+
+// detailsHeader is the top bar: back button, title, and the camera's state as
+// chips (on air, recording, connection). The REC chip toggles recording;
+// recording is a guarded control, so the operator lock still asks first.
+type detailsHeader struct {
+	ctl  *Controller
+	slot int
+	obj  fyne.CanvasObject
+
+	title, sub *widgets.Text
+	tally      *widgets.IconButton
+	rec        *widgets.IconButton
+	connIcon   *widgets.Icon
+	connTxt    *widgets.Text
+}
+
+func newDetailsHeader(ctl *Controller, slot int, back func()) *detailsHeader {
+	h := &detailsHeader{ctl: ctl, slot: slot}
+	backBtn := widgets.NewIconButton(icons.Back, ctl.tx.T("details.back"), back)
+	h.title = widgets.NewText("", style.Text, 16).Bold()
+	h.sub = widgets.NewText("", style.TextMuted, 12)
+	h.tally = widgets.NewIconButton(icons.Broadcast, ctl.tx.T("details.onAir"), nil)
+	h.tally.SetDanger(true)
+	h.rec = widgets.NewIconButton(icons.Record, ctl.tx.T("details.rec"), func() {
+		on := false
+		if v := ctl.Value(slot, core.Record); v != nil {
+			on = v.On
+		}
+		ctl.Write(slot, core.Record, core.Bool(!on))
+	})
+	h.connIcon = widgets.NewIcon(icons.Wifi, style.TextMuted, 16)
+	h.connTxt = widgets.NewText("", style.TextMuted, 12)
+	left := container.NewHBox(backBtn,
+		container.New(layout.NewCustomPaddedLayout(0, 0, 8, 0), widgets.NewIcon(icons.Video, style.AccentText, 18)),
+		h.title, h.sub)
+	right := container.NewHBox(h.tally, h.rec, h.connIcon, h.connTxt)
+	h.obj = container.New(layout.NewCustomPaddedLayout(0, 4, 0, 8), container.NewBorder(nil, nil, left, right))
+	return h
+}
+
+func (h *detailsHeader) apply() {
+	tx := h.ctl.tx
+	h.title.SetText(tx.T("details.title", "slot", h.slot))
+	cam := h.ctl.Camera(h.slot)
+	if cam == nil {
+		h.sub.SetText("")
+		h.connTxt.SetText("")
+		h.tally.Hide()
+		h.rec.Hide()
+		return
+	}
+	h.sub.SetText(fmt.Sprintf("%s %s · %s", cam.Brand, cam.ModelName, cam.Host))
+	if v := h.ctl.Value(h.slot, core.Tally); v != nil && v.On {
+		h.tally.Show()
+	} else {
+		h.tally.Hide()
+	}
+	if sp, ok := h.ctl.Spec(h.slot, core.Record); ok && !sp.ReadOnly {
+		h.rec.Show()
+		v := h.ctl.Value(h.slot, core.Record)
+		h.rec.SetDanger(v != nil && v.On)
+		h.rec.SetDisabled(cam.Status.State != core.StateConnected)
+	} else {
+		h.rec.Hide()
+	}
+	tok, icon := style.TextMuted, icons.WifiOff
+	switch cam.Status.State {
+	case core.StateConnected:
+		tok, icon = style.OK, icons.Wifi
+	case core.StateError:
+		tok = style.Danger
+	}
+	h.connIcon.SetName(icon)
+	h.connIcon.SetToken(tok)
+	h.connTxt.SetToken(tok)
+	h.connTxt.SetText(tx.ConnLabel(cam.Status.State))
 }

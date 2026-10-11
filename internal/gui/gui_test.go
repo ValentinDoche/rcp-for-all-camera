@@ -281,6 +281,9 @@ func TestDetailsShowsEveryDeclaredControl(t *testing.T) {
 	for id := range p.rows {
 		covered[id] = true
 	}
+	for id := range p.cards {
+		covered[id] = true
+	}
 	for _, sp := range a.ctl.Specs(1) {
 		if !covered[sp.ID] {
 			t.Errorf("control %s has no widget on the details page", sp.ID)
@@ -319,9 +322,9 @@ func TestDetailsRowsWriteThroughTheService(t *testing.T) {
 	a, _, cams := newTestApp(t, true)
 	sized(a)
 	a.ShowDetails(1)
-	row := a.details.rows[core.Gain]
+	row := a.details.rows[core.ShutterAngle]
 	if row == nil {
-		t.Fatal("gain row missing")
+		t.Fatal("shutter angle row missing")
 	}
 	var entry *widget.Entry
 	for _, o := range all(row.obj) {
@@ -329,19 +332,19 @@ func TestDetailsRowsWriteThroughTheService(t *testing.T) {
 			entry = e
 		}
 	}
-	entry.SetText("18")
-	entry.OnSubmitted("18")
+	entry.SetText("90")
+	entry.OnSubmitted("90°")
 	waitWrites(a.ctl)
 	last := (*cams)[0].setCalls()
-	if len(last) == 0 || last[len(last)-1].ID != core.Gain || last[len(last)-1].V.Number != 18 {
+	if len(last) == 0 || last[len(last)-1].ID != core.ShutterAngle || last[len(last)-1].V.Number != 90 {
 		t.Errorf("calls = %+v", last)
 	}
 	// out of range is clamped, not rejected
 	entry.OnSubmitted("999")
 	waitWrites(a.ctl)
 	last = (*cams)[0].setCalls()
-	if last[len(last)-1].V.Number != 36 {
-		t.Errorf("999 must clamp to 36, got %v", last[len(last)-1].V.Number)
+	if last[len(last)-1].V.Number != 360 {
+		t.Errorf("999 must clamp to 360, got %v", last[len(last)-1].V.Number)
 	}
 	// garbage: notice, no write
 	n := len(last)
