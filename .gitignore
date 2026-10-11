@@ -1,0 +1,14 @@
+# Build outputs
+*.exe
+/build/
+gui/build/bin/
+# Third-party binaries kept locally only
+*.dmg
+# Local config / secrets
+rig.json
+*.local.json
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
