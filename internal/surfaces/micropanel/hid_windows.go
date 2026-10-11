@@ -84,6 +84,10 @@ type hidpCaps struct {
 	NumberFeatureDataIndices  uint16
 }
 
+// maxReportLen bounds every report buffer. The panel's reports are at most
+// 64 bytes (full-speed HID); larger values come from a bug or a bad device.
+const maxReportLen = 64
+
 // ErrNotFound is returned when no matching HID interface is present.
 var ErrNotFound = errors.New("micropanel: device not found")
 
@@ -119,7 +123,9 @@ func findHIDPath(vid, pid uint16) (string, error) {
 		}
 		var need uint32
 		procSetupDiGetDeviceInterfaceDetailW.Call(set, uintptr(unsafe.Pointer(&ifd)), 0, 0, uintptr(unsafe.Pointer(&need)), 0)
-		if need == 0 {
+		// cbSize (4 bytes) plus at least one UTF-16 char, and a sane upper
+		// bound: the cbSize write below must stay inside buf.
+		if need < 8 || need > 64<<10 {
 			continue
 		}
 		buf := make([]byte, need)
@@ -177,8 +183,8 @@ func openHID(vid, pid uint16) (*hidDevice, error) {
 		procHidDFreePreparsedData.Call(pp)
 		d.inLen, d.outLen, d.featLen = int(caps.InputReportByteLength), int(caps.OutputReportByteLength), int(caps.FeatureReportByteLength)
 	}
-	if d.inLen == 0 {
-		d.inLen, d.outLen, d.featLen = 64, 64, 64
+	if d.inLen <= 0 || d.inLen > maxReportLen {
+		d.inLen, d.outLen, d.featLen = maxReportLen, maxReportLen, maxReportLen
 	}
 
 	var sn [128]uint16
@@ -195,11 +201,14 @@ func (d *hidDevice) read() ([]byte, error) {
 	if err := syscall.ReadFile(d.rd, buf, &n, nil); err != nil {
 		return nil, err
 	}
-	return buf[:n], nil
+	return buf[:min(int(n), len(buf))], nil
 }
 
 // write sends an output report (p[0] = report ID), zero-padded to the device length.
 func (d *hidDevice) write(p []byte) error {
+	if len(p) == 0 || len(p) > maxReportLen {
+		return fmt.Errorf("output report: bad length %d", len(p))
+	}
 	buf := make([]byte, max(d.outLen, len(p)))
 	copy(buf, p)
 	var n uint32
@@ -209,6 +218,9 @@ func (d *hidDevice) write(p []byte) error {
 // setFeature sends a feature report of exactly len(p) bytes: the panel stalls
 // (ERROR_GEN_FAILURE) when the buffer is padded to the device maximum.
 func (d *hidDevice) setFeature(p []byte) error {
+	if len(p) == 0 || len(p) > maxReportLen {
+		return fmt.Errorf("feature report: bad length %d", len(p))
+	}
 	buf := append([]byte(nil), p...)
 	ok, _, err := procHidDSetFeature.Call(uintptr(d.wr), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
 	if ok == 0 {
@@ -219,6 +231,9 @@ func (d *hidDevice) setFeature(p []byte) error {
 
 // getFeature reads feature report id with an exact total size (report ID included).
 func (d *hidDevice) getFeature(id byte, size int) ([]byte, error) {
+	if size < 1 || size > maxReportLen {
+		return nil, fmt.Errorf("feature report 0x%02x: bad size %d", id, size)
+	}
 	buf := make([]byte, size)
 	buf[0] = id
 	ok, _, err := procHidDGetFeature.Call(uintptr(d.wr), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))

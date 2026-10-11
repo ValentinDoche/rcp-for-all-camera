@@ -1,11 +1,12 @@
 // Package app wires the modules together and exposes Service, the API the
-// GUI calls. Every exported Service method is bound to the Wails frontend
-// as window.go.app.Service.<Method>; docs/gui-api.md is the reference.
+// GUI calls directly; docs/app-api.md is the reference.
 package app
 
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
@@ -13,7 +14,7 @@ import (
 // SlotCount is the number of camera buttons on the panel.
 const SlotCount = 8
 
-// Event names pushed to the frontend (Wails runtime events).
+// Event names pushed to the GUI through the Emitter.
 const (
 	EventPanelStatus = "panel:status" // payload PanelStatus
 	EventRigChanged  = "rig:changed"  // payload Rig
@@ -68,6 +69,33 @@ type SlotInput struct {
 	Password *string `json:"password"`
 }
 
+// String, GoString and LogValue keep the password out of fmt verbs and slog.
+func (in SlotInput) String() string {
+	return fmt.Sprintf("{Model:%s Name:%s Host:%s Port:%d Transport:%s Username:%s Password:%s}",
+		in.Model, in.Name, in.Host, in.Port, in.Transport, in.Username, in.passwordState())
+}
+
+func (in SlotInput) GoString() string { return "app.SlotInput" + in.String() }
+
+func (in SlotInput) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", string(in.Model)), slog.String("name", in.Name),
+		slog.String("host", in.Host), slog.Int("port", in.Port),
+		slog.String("transport", string(in.Transport)), slog.String("username", in.Username),
+		slog.String("password", in.passwordState()),
+	)
+}
+
+func (in SlotInput) passwordState() string {
+	switch {
+	case in.Password == nil:
+		return "keep"
+	case *in.Password == "":
+		return "clear"
+	}
+	return "[redacted]"
+}
+
 // ControlView is one control of a camera with its last known value.
 // Value is nil while the value is unknown (camera offline).
 type ControlView struct {
@@ -95,8 +123,8 @@ const (
 	CodeInternal       = "INTERNAL"
 )
 
-// Error is the only error type Service returns. Wails rejects the JS promise
-// with Error(), which is the JSON {"code": "...", "message": "..."}.
+// Error is the only error type Service returns. Error() is the JSON
+// {"code": "...", "message": "..."}, a stable form for logs and remote callers.
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

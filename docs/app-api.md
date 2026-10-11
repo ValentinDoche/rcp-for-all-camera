@@ -49,6 +49,11 @@ Every method returns `*app.Error` on failure (`errors.As`). `Code` is stable and
 added to; `Message` is for logs and may change. Unknown internal errors map to `INTERNAL`
 with a generic message, so paths and internals never reach the GUI.
 
+Input bounds (see [security.md](security.md)): control ids are 1 to 64 characters of
+`[A-Za-z0-9._-]`, enum choices are at most 64 printable characters, and model ids are at
+most 64 bytes. Names and credentials must be printable UTF-8 with no control, bidi or
+zero-width characters.
+
 `INVALID_SLOT`, `EMPTY_SLOT`, `INVALID_CONFIG`, `UNKNOWN_MODEL`, `UNKNOWN_CONTROL`,
 `INVALID_VALUE`, `READ_ONLY`, `NOT_CONNECTED`, `NOT_IMPLEMENTED`, `INTERNAL`.
 

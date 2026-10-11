@@ -52,7 +52,26 @@ func DefaultPath() (string, error) {
 }
 
 // Load reads the rig. A missing file is an empty rig, not an error.
+//
+// A file that exists but cannot be used (too large, malformed, unsupported
+// version) is renamed to <path>.bad before the error is returned: the app
+// then starts with an empty rig, and its next Save must not destroy the
+// user's file. Unknown JSON fields are ignored for forward compatibility (a
+// stray "password" key is never read: CameraConfig.Password is json:"-").
 func (s FileStore) Load() (Rig, error) {
+	rig, err := s.load()
+	if errors.Is(err, errUnusable) {
+		if rerr := os.Rename(s.Path, s.Path+".bad"); rerr != nil {
+			err = errors.Join(err, fmt.Errorf("keep unreadable config aside: %w", rerr))
+		}
+	}
+	return rig, err
+}
+
+// errUnusable marks a rig file that was read but cannot be used.
+var errUnusable = errors.New("unusable config file")
+
+func (s FileStore) load() (Rig, error) {
 	empty := Rig{Version: Version}
 	f, err := os.Open(s.Path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -67,14 +86,14 @@ func (s FileStore) Load() (Rig, error) {
 		return empty, fmt.Errorf("read config: %w", err)
 	}
 	if len(b) > MaxFileSize {
-		return empty, fmt.Errorf("config file larger than %d bytes", MaxFileSize)
+		return empty, fmt.Errorf("config file larger than %d bytes: %w", MaxFileSize, errUnusable)
 	}
 	var rig Rig
 	if err := json.Unmarshal(b, &rig); err != nil {
-		return empty, fmt.Errorf("parse config: %w", err)
+		return empty, fmt.Errorf("parse config: %w: %w", errUnusable, err)
 	}
 	if rig.Version != Version {
-		return empty, fmt.Errorf("version %d: %w", rig.Version, ErrUnsupportedVersion)
+		return empty, fmt.Errorf("version %d: %w: %w", rig.Version, ErrUnsupportedVersion, errUnusable)
 	}
 	if rig.Active < 0 || rig.Active > Slots {
 		rig.Active = 0
@@ -82,36 +101,45 @@ func (s FileStore) Load() (Rig, error) {
 	return rig, nil
 }
 
-// Save writes the rig atomically (temp file + rename), readable only by the
-// current user.
+// Save writes the rig atomically (temp file + rename). The 0700/0600 modes
+// only matter on Unix; on Windows the file inherits the ACL of %APPDATA%,
+// which is private to the user (plus SYSTEM and Administrators). See
+// docs/security.md.
 func (s FileStore) Save(rig Rig) error {
 	rig.Version = Version
 	b, err := json.MarshalIndent(rig, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
-	dir := filepath.Dir(s.Path)
+	return writeFileAtomic(s.Path, ".rig-*.json", b)
+}
+
+// writeFileAtomic replaces path with b through a temp file in the same
+// directory, so a crash never leaves a half-written file.
+func writeFileAtomic(path, pattern string, b []byte) error {
+	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, ".rig-*.json")
+	tmp, err := os.CreateTemp(dir, pattern) // mode 0600
 	if err != nil {
-		return fmt.Errorf("create temp config: %w", err)
+		return fmt.Errorf("create temp file: %w", err)
 	}
 	defer os.Remove(tmp.Name()) // no-op after a successful rename
+	name := filepath.Base(path)
 	if _, err := tmp.Write(b); err != nil {
 		tmp.Close()
-		return fmt.Errorf("write config: %w", err)
+		return fmt.Errorf("write %s: %w", name, err)
 	}
 	if err := tmp.Sync(); err != nil {
 		tmp.Close()
-		return fmt.Errorf("sync config: %w", err)
+		return fmt.Errorf("sync %s: %w", name, err)
 	}
 	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close config: %w", err)
+		return fmt.Errorf("close %s: %w", name, err)
 	}
-	if err := os.Rename(tmp.Name(), s.Path); err != nil {
-		return fmt.Errorf("replace config: %w", err)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return fmt.Errorf("replace %s: %w", name, err)
 	}
 	return nil
 }

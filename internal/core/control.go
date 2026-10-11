@@ -70,11 +70,49 @@ func Choice(v string) Value  { return Value{Kind: KindEnum, Choice: v} }
 func Bool(v bool) Value      { return Value{Kind: KindToggle, On: v} }
 func Trigger() Value         { return Value{Kind: KindAction} }
 
+// MaxIDLen bounds control ids and enum choice values. Both cross the GUI
+// boundary and end up in logs, errors and camera commands.
+const MaxIDLen = 64
+
+// CheckControlID reports whether id is shaped like a control id: 1 to
+// MaxIDLen ASCII letters, digits, '.', '_' or '-'. It is the boundary check
+// for ids coming from the GUI; the error never echoes the id.
+func CheckControlID(id ControlID) error {
+	if id == "" || len(id) > MaxIDLen {
+		return fmt.Errorf("control id must be 1 to %d characters: %w", MaxIDLen, ErrUnknownControl)
+	}
+	for i := 0; i < len(id); i++ {
+		if !isIDChar(id[i]) {
+			return fmt.Errorf("control id has a forbidden character: %w", ErrUnknownControl)
+		}
+	}
+	return nil
+}
+
+func isIDChar(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-'
+}
+
+// Check reports whether v is well formed on its own (known kind, bounded
+// printable choice), before it is matched against a spec. The error never
+// echoes the value.
+func (v Value) Check() error {
+	switch v.Kind {
+	case KindRange, KindEnum, KindToggle, KindAction:
+	default:
+		return fmt.Errorf("unknown value kind: %w", ErrInvalidValue)
+	}
+	if len(v.Choice) > MaxIDLen || !printable(v.Choice) {
+		return fmt.Errorf("choice must be at most %d printable characters: %w", MaxIDLen, ErrInvalidValue)
+	}
+	return nil
+}
+
 // Check reports whether the spec itself is well formed. Driver tests call it
 // on every spec they declare.
 func (s ControlSpec) Check() error {
-	if s.ID == "" {
-		return fmt.Errorf("control spec: empty id")
+	if err := CheckControlID(s.ID); err != nil {
+		return fmt.Errorf("control spec %q: %w", s.ID, err)
 	}
 	switch s.Kind {
 	case KindRange:
@@ -90,7 +128,7 @@ func (s ControlSpec) Check() error {
 		}
 		seen := make(map[string]bool, len(s.Options))
 		for _, o := range s.Options {
-			if o.Value == "" || seen[o.Value] {
+			if o.Value == "" || len(o.Value) > MaxIDLen || seen[o.Value] {
 				return fmt.Errorf("control %s: empty or duplicate option %q", s.ID, o.Value)
 			}
 			seen[o.Value] = true

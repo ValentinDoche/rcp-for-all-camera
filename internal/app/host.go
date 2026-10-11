@@ -10,8 +10,8 @@ import (
 type PanelProbe func() (present bool, err error)
 
 // Host owns the Service lifecycle: it attaches the event emitter and runs
-// the background loops. It is kept apart from Service so that none of these
-// methods get bound to the frontend.
+// the background loops. It is kept apart from Service so that the API
+// surface stays limited to the GUI methods.
 type Host struct {
 	svc      *Service
 	probe    PanelProbe

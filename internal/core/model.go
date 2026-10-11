@@ -2,8 +2,11 @@ package core
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // ModelID identifies a camera model: "<driver>.<model>", e.g. "sony.fx6".
@@ -87,6 +90,33 @@ type CameraConfig struct {
 	Password string `json:"-"`
 }
 
+// redacted is CameraConfig without its password, for logs and %v output.
+type redacted struct {
+	Model       ModelID
+	Name, Host  string
+	Port        int
+	Transport   Transport
+	Username    string
+	HasPassword bool
+}
+
+func (c CameraConfig) redacted() redacted {
+	return redacted{c.Model, c.Name, c.Host, c.Port, c.Transport, c.Username, c.Password != ""}
+}
+
+// String, GoString and LogValue keep the password out of fmt verbs and slog,
+// so a CameraConfig can be logged or wrapped in an error without leaking it.
+func (c CameraConfig) String() string   { return fmt.Sprintf("%+v", c.redacted()) }
+func (c CameraConfig) GoString() string { return "core.CameraConfig" + c.String() }
+func (c CameraConfig) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("model", string(c.Model)), slog.String("name", c.Name),
+		slog.String("host", c.Host), slog.Int("port", c.Port),
+		slog.String("transport", string(c.Transport)), slog.String("username", c.Username),
+		slog.Bool("hasPassword", c.Password != ""),
+	)
+}
+
 const (
 	maxNameLen = 64
 	maxCredLen = 128
@@ -101,7 +131,7 @@ func ValidateConfig(m ModelInfo, c CameraConfig) error {
 	if c.Model != m.ID {
 		return bad("config is for model %q", c.Model)
 	}
-	if len(c.Name) > maxNameLen || hasControlChars(c.Name) {
+	if len(c.Name) > maxNameLen || !printable(c.Name) {
 		return bad("name must be at most %d printable characters", maxNameLen)
 	}
 	if !validHost(c.Host) {
@@ -114,7 +144,7 @@ func ValidateConfig(m ModelInfo, c CameraConfig) error {
 		return bad("transport %q not available on this model", c.Transport)
 	}
 	if len(c.Username) > maxCredLen || len(c.Password) > maxCredLen ||
-		hasControlChars(c.Username) || hasControlChars(c.Password) {
+		!printable(c.Username) || !printable(c.Password) {
 		return bad("credentials must be at most %d printable characters", maxCredLen)
 	}
 	if m.Auth == AuthRequired && c.Username == "" {
@@ -132,13 +162,19 @@ func hasTransport(m ModelInfo, t Transport) bool {
 	return false
 }
 
-func hasControlChars(s string) bool {
+// printable reports whether s is valid UTF-8 without control or format
+// characters (C0/C1 controls, bidi overrides, zero-width marks), which could
+// spoof what the GUI shows or corrupt a protocol line.
+func printable(s string) bool {
+	if !utf8.ValidString(s) {
+		return false
+	}
 	for _, r := range s {
-		if r < 0x20 || r == 0x7f {
-			return true
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // validHost accepts an IPv4/IPv6 literal or an RFC 1123 host name. URLs,

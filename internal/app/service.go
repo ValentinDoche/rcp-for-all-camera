@@ -12,7 +12,7 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
-// Emitter pushes events to the GUI (Wails runtime.EventsEmit in production).
+// Emitter pushes events to the GUI.
 type Emitter interface {
 	Emit(name string, payload any)
 }
@@ -31,11 +31,12 @@ type Options struct {
 	Logger   *slog.Logger
 }
 
-// commandTimeout bounds every camera call made from the GUI.
-const commandTimeout = 3 * time.Second
+// commandTimeout bounds every camera call made from the GUI (a variable only
+// so tests can shorten it).
+var commandTimeout = 3 * time.Second
 
-// Service is the GUI-facing API. Every exported method is bound to the
-// frontend, so lifecycle hooks are unexported (see Host). All methods are
+// Service is the GUI-facing API. Lifecycle hooks are kept off it (see Host)
+// so its method set is exactly the API. All methods are
 // safe for concurrent use and return *Error on failure.
 type Service struct {
 	reg     *core.Registry
@@ -150,6 +151,14 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 	s.slots[slot-1] = st
 	if err := s.saveLocked(); err != nil {
 		s.slots[slot-1] = old
+		// Keep the secret store in line with the rig that stays on disk.
+		oldPassword := ""
+		if old != nil {
+			oldPassword = old.cfg.Password
+		}
+		if err := s.storePassword(slot, oldPassword); err != nil {
+			s.log.Warn("password not restored after failed save", "slot", slot, "err", err)
+		}
 		s.mu.Unlock()
 		st.cam.Close()
 		return Slot{}, toAPIError(err)
@@ -230,14 +239,16 @@ func (s *Service) Controls(slot int) ([]ControlView, error) {
 	connected := cam.Status().State == core.StateConnected
 	specs := cam.Controls()
 	out := make([]ControlView, 0, len(specs))
+	// One deadline for the whole read: a slow camera must not block the GUI
+	// for commandTimeout per control.
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	defer cancel()
 	for _, sp := range specs {
 		cv := ControlView{Spec: sp}
-		if connected {
-			ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+		if connected && ctx.Err() == nil {
 			if v, err := cam.Get(ctx, sp.ID); err == nil {
 				cv.Value = &v
 			}
-			cancel()
 		}
 		out = append(out, cv)
 	}
@@ -246,6 +257,12 @@ func (s *Service) Controls(slot int) ([]ControlView, error) {
 
 // SetControl writes one control of the slot's camera.
 func (s *Service) SetControl(slot int, id string, v core.Value) error {
+	if err := core.CheckControlID(core.ControlID(id)); err != nil {
+		return toAPIError(err)
+	}
+	if err := v.Check(); err != nil {
+		return toAPIError(err)
+	}
 	cam, err := s.camera(slot)
 	if err != nil {
 		return err
@@ -307,6 +324,9 @@ func (s *Service) camera(slot int) (core.Camera, error) {
 
 // build validates cfg, fills the model defaults and creates the camera.
 func (s *Service) build(cfg core.CameraConfig) (*slotState, error) {
+	if len(cfg.Model) > core.MaxIDLen {
+		return nil, fmt.Errorf("model id longer than %d characters: %w", core.MaxIDLen, core.ErrUnknownModel)
+	}
 	info, ok := s.reg.Model(cfg.Model)
 	if !ok {
 		return nil, fmt.Errorf("%q: %w", cfg.Model, core.ErrUnknownModel)
