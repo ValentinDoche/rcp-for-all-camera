@@ -37,6 +37,10 @@ type Rig struct {
 	Active  int                       `json:"active"`
 	// BindIP is the local address used to reach cameras ("" = OS default).
 	BindIP string `json:"bindIp,omitempty"`
+	// OperatorLock: nil means on (the default).
+	OperatorLock *bool `json:"operatorLock,omitempty"`
+	// LogLevel is "normal" (default) or "debug".
+	LogLevel string `json:"logLevel,omitempty"`
 }
 
 // FileStore reads and writes a rig as JSON at Path.

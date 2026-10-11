@@ -59,6 +59,10 @@ type ControlSpec struct {
 	// Section optionally sub-groups controls inside a group (e.g. "Knee",
 	// "Matrix - Phase"), for cameras that expose many parameters.
 	Section string `json:"section,omitempty"`
+	// Guarded marks a control that changes recording, power or what goes on
+	// air (record, color bars, output format...). While the operator lock is
+	// on, the app asks for confirmation before writing it.
+	Guarded bool `json:"guarded,omitempty"`
 }
 
 // Value carries a control value. Only the field matching Kind is meaningful:

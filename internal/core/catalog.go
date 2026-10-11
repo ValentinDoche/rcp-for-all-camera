@@ -54,6 +54,10 @@ const (
 	Tally  ControlID = "tally"
 )
 
+// guarded are the standard controls that change recording or what goes on
+// air; the operator lock asks for confirmation before they are written.
+var guarded = map[ControlID]bool{Record: true, ColorBars: true}
+
 type catalogEntry struct {
 	label string
 	group ControlGroup
@@ -106,5 +110,5 @@ func Std(id ControlID) ControlSpec {
 	if !ok {
 		return ControlSpec{ID: id, Label: string(id), Group: GroupMisc}
 	}
-	return ControlSpec{ID: id, Label: e.label, Group: e.group}
+	return ControlSpec{ID: id, Label: e.label, Group: e.group, Guarded: guarded[id]}
 }
