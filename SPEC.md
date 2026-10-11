@@ -7,7 +7,7 @@ Status: DRAFT, awaiting owner review. Source of intent: [docs/intent/rcp-for-all
 Make a Blackmagic **ATEM Micro Camera Panel** usable as a universal camera control panel on a PC with **no ATEM switcher**.
 
 - The panel connects to the PC over **USB**.
-- The cameras connect over **Ethernet**: Blackmagic Studio 6K Pro, Sony FX6, Sony FX9.
+- The cameras connect over the network (Ethernet, Wi-Fi or a USB-C Ethernet dongle depending on the body). Supported models (owner list, 2026-10-11): Blackmagic Pocket 4K, Pocket 6K G2, Pocket 6K Pro, Studio 4K Plus G2, Studio 4K Pro G2, Studio 6K Pro; Sony FX3 (Wi-Fi), FX6 (Wi-Fi or USB-C Ethernet), FX9, FR7, other Sony (user/password); Panasonic AW-UE100, AW-UE150, AW-UE160, other Panasonic.
 - Pressing panel button 1-8 does two things at once: it selects which camera the panel's controls drive, and it routes that source to an **aux output** on an external router/mixer (Videohub, ATEM or vMix).
 - The panel's controls drive every control each camera exposes over the network.
 - The project is open source and modular: surface, camera and router code are separate modules, so new devices can be added later.
@@ -17,7 +17,7 @@ Make a Blackmagic **ATEM Micro Camera Panel** usable as a universal camera contr
 ### Non-goals
 
 - Not a video switcher; no video or audio handling.
-- No cameras beyond the three above in v1 (the design must allow more).
+- No cameras beyond the list above in v1 (the camera module system must allow more: see docs/adding-a-camera.md).
 - No installer, licensing, cloud or remote access.
 
 ## Assumptions (correct me before planning)
@@ -31,7 +31,7 @@ Make a Blackmagic **ATEM Micro Camera Panel** usable as a universal camera contr
 3. *(Resolved by the spike: HID with challenge/response, see Open Question 1.)* The panel's USB protocol was **not known** at first. It may be a network-over-USB link carrying the ATEM protocol, or HID. The first task is a feasibility spike (see Open Questions). This decides how the "Surface" module is built.
 4. Blackmagic Studio 6K Pro is controlled through Blackmagic's **REST/WebSocket camera control API** over Ethernet.
 5. Sony FX6/FX9 are controlled over **IP/Ethernet only (no LANC)**. The exact network interface and the controls it exposes **need verification** per camera.
-6. Configuration is done in a **GUI** (not a hand-edited file). The GUI stores its settings in a config file that can still be exported and shared. The GUI is a **Wails** desktop app (Go backend, web frontend in the system WebView2, which ships with Windows 11), producing a single `.exe`. The core runs without the GUI (headless mode) so it can be tested and run as a service.
+6. Configuration is done in a **GUI** (not a hand-edited file). The GUI stores its settings in a config file that can still be exported and shared. The GUI is a **native Fyne** desktop app (decided 2026-10-11: the owner refused a web UI, so no Wails/WebView), producing a single `.exe` (cgo, MinGW-w64). Light and dark themes. Every parameter a camera exposes is controllable from the GUI. The core runs without the GUI (headless mode) so it can be tested and run as a service.
 7. Router/mixer protocols: Videohub (TCP text protocol, port 9990), ATEM (UDP, see assumption 2), vMix (HTTP or TCP API).
 
 ## Capability Map
@@ -48,7 +48,7 @@ The request bundles several independently testable capabilities, so it is split 
 | `router-atem` | Aux output control on an ATEM switcher | `core` |
 | `router-vmix` | Aux/output control on vMix | `core` |
 | `app` | Wires modules together, button-to-camera-and-aux mapping, headless runner | all above |
-| `gui` | Wails desktop GUI: add/edit cameras and routers, button mapping, control mapping, live status, test controls | `core`, `app` |
+| `gui` | Native Fyne desktop GUI: panel detection, assign cameras to slots 1-8 with their model, control every camera parameter, add/edit routers, button mapping, live status | `core`, `app` |
 
 Build order: `core` → `surface-micro-panel`, `camera-blackmagic` → `camera-sony`, `router-videohub` → `router-atem`, `router-vmix` → `app` → `gui`
 
@@ -60,8 +60,7 @@ Planned (to be confirmed once the project is scaffolded):
 
 ```
 Build (headless): go build ./cmd/rcp
-Build (GUI):      wails build -platform windows/amd64
-Dev (GUI):        wails dev
+Build (GUI):      CGO_ENABLED=1 go build -ldflags "-H windowsgui" -o rcp.exe ./cmd/rcp
 Test:             go test ./... -race -cover
 Lint:             golangci-lint run
 Run (headless):   ./rcp --config rig.json
@@ -77,7 +76,7 @@ internal/cameras/blackmagic/   → Blackmagic camera driver
 internal/cameras/sony/         → Sony FX6/FX9 IP driver
 internal/routers/videohub|atem|vmix → Router drivers
 internal/app/                  → Wiring, button/control mapping, headless runner
-gui/                           → Wails app (Go bindings + web frontend)
+internal/gui/                  → Fyne native GUI
 testdata/                      → Fake-device fixtures
 docs/                          → Intent, protocol notes, per-module docs
 SPEC.md, SPEC-<module>.md      → This spec and module specs
@@ -167,5 +166,5 @@ Behaviour the owner asked for. It applies to the `app` mapping layer and the sur
 3. **ATEM from Go:** use a community Go library or implement the protocol ourselves for `router-atem`? Needs a quick maturity check.
 4. **Controls to physical mapping:** which panel knob/joystick maps to which control, and which controls need a "page" or modifier because the panel has fewer physical controls than the cameras expose? (Configurable in the GUI, but a sensible default is needed.)
 5. **Aux model:** one aux output for all cameras, or one aux per camera group? How are button numbers mapped to router inputs (configured table assumed)?
-6. **GUI framework:** Wails is assumed (single exe, needs WebView2, which ships with Windows 11). Fyne is the pure-Go alternative if you prefer no web frontend.
+6. ~~**GUI framework**~~ **Resolved 2026-10-11:** native Fyne GUI (Wails was tried and removed: the owner wants no web frontend).
 7. **License:** MIT, Apache-2.0 or other for the open-source release?

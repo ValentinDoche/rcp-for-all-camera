@@ -7,10 +7,11 @@ is, and the traps already hit. Last updated: 2026-10-11.
 
 **RCP For All Camera**: make a Blackmagic **ATEM Micro Camera Panel** (USB) work as a
 universal camera control panel on a Windows PC **with no ATEM switcher**. It will
-control a Blackmagic Studio 6K Pro (REST/WebSocket), a Sony FX6 and a Sony FX9 (IP)
-over Ethernet. Camera buttons 1–8 also route the source to an aux on a Videohub,
+control Blackmagic (Pocket 4K/6K, Studio 4K/6K), Sony (FX3, FX6, FX9, FR7) and
+Panasonic (AW-UE100/150/160) cameras over the network. Camera buttons 1–8 also route the source to an aux on a Videohub,
 an ATEM or vMix. The code is open source and modular (surface / camera / router
-modules). Language: **Go**, built as a single `.exe`, with a Wails GUI planned.
+modules). Language: **Go**, built as a single `.exe`, with a **native Fyne GUI**
+(the owner refused a web UI: no Wails, no HTML/WebView).
 Owner: Valentin (writes in French, so answer in French).
 
 - Intent: [docs/intent/rcp-for-all-camera.md](docs/intent/rcp-for-all-camera.md)
@@ -20,8 +21,13 @@ Owner: Valentin (writes in French, so answer in French).
 
 | Module (SPEC id) | State |
 |---|---|
-| `surface-micro-panel` | **Driver done and verified on hardware** (Windows only): [internal/surfaces/micropanel](internal/surfaces/micropanel) |
-| `core`, cameras, routers, `app`, `gui` | **Not started**. Next step per SPEC: write `SPEC-surface-micro-panel.md`, then `core` |
+| `surface-micro-panel` | **Driver done and verified on hardware** (Windows only): [internal/surfaces/micropanel](internal/surfaces/micropanel). `Present()` used by the GUI for detection; not yet wired to cameras |
+| `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, `app.Service` API ([docs/app-api.md](docs/app-api.md)) |
+| cameras | **Models + control specs declared, no protocol** (`camerakit.Placeholder` returns `NOT_IMPLEMENTED`). 15 models |
+| `gui` | Native Fyne GUI in [internal/gui](internal/gui), entry point [cmd/rcp](cmd/rcp) |
+| routers | **Not started** |
+
+Architecture overview: [docs/architecture.md](docs/architecture.md). Security model: [docs/security.md](docs/security.md).
 
 Phase 1 (USB feasibility spike) is complete, verdict **GO**. Full report:
 [docs/reports/2026-10-11-micro-camera-panel-usb-spike.md](docs/reports/2026-10-11-micro-camera-panel-usb-spike.md) (French).
@@ -31,7 +37,15 @@ Phase 1 (USB feasibility spike) is complete, verdict **GO**. Full report:
 ```
 AGENTS.md                         ← this file
 SPEC.md                           ← project spec (assumptions, modules, boundaries)
-go.mod                            ← module github.com/valentindoche/rcp-for-all-camera, no deps
+go.mod                            ← module github.com/valentindoche/rcp-for-all-camera, dep: fyne
+cmd/rcp/                          ← the app (GUI) entry point
+internal/core/                    ← contracts: ControlSpec/Value, Camera/Driver, ModelInfo, Registry, errors
+internal/config/                  ← rig.json store (atomic, 0600) + Secrets (passwords never in rig.json)
+internal/app/                     ← Service (API used by the GUI) + Host (lifecycle, panel polling)
+internal/cameras/                 ← Register(); blackmagic/ sony/ panasonic/ drivers;
+                                    camerakit (Placeholder), speckit (spec builders), cameratest (contract suite)
+internal/gui/                     ← Fyne GUI (themes clair/sombre)
+docs/architecture.md, docs/app-api.md, docs/adding-a-camera.md, docs/security.md
 internal/surfaces/micropanel/
   hid_windows.go                  ← pure-Go HID: setupapi + hid.dll + kernel32 (no cgo)
   auth.go, auth_test.go           ← challenge/response (feature report 0x05)
@@ -51,9 +65,19 @@ Middle-Control-MacOS-4.0.4.dmg    ← third-party app; analysed, useless for USB
 paneltest.exe                     ← local build output, rebuild instead of trusting it
 ```
 
-No git repo yet (`git init` has not been run).
+Git repo on `main`, Conventional Commits (`feat(core): …`, `fix(gui): …`, `refactor`,
+`docs`, `test`, `chore`), each commit ends with the Co-Authored-By line.
 
 ## 4. Commands
+
+Fyne needs cgo. gcc (WinLibs MinGW-w64, installed with winget) is on the user PATH, but
+an already-open shell may not see it:
+
+```bash
+export PATH="/c/Users/VALENTIN/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin:$PATH" CGO_ENABLED=1
+go build -ldflags "-H windowsgui" -o rcp.exe ./cmd/rcp   # the app (first build ~4 min)
+go test -race ./internal/...
+```
 
 ```bash
 go vet ./...
@@ -108,6 +132,9 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
    wipes the others. Bug seen: the iris "11" segment stuck on.
 8. Input reports are only sent on change, so read features 0x0E/0x0F at connect
    (already done in `Panel.Run`).
+9. The **Bash tool mangles some heredocs** containing apostrophes; write files with the
+   Write tool instead.
+10. The owner wants a **native** GUI. Wails (HTML in WebView2) was built then removed.
 
 ## 7. What was tried and abandoned
 
@@ -138,8 +165,10 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
    After a camera switch, the lever only takes control once it reaches the camera's
    current iris (camera at F10, lever at F4 → nothing until the lever reaches F10).
    The same applies to the master-black ring. Not implemented yet: `paneltest` still jumps the iris.
-8. Next per SPEC: write `SPEC-surface-micro-panel.md`, then build `core`
-   (interfaces `Camera`, `Router`, `Surface`), then `camera-blackmagic`.
+8. Next: wire the panel (`micropanel.Open` + `Run`) into `app` (slot buttons → `SelectSlot`,
+   knobs/lever → `SetControl` with CB-1 pickup), then the first real protocol
+   (`camera-blackmagic` REST), then routers. Every control range marked `TODO(verify)` in
+   `internal/cameras/*/specs.go` must be checked against official docs or hardware.
 
 ## 9. Working rules (from SPEC.md boundaries, plus the owner's preferences)
 
