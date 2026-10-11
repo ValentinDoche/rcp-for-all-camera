@@ -16,6 +16,7 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel"
 	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
@@ -40,7 +41,8 @@ func run() error {
 		return fmt.Errorf("open log: %w", err)
 	}
 	defer logFile.Close()
-	log := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	level := new(slog.LevelVar) // Info until the saved setting is applied
+	log := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: level}))
 
 	reg := core.NewRegistry()
 	if err := cameras.Register(reg); err != nil {
@@ -65,11 +67,15 @@ func run() error {
 			return out
 		},
 		AutoStart: autoStarter(),
+		LogLevel:  level,
+		LogDir:    dir,
 	})
 	if err != nil {
 		return err
 	}
 	host := appsvc.NewHost(svc, panelProbe, time.Second)
+	// The USB panel is a control surface: rendered from and driving the Service.
+	host.SetSurface(panel.New(panel.Options{Logger: log}))
 
 	fa := app.NewWithID(gui.AppID)
 	win := gui.New(fa, svc, gui.Options{})

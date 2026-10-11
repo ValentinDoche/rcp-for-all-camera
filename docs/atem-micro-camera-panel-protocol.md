@@ -31,9 +31,9 @@ The panel works with **no ATEM switcher** present: it only needs the host to aut
 |---|---|---|---|---|
 | `0x02` | out | 32 | Button / indicator LEDs (bitmap + layer) | ✅ |
 | `0x03` | in | 13 | Held keys: up to 6 × u16 key codes | ✅ |
-| `0x04` | feature | 8 | Status/version? Bytes change between reads (`04 20 15 41…`, `04 60 1f 41…`) | ❓ |
+| `0x04` | feature | 8 | Status/version? Bytes change between reads (`04 20 15 41…`, `04 60 1f 41…`, `04 60 10 41 00 00 f4 01`) | ❓ |
 | `0x05` | feature | 10 | Authentication (challenge/response) | ✅ |
-| `0x06` | in + feature | 3 | Battery: byte 1 bit 0 = charging, byte 2 = percent (reads `00 64`) | 🔎 |
+| `0x06` | in + feature | 3 | Battery: byte 1 bit 0 = charging, byte 2 = percent (feature read `06 00 64` on 2026-10-11) | ✅ read |
 | `0x09` → `0x0A` | feature | 4 / 28 | Set `09 00 00 00`, then read `0A`: `[a, b, c, u32, 10 × u16]`, the u16s are the switcher input IDs assigned to the camera buttons (`1..8, 0, 0`) | 🔎 |
 | `0x0B` | feature | 14 | ❓ | ❓ |
 | `0x0D` | in | 5 | `settingsChanged` flags (u32); host then reads feature `0x14` | 🔎 |
@@ -44,7 +44,7 @@ The panel works with **no ATEM switcher** present: it only needs the host to aut
 | `0x12` | feature | 4 | Scene-file directory: set `[1, cam, 0]`, read `[x, cam, bits]`, bits 0..4 = slots stored | 🔎 |
 | `0x13` | feature | 64 | Scene file: `[slot 1..5, camera 1..80, 61-byte blob]`; stored **in the panel** | 🔎 |
 | `0x14` | feature | 2 | 1 bit setting (read after `0x0D`) | ❓ |
-| `0x15` | feature | 33 | 32-byte ASCII, probably device name | 🔎 |
+| `0x15` | feature | 33 | 32-byte ASCII device name: reads `ATEM Micro Camera Panel` | ✅ read |
 
 ## 3. Authentication (feature report 0x05) ✅
 
