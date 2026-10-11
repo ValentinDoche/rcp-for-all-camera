@@ -35,7 +35,7 @@ func newPresetsBlock(ctl *Controller, slot int) *presetsBlock {
 		cells[i] = b.nums[i]
 	}
 	b.store = widgets.NewIconButton(icons.Save, ctl.tx.T("preset.store"), func() { b.arm(!b.armed) })
-	b.obj = card(icons.Bookmarks, ctl.tx.T("preset.title"), b.store, container.NewGridWithColumns(app.PresetCount, cells...))
+	b.obj = card(icons.Bookmarks, ctl.tx.T("preset.title"), true, b.store, container.NewGridWithColumns(app.PresetCount, cells...))
 	b.refresh()
 	return b
 }

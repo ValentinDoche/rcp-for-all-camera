@@ -48,38 +48,39 @@ func sized(a *App) {
 	a.Window().Resize(fyne.NewSize(1440, 810))
 }
 
-func TestStripOnlyOffersWhatTheCameraDeclares(t *testing.T) {
+// Every strip has the same parts; what a camera does not declare is greyed.
+func TestStripsLookTheSameAndGreyWhatIsMissing(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
 	sized(a)
 	bmd, sony, pana := a.strips[0].content, a.strips[1].content, a.strips[2].content
 	if bmd == nil || sony == nil || pana == nil {
 		t.Fatal("assigned slots must have content")
 	}
-	if bmd.wheel == nil || bmd.selector == nil || len(bmd.groupMap) != 3 {
-		t.Error("Studio 6K Pro declares lift, gamma and gain: wheel and selector expected")
+	for i, c := range []*stripContent{bmd, sony, pana} {
+		if c.wheel == nil || c.selector == nil || len(c.groupMap) != 3 || c.pad == nil || c.meter == nil ||
+			c.zoom == nil || c.focus == nil || c.iris == nil || len(c.summary) != 4 {
+			t.Errorf("strip %d misses a part", i+1)
+		}
 	}
-	if sony.wheel != nil || sony.selector != nil {
-		t.Error("FX6 declares no color wheels: none must be shown")
+	if sony.wheel.wheel.Disabled() == false {
+		t.Error("FX6 declares no color wheels: its wheel must be greyed")
 	}
-	if pana.wheel == nil {
-		t.Error("UE150 declares pedestal R/G/B (lift): a wheel is expected")
+	if bmd.wheel.wheel.Disabled() || pana.wheel.wheel.Disabled() {
+		t.Error("Studio 6K Pro and UE150 have a Lift wheel")
 	}
-	if bmd.zoom == nil || bmd.focus == nil || bmd.pad == nil || bmd.meter == nil {
-		t.Error("Studio 6K Pro has zoom, focus, iris and master black")
+	if bmd.zoom.Disabled() {
+		t.Error("Studio 6K Pro with a power zoom: the zoom lever works")
 	}
-	if findButton(a.strips[0].root, "Auto focus") == nil || findButton(a.strips[0].root, "AWB") == nil {
-		t.Error("quick actions missing")
+	for _, label := range []string{"Auto focus", "Auto iris", "AWB"} {
+		if findButton(a.strips[1].root, label) == nil {
+			t.Errorf("quick action %q missing on the FX6 strip", label)
+		}
 	}
 	if findButton(a.strips[0].root, "Détails") == nil {
 		t.Error("Détails button missing")
 	}
-	// the Panasonic has no ND filter in this model: its summary must not list one
-	for _, cell := range pana.summary {
-		if cell.spec.ID == core.ND {
-			if !a.ctl.Has(3, core.ND) {
-				t.Error("ND readout shown for a camera without ND")
-			}
-		}
+	if !a.ctl.Has(3, core.ND) && pana.summary[0].spec.ID != "" {
+		t.Error("an ND readout without ND must stay empty")
 	}
 }
 

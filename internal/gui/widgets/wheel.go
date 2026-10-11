@@ -256,3 +256,6 @@ func hsv(h, s, v float64) color.NRGBA {
 	m := v - c
 	return color.NRGBA{R: uint8((rr + m) * 255), G: uint8((gg + m) * 255), B: uint8((bb + m) * 255), A: 0xFF}
 }
+
+// Disabled reports whether the wheel is greyed.
+func (w *ColorWheel) Disabled() bool { return w.disabled }

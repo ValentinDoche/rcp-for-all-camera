@@ -139,9 +139,11 @@ func (b *wheelBlock) apply() {
 		} else {
 			b.y.Set(widgets.Neutral(ids[0], sp.Min, sp.Max))
 		}
-		b.y.Show()
+		b.y.SetDisabled(false)
 	} else {
-		b.y.Hide()
+		// not declared: greyed, never hidden, so every camera looks the same
+		b.y.Set((b.y.Min + b.y.Max) / 2)
+		b.y.SetDisabled(true)
 	}
 	sp, ok := b.rgbSpec(1)
 	if ok && vals[1] != nil && vals[2] != nil && vals[3] != nil {
@@ -151,7 +153,13 @@ func (b *wheelBlock) apply() {
 	} else {
 		b.wheel.SetPuck(0, 0)
 	}
-	b.wheel.SetDisabled(!wheelAvailable(b.ctl, b.slot, b.group))
+	avail := wheelAvailable(b.ctl, b.slot, b.group)
+	b.wheel.SetDisabled(!avail)
+	if avail {
+		b.reset.Enable()
+	} else {
+		b.reset.Disable()
+	}
 }
 
 func (b *wheelBlock) onWheel(x, y float64) {

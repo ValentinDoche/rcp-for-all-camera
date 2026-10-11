@@ -59,8 +59,8 @@ type stripContent struct {
 	summary []summaryCell
 	pad     *widgets.IrisPad
 	meter   *widgets.LevelMeter
-	iris    *widgets.Text // the f-stop above the pad
-	zoom    *widgets.Slider
+	iris    *widgets.Text  // the f-stop above the pad
+	zoom    *widgets.Lever // spring-loaded: push to zoom, released it stops
 	focus   *widgets.Slider
 	quiet   bool
 }
@@ -243,97 +243,87 @@ func (s *strip) buildContent() *stripContent {
 	c := &stripContent{}
 	slot, ctl := s.slot, s.ctl
 	has := func(id core.ControlID) bool { return ctl.Has(slot, id) }
+	// Every strip has the same parts in the same places; what the camera does
+	// not declare is greyed, never removed.
 
 	var top []fyne.CanvasObject
 
-	// Lift / Gamma / Gain selector and wheel
-	var avail []int
+	// Lift / Gamma / Gain selector and wheel, starting on the first one the
+	// camera has
 	var titles []string
+	first := -1
 	for g := range wheelGroups {
-		if wheelAvailable(ctl, slot, g) {
-			avail = append(avail, g)
-			titles = append(titles, ctl.tx.T(wheelGroups[g].Key))
+		c.groupMap = append(c.groupMap, g)
+		titles = append(titles, ctl.tx.T(wheelGroups[g].Key))
+		if first < 0 && wheelAvailable(ctl, slot, g) {
+			first = g
 		}
 	}
-	if len(avail) > 0 {
-		c.groupMap = avail
-		c.wheel = newWheelBlock(ctl, slot, 168)
-		c.wheel.setGroup(avail[0])
-		c.selector = widgets.NewSegmented(titles, func(i int) {
-			c.wheel.setGroup(c.groupMap[i])
-		})
-		c.selector.SetSelected(0)
-		top = append(top, container.New(layout.NewCustomPaddedLayout(6, 2, 4, 4), c.selector), c.wheel.obj)
-	}
+	first = max(first, 0)
+	c.wheel = newWheelBlock(ctl, slot, 168)
+	c.wheel.setGroup(first)
+	c.selector = widgets.NewSegmented(titles, func(i int) {
+		c.wheel.setGroup(c.groupMap[i])
+	})
+	c.selector.SetSelected(first)
+	top = append(top, container.New(layout.NewCustomPaddedLayout(6, 2, 4, 4), c.selector), c.wheel.obj)
 
 	// ND / GAIN / OBTURATEUR / BALANCE
 	var cells []fyne.CanvasObject
-	addCell := func(caption string, id core.ControlID) {
-		sp, ok := ctl.Spec(slot, id)
-		if !ok {
-			return
+	addCell := func(caption string, ids ...core.ControlID) {
+		var sp core.ControlSpec
+		for _, id := range ids {
+			if got, ok := ctl.Spec(slot, id); ok {
+				sp = got
+				break
+			}
+		}
+		tok := style.TextMuted
+		if sp.ID == "" {
+			tok = style.TextFaint
 		}
 		val := widgets.NewText(texts.Missing, style.Text, 13).Bold().Mono().Align(fyne.TextAlignCenter)
 		c.summary = append(c.summary, summaryCell{spec: sp, val: val})
 		cells = append(cells, container.NewVBox(
-			widgets.NewText(caption, style.TextMuted, 10).Align(fyne.TextAlignCenter), val))
+			widgets.NewText(caption, tok, 10).Align(fyne.TextAlignCenter), val))
 	}
-	if has(core.ND) {
-		addCell(ctl.tx.T("strip.nd"), core.ND)
-	}
-	switch {
-	case has(core.Gain):
-		addCell(ctl.tx.T("strip.gain"), core.Gain)
-	case has(core.ISO):
+	addCell(ctl.tx.T("strip.nd"), core.ND)
+	if !has(core.Gain) && has(core.ISO) {
 		addCell(ctl.tx.T("strip.iso"), core.ISO)
+	} else {
+		addCell(ctl.tx.T("strip.gain"), core.Gain)
 	}
-	switch {
-	case has(core.ShutterSpeed):
-		addCell(ctl.tx.T("strip.shutter"), core.ShutterSpeed)
-	case has(core.ShutterAngle):
-		addCell(ctl.tx.T("strip.shutter"), core.ShutterAngle)
-	}
-	if has(core.WhiteBalance) {
-		addCell(ctl.tx.T("strip.balance"), core.WhiteBalance)
-	}
-	if len(cells) > 0 {
-		top = append(top, container.New(layout.NewCustomPaddedLayout(6, 0, 0, 0),
-			widgets.NewPanel(style.Inset, style.Border, 4, container.NewGridWithColumns(len(cells), cells...))))
-	}
+	addCell(ctl.tx.T("strip.shutter"), core.ShutterSpeed, core.ShutterAngle)
+	addCell(ctl.tx.T("strip.balance"), core.WhiteBalance)
+	top = append(top, container.New(layout.NewCustomPaddedLayout(6, 0, 0, 0),
+		widgets.NewPanel(style.Inset, style.Border, 4, container.NewGridWithColumns(len(cells), cells...))))
 
-	// iris pad, meter, zoom and focus
-	hasIris, hasMB := has(core.Iris), has(core.MasterBlack)
-	hasZoom, hasFocus := has(core.Zoom), has(core.Focus)
-	var center fyne.CanvasObject = layout.NewSpacer()
-	if hasIris || hasMB {
-		c.pad = widgets.NewIrisPad(fyne.NewSize(120, 110))
-		c.pad.SetAxes(hasMB, hasIris)
-		c.pad.OnChanged = func(x, y float64, _, _ bool) { s.onPad(c, x, y) }
-		center = c.pad
+	// iris pad, meter, zoom lever and focus
+	c.pad = widgets.NewIrisPad(fyne.NewSize(120, 110))
+	c.pad.SetAxes(has(core.MasterBlack), has(core.Iris))
+	c.pad.OnChanged = func(x, y float64, _, _ bool) { s.onPad(c, x, y) }
+	c.meter = widgets.NewLevelMeter(20, fyne.NewSize(12, 100))
+	row := container.NewBorder(nil, nil,
+		container.New(layout.NewCustomPaddedLayout(14, 14, 0, 4), c.meter), nil, c.pad)
+
+	c.zoom = widgets.NewLever(true)
+	if sp, ok := ctl.Spec(slot, core.Zoom); ok && sp.Kind == core.KindRange && !sp.ReadOnly {
+		c.zoom.OnHold = func(d float64) { zoomHold(ctl, slot, sp, d) }
+	} else {
+		c.zoom.SetDisabled(true)
 	}
-	row := container.NewBorder(nil, nil, nil, nil, center)
-	if hasIris {
-		c.meter = widgets.NewLevelMeter(20, fyne.NewSize(12, 100))
-		row = container.NewBorder(nil, nil,
-			container.New(layout.NewCustomPaddedLayout(14, 14, 0, 4), c.meter), nil, center)
+	c.focus = s.vslider(c, core.Focus)
+	row = container.NewBorder(nil, nil, nil, container.NewHBox(
+		labeledVertical(ctl.tx.T("strip.zoom"), has(core.Zoom), c.zoom),
+		labeledVertical(ctl.tx.T("strip.focus"), has(core.Focus), c.focus)), row)
+
+	irisTok := style.TextMuted
+	if !has(core.Iris) {
+		irisTok = style.TextFaint
 	}
-	var side []fyne.CanvasObject
-	if hasZoom {
-		c.zoom = s.vslider(c, core.Zoom)
-		side = append(side, labeledVertical(ctl.tx.T("strip.zoom"), c.zoom))
-	}
-	if hasFocus {
-		c.focus = s.vslider(c, core.Focus)
-		side = append(side, labeledVertical(ctl.tx.T("strip.focus"), c.focus))
-	}
-	if len(side) > 0 {
-		row = container.NewBorder(nil, nil, nil, container.NewHBox(side...), row)
-	}
-	if hasIris {
-		c.iris = widgets.NewText(texts.Missing, style.Text, 15).Bold().Mono()
-		row = container.NewBorder(container.NewHBox(
-			widgets.NewText(ctl.tx.T("strip.iris"), style.TextMuted, 10), c.iris), nil, nil, nil, row)
-	}
+	c.iris = widgets.NewText(texts.Missing, style.Text, 15).Bold().Mono()
+	row = container.NewBorder(container.NewHBox(
+		widgets.NewText(ctl.tx.T("strip.iris"), irisTok, 10), c.iris), nil, nil, nil, row)
 	padArea := container.New(layout.NewCustomPaddedLayout(6, 0, 0, 0), row)
 
 	// quick actions
@@ -342,16 +332,14 @@ func (s *strip) buildContent() *stripContent {
 		id    core.ControlID
 		label string
 	}{{core.AutoFocus, ctl.tx.T("strip.autoFocus")}, {core.AutoIris, ctl.tx.T("strip.autoIris")}, {core.AutoWhiteBalance, ctl.tx.T("strip.awb")}} {
-		if !has(a.id) {
-			continue
-		}
 		id := a.id
-		acts = append(acts, widget.NewButton(a.label, func() { ctl.Write(slot, id, core.Trigger()) }))
+		btn := widget.NewButton(a.label, func() { ctl.Write(slot, id, core.Trigger()) })
+		if !has(id) {
+			btn.Disable()
+		}
+		acts = append(acts, btn)
 	}
-	var bottom []fyne.CanvasObject
-	if len(acts) > 0 {
-		bottom = append(bottom, container.NewGridWithColumns(len(acts), acts...))
-	}
+	bottom := []fyne.CanvasObject{container.NewGridWithColumns(len(acts), acts...)}
 	if s.actions.Details != nil {
 		d := widget.NewButton(ctl.tx.T("strip.details"), func() { s.actions.Details(slot) })
 		d.Importance = widget.MediumImportance
@@ -362,25 +350,32 @@ func (s *strip) buildContent() *stripContent {
 	return c
 }
 
-// vslider builds a vertical zoom or focus slider that writes through the
-// controller.
+// vslider builds a vertical focus slider that writes through the controller;
+// greyed when the camera has no such control.
 func (s *strip) vslider(c *stripContent, id core.ControlID) *widgets.Slider {
-	sp, _ := s.ctl.Spec(s.slot, id)
-	sl := widgets.NewSlider(sp.Min, sp.Max)
+	sp, ok := s.ctl.Spec(s.slot, id)
+	sl := widgets.NewSlider(0, 1)
 	sl.Vertical = true
-	sl.Step = stepOf(sp)
+	if !ok || sp.Kind != core.KindRange || sp.ReadOnly {
+		sl.SetDisabled(true)
+		return sl
+	}
+	sl.Min, sl.Max, sl.Step = sp.Min, sp.Max, stepOf(sp)
 	sl.OnChanged = func(v float64) {
 		s.ctl.Write(s.slot, id, core.Number(widgets.Quantize(v, widgets.RangeOf(sp))))
 	}
 	return sl
 }
 
-func labeledVertical(caption string, sl *widgets.Slider) fyne.CanvasObject {
+func labeledVertical(caption string, on bool, o fyne.CanvasObject) fyne.CanvasObject {
+	tok := style.TextMuted
+	if !on {
+		tok = style.TextFaint
+	}
 	return widgets.Sized(38, 0, container.NewBorder(
-		widgets.NewText(caption, style.TextMuted, 10).Align(fyne.TextAlignCenter), nil, nil, nil, sl))
+		widgets.NewText(caption, tok, 10).Align(fyne.TextAlignCenter), nil, nil, nil, o))
 }
 
-// irisScale is the iris scale of the slot's camera and lens.
 func (s *strip) irisScale() (widgets.IrisScale, bool) {
 	sp, ok := s.ctl.Spec(s.slot, core.Iris)
 	if !ok {
@@ -463,18 +458,11 @@ func (s *strip) applyContent() {
 			}
 		}
 	}
-	for _, p := range []struct {
-		sl *widgets.Slider
-		id core.ControlID
-	}{{c.zoom, core.Zoom}, {c.focus, core.Focus}} {
-		if p.sl == nil {
-			continue
-		}
-		sp, _ := s.ctl.Spec(s.slot, p.id)
-		if v := s.ctl.Value(s.slot, p.id); v != nil {
-			p.sl.Set(v.Number)
+	if sp, ok := s.ctl.Spec(s.slot, core.Focus); ok {
+		if v := s.ctl.Value(s.slot, core.Focus); v != nil {
+			c.focus.Set(v.Number)
 		} else {
-			p.sl.Set(sp.Min)
+			c.focus.Set(sp.Min)
 		}
 	}
 }

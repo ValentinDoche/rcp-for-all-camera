@@ -125,16 +125,17 @@ func (p *detailsPage) rebuild() {
 		p.cards[core.Record] = true
 	}
 
-	// three wheels
+	// three wheels, greyed when the camera has no such correction
 	var cols []fyne.CanvasObject
 	for g := range wheelGroups {
-		if !wheelAvailable(p.ctl, p.slot, g) {
-			continue
-		}
 		wb := newWheelBlock(p.ctl, p.slot, 200)
 		wb.setGroup(g)
 		p.wheels = append(p.wheels, wb)
-		title := widgets.NewText(p.ctl.tx.T(wheelGroups[g].Key), style.Text, 14).Bold().Align(fyne.TextAlignCenter)
+		tok := style.Text
+		if !wheelAvailable(p.ctl, p.slot, g) {
+			tok = style.TextFaint
+		}
+		title := widgets.NewText(p.ctl.tx.T(wheelGroups[g].Key), tok, 14).Bold().Align(fyne.TextAlignCenter)
 		cols = append(cols, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(title, wb.obj)))
 	}
 
@@ -155,7 +156,7 @@ func (p *detailsPage) rebuild() {
 	// their fourth column, with compact rows, so the whole page fits the
 	// screen (1920 x 1080) without scrolling.
 	p.secs = buildSections(p.ctl, p.slot, skip, false)
-	besideWheels := len(cols) > 0 && len(p.secs) == 1
+	besideWheels := len(p.secs) <= 1
 	if besideWheels {
 		p.secs = buildSections(p.ctl, p.slot, skip, true)
 	}
@@ -166,6 +167,10 @@ func (p *detailsPage) rebuild() {
 		lower = append(lower, sectionObject(s, 1))
 	}
 	switch {
+	case besideWheels && len(lower) == 0: // keep the fourth column, empty
+		cols = append(cols, widgets.NewPanel(style.Surface, style.Border, 12,
+			widgets.NewText(p.ctl.tx.GroupTitle(core.GroupColor), style.TextFaint, 14).Bold()))
+		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
 	case besideWheels:
 		cols = append(cols, lower[0])
 		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
