@@ -2,6 +2,9 @@ package widgets
 
 import (
 	"math"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
 	"slices"
 	"testing"
 
@@ -64,5 +67,18 @@ func TestIrisLabels(t *testing.T) {
 	k := NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
 	if got := k.Labels(); !slices.Equal(got, []float64{2.8, 4, 5.6, 8, 11, 16, 22}) {
 		t.Errorf("labels %v", got)
+	}
+}
+
+func TestPadCrossFollowsThePuck(t *testing.T) {
+	p := NewIrisPad(fyne.NewSize(120, 110))
+	p.SetAxes(true, true)
+	p.Resize(fyne.NewSize(120, 110))
+	p.SetPos(0.5, -0.5)
+	r := test.WidgetRenderer(p).(*padRenderer)
+	cx := r.puck.Position().X + padPuckR
+	cy := r.puck.Position().Y + padPuckR
+	if r.v.Position1.X != cx || r.v.Position2.X != cx || r.h.Position1.Y != cy || r.h.Position2.Y != cy {
+		t.Errorf("cross at (%v, %v), puck centre at (%v, %v)", r.v.Position1.X, r.h.Position1.Y, cx, cy)
 	}
 }

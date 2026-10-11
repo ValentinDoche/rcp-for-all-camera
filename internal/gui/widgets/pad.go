@@ -140,11 +140,12 @@ func (r *padRenderer) MinSize() fyne.Size { return r.p.minSize }
 func (r *padRenderer) Layout(s fyne.Size) {
 	r.bg.Resize(s)
 	cx, cy := s.Width/2, s.Height/2
-	r.h.Position1, r.h.Position2 = fyne.NewPos(6, cy), fyne.NewPos(s.Width-6, cy)
-	r.v.Position1, r.v.Position2 = fyne.NewPos(cx, 6), fyne.NewPos(cx, s.Height-6)
 	hw, hh := float64(s.Width)/2-padPuckR, float64(s.Height)/2-padPuckR
 	px := float32(float64(cx) + r.p.x*hw)
 	py := float32(float64(cy) - r.p.y*hh)
+	// the cross goes through the puck's centre and follows it
+	r.h.Position1, r.h.Position2 = fyne.NewPos(6, py), fyne.NewPos(s.Width-6, py)
+	r.v.Position1, r.v.Position2 = fyne.NewPos(px, 6), fyne.NewPos(px, s.Height-6)
 	r.puck.Move(fyne.NewPos(px-padPuckR, py-padPuckR))
 	r.puck.Resize(fyne.NewSize(2*padPuckR, 2*padPuckR))
 	r.dot.Move(fyne.NewPos(px-3, py-3))
