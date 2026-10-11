@@ -31,6 +31,9 @@ const (
 	GroupImage     ControlGroup = "image"
 	GroupPTZ       ControlGroup = "ptz"
 	GroupTransport ControlGroup = "transport"
+	GroupAudio     ControlGroup = "audio"
+	GroupOutput    ControlGroup = "output" // video outputs, formats, HDR
+	GroupSystem    ControlGroup = "system" // power, installation, tally lamps, OSD
 	GroupMisc      ControlGroup = "misc"
 )
 
@@ -53,6 +56,9 @@ type ControlSpec struct {
 	Step     float64      `json:"step,omitempty"`
 	Options  []Option     `json:"options,omitempty"`
 	ReadOnly bool         `json:"readOnly,omitempty"`
+	// Section optionally sub-groups controls inside a group (e.g. "Knee",
+	// "Matrix - Phase"), for cameras that expose many parameters.
+	Section string `json:"section,omitempty"`
 }
 
 // Value carries a control value. Only the field matching Kind is meaningful:
@@ -113,6 +119,9 @@ func (v Value) Check() error {
 func (s ControlSpec) Check() error {
 	if err := CheckControlID(s.ID); err != nil {
 		return fmt.Errorf("control spec %q: %w", s.ID, err)
+	}
+	if len(s.Section) > MaxIDLen || !printable(s.Section) {
+		return fmt.Errorf("control %s: section must be at most %d printable characters", s.ID, MaxIDLen)
 	}
 	switch s.Kind {
 	case KindRange:

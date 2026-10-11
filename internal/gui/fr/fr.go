@@ -68,7 +68,8 @@ func ControlLabel(s core.ControlSpec) string {
 // GroupOrder is the display order of the generic sections.
 var GroupOrder = []core.ControlGroup{
 	core.GroupLens, core.GroupExposure, core.GroupWhite, core.GroupColor,
-	core.GroupImage, core.GroupPTZ, core.GroupTransport, core.GroupMisc,
+	core.GroupImage, core.GroupPTZ, core.GroupTransport, core.GroupAudio,
+	core.GroupOutput, core.GroupSystem, core.GroupMisc,
 }
 
 // GroupTitle is the French title of a control group.
@@ -88,6 +89,12 @@ func GroupTitle(g core.ControlGroup) string {
 		return "PTZ"
 	case core.GroupTransport:
 		return "Enregistrement"
+	case core.GroupAudio:
+		return "Audio"
+	case core.GroupOutput:
+		return "Sorties vidéo"
+	case core.GroupSystem:
+		return "Système"
 	}
 	return "Divers"
 }

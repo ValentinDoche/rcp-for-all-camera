@@ -50,14 +50,15 @@ func TestGroupTitlesCoverAllGroups(t *testing.T) {
 	want := map[core.ControlGroup]string{
 		core.GroupLens: "Objectif", core.GroupExposure: "Exposition", core.GroupWhite: "Balance des blancs",
 		core.GroupColor: "Correction colorimétrique", core.GroupImage: "Image", core.GroupPTZ: "PTZ",
-		core.GroupTransport: "Enregistrement", core.GroupMisc: "Divers", "weird": "Divers",
+		core.GroupTransport: "Enregistrement", core.GroupAudio: "Audio", core.GroupOutput: "Sorties vidéo",
+		core.GroupSystem: "Système", core.GroupMisc: "Divers", "weird": "Divers",
 	}
 	for g, w := range want {
 		if got := GroupTitle(g); got != w {
 			t.Errorf("GroupTitle(%q) = %q, want %q", g, got, w)
 		}
 	}
-	if len(GroupOrder) != 8 {
+	if len(GroupOrder) != 11 {
 		t.Errorf("GroupOrder has %d entries", len(GroupOrder))
 	}
 }

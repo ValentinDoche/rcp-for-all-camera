@@ -235,17 +235,29 @@ func buildSections(ctl *Controller, slot int, skip map[core.ControlID]bool) []*s
 }
 
 // sectionObject lays a section out as a titled panel with two columns of rows.
+// Rows sharing a spec.Section are gathered under a small sub-title, in the
+// order their section first appears.
 func sectionObject(s *section) fyne.CanvasObject {
-	var objs []fyne.CanvasObject
+	var order []string
+	bySection := map[string][]fyne.CanvasObject{}
 	for _, r := range s.rows {
-		objs = append(objs, container.New(layout.NewCustomPaddedLayout(2, 2, 4, 4), r.obj))
+		if _, seen := bySection[r.spec.Section]; !seen {
+			order = append(order, r.spec.Section)
+		}
+		bySection[r.spec.Section] = append(bySection[r.spec.Section],
+			container.New(layout.NewCustomPaddedLayout(2, 2, 4, 4), r.obj))
 	}
-	title := widgets.NewText(s.title, style.Text, 14).Bold()
 	body := container.NewVBox(
-		title,
+		widgets.NewText(s.title, style.Text, 14).Bold(),
 		widgets.Sized(0, 1, widgets.NewHairline()),
-		container.NewGridWithColumns(2, objs...),
 	)
+	for _, name := range order {
+		if name != "" {
+			body.Add(container.New(layout.NewCustomPaddedLayout(8, 2, 4, 4),
+				widgets.NewText(name, style.TextMuted, 12).Bold()))
+		}
+		body.Add(container.NewGridWithColumns(2, bySection[name]...))
+	}
 	return widgets.NewPanel(style.Surface, style.Border, 12, body)
 }
 

@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +92,21 @@ func TestStdFillsLabelAndGroupFromCatalog(t *testing.T) {
 	s := Std(Iris)
 	if s.Label == "" || s.Group != GroupLens {
 		t.Fatalf("Std(Iris) = %+v, want label and lens group", s)
+	}
+}
+
+func TestSpecCheckBoundsSection(t *testing.T) {
+	ok := ControlSpec{ID: "x", Kind: KindToggle, Section: "Matrice linéaire"}
+	if err := ok.Check(); err != nil {
+		t.Fatalf("Check(valid section) = %v", err)
+	}
+	for name, sec := range map[string]string{
+		"too long":     strings.Repeat("s", MaxIDLen+1),
+		"control char": "a\nb",
+	} {
+		s := ControlSpec{ID: "x", Kind: KindToggle, Section: sec}
+		if err := s.Check(); err == nil {
+			t.Errorf("%s: Check() = nil, want error", name)
+		}
 	}
 }
