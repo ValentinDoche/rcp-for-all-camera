@@ -15,8 +15,9 @@ const (
 // Status is a snapshot of a camera's connection.
 type Status struct {
 	State ConnState `json:"state"`
-	// Detail is a short human-readable reason for StateError. It must not
-	// contain credentials.
+	// Detail is a short human-readable reason for StateError, or for
+	// StateDisconnected while the driver retries. It must not contain
+	// credentials.
 	Detail string `json:"detail,omitempty"`
 }
 

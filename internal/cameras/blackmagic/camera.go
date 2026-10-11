@@ -11,9 +11,11 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"os"
 	"slices"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
@@ -309,18 +311,28 @@ func (c *Camera) request(ctx context.Context, method, path string, body map[stri
 func (c *Camera) run(ctx context.Context) {
 	defer close(c.done)
 	backoff := time.Second
+	away := false // unreachable on the last attempt: retries stay "offline"
 	for ctx.Err() == nil {
-		c.setStatus(core.StateConnecting, "")
+		if !away {
+			c.setStatus(core.StateConnecting, "")
+		}
 		connected, err := c.session(ctx)
 		if ctx.Err() != nil {
 			break
 		}
-		c.finishFirst(err)
 		if connected {
 			backoff = time.Second
 		}
 		c.log.Debug("connection lost", "err", err)
-		c.setStatus(core.StateError, err.Error())
+		// A camera that cannot be reached (off, unplugged, wrong address) is
+		// offline; error is kept for a camera that answers but refuses us.
+		state := core.StateError
+		if unreachable(err) {
+			state = core.StateDisconnected
+		}
+		away = state == core.StateDisconnected
+		c.setStatus(state, err.Error())
+		c.finishFirst(err) // after the status, so Connect's caller sees it
 		select {
 		case <-ctx.Done():
 		case <-time.After(backoff):
@@ -329,6 +341,14 @@ func (c *Camera) run(ctx context.Context) {
 	}
 	c.finishFirst(ctx.Err())
 	c.setStatus(core.StateDisconnected, "")
+}
+
+// unreachable reports whether a session failed because the camera could not
+// be reached or the link dropped, rather than because it refused us.
+func unreachable(err error) bool {
+	var ne net.Error
+	return errors.As(err, &ne) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, errWSClosed) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, syscall.ECONNRESET)
 }
 
 func (c *Camera) finishFirst(err error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"maps"
 	"net"
 	"net/http"
@@ -390,9 +391,9 @@ func TestCameraReconnects(t *testing.T) {
 	f := newFakeCamera(t)
 	cam, rec := connected(t, f)
 	f.dropSockets()
-	rec.waitFor(t, "error status", func(es []core.Event) bool {
+	rec.waitFor(t, "offline status", func(es []core.Event) bool {
 		for _, e := range es {
-			if e.Status != nil && e.Status.State == core.StateError {
+			if e.Status != nil && e.Status.State == core.StateDisconnected {
 				return true
 			}
 		}
@@ -435,8 +436,38 @@ func TestCameraFirstAttemptFails(t *testing.T) {
 	if err := cam.Connect(ctx); err == nil {
 		t.Fatal("Connect to a closed port must fail")
 	}
-	if st := cam.Status().State; st != core.StateError && st != core.StateConnecting {
-		t.Errorf("status %s, want error or connecting (retrying)", st)
+	if st := cam.Status(); st.State != core.StateDisconnected || st.Detail == "" {
+		t.Errorf("status %+v, want offline with a reason", st)
+	}
+	// retries keep it offline instead of flickering through "connecting"
+	time.Sleep(1500 * time.Millisecond)
+	if st := cam.Status().State; st != core.StateDisconnected {
+		t.Errorf("status while retrying %s, want offline", st)
+	}
+}
+
+func TestCameraThatRefusesUsIsInError(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler()) // answers, but no event socket
+	defer srv.Close()
+	port := srv.Listener.Addr().(*net.TCPAddr).Port
+	cam := newCamera(studio6kProSpecs(), core.CameraConfig{Host: "127.0.0.1"}, port)
+	defer cam.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := cam.Connect(ctx); err == nil {
+		t.Fatal("Connect must fail")
+	}
+	if st := cam.Status().State; st != core.StateError {
+		t.Errorf("status %s, want error", st)
+	}
+}
+
+func TestUnreachable(t *testing.T) {
+	if !unreachable(&net.OpError{Op: "dial", Err: errors.New("refused")}) || !unreachable(io.EOF) || !unreachable(errWSClosed) {
+		t.Error("network failures are unreachable")
+	}
+	if unreachable(errors.New("camera refused the event subscription")) {
+		t.Error("a refusal is an error, not offline")
 	}
 }
 

@@ -53,6 +53,10 @@ How camera support is organised, and how to add a brand or a model.
 - `Set` validates against the spec (`ControlSpec.Validate`) before any I/O and returns
   `ErrUnknownControl`, `ErrInvalidValue` or `ErrReadOnly` without touching the network.
 - Never silently drop a command: a failure on the wire returns an error.
+- A camera that cannot be reached (off, unplugged, wrong address, link dropped) is
+  `StateDisconnected` with a `Detail`, and stays so while the driver retries.
+  `StateError` is for a camera that answers but refuses us; the panel's ALARM blinks on
+  it.
 - Credentials are never logged, never serialized, never put in error messages or status
   details.
 - Protocol details (URLs, JSON, byte layouts) stay inside the driver package. Everything
