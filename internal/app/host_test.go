@@ -96,6 +96,11 @@ func TestHostSubscribeAndCancel(t *testing.T) {
 	h := NewHost(f.svc, func() (bool, error) { return false, nil }, time.Hour)
 	h.Start(context.Background(), f.events)
 	defer h.Stop()
+	_, _ = f.svc.AssignSlot(2, validInput())
+	_, _ = f.svc.AssignSlot(3, validInput())
+	f.events.mu.Lock()
+	f.events.events = nil // count only the selections below
+	f.events.mu.Unlock()
 	extra := &recorder{}
 	cancel := h.Subscribe(extra)
 	f.svc.SelectSlot(2)

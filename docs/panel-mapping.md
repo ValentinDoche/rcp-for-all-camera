@@ -58,7 +58,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 
 | Control | Action |
 |---|---|
-| CAMERA 1–8 | `SelectSlot(n)`. Keys held when the panel connects are ignored. |
+| CAMERA 1–8 | `SelectSlot(n)` for an assigned slot; the button of an empty slot is inert (LED off). Keys held when the panel connects are ignored. |
 | ND ▲▼ | Next/previous `nd` option. |
 | MASTER GAIN ▲▼ | `gain` ± its step (step 0 → range/20), else next/previous `iso` option. |
 | SHUTTER ▲▼ | Next/previous `shutterSpeed` option, else `shutterAngle` through 11.25, 15, 22.5, 45, 72, 90, 144, 172.8, 180, 216, 270, 360. |

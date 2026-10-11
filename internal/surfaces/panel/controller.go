@@ -303,7 +303,10 @@ func (c *Controller) moveLocked(p *pickup, id core.ControlID, pos float64,
 // pressLocked maps a key press (docs/panel-mapping.md).
 func (c *Controller) pressLocked(name string) {
 	if strings.HasPrefix(name, "CAM") && len(name) == 4 && name[3] >= '1' && name[3] <= '8' {
-		c.w.do(op{select_: true, slot: int(name[3] - '0')})
+		// An empty slot's button is inert (its LED is off too).
+		if slot := int(name[3] - '0'); c.assignedLocked(slot) {
+			c.w.do(op{select_: true, slot: slot})
+		}
 		return
 	}
 	slot := c.cam.slot
@@ -386,4 +389,14 @@ func slotCamera(r app.Rig, slot int) *app.CameraView {
 		}
 	}
 	return nil
+}
+
+// assignedLocked reports whether slot has a camera in the last known rig.
+func (c *Controller) assignedLocked(slot int) bool {
+	for _, sl := range c.rig.Slots {
+		if sl.Slot == slot {
+			return sl.Camera != nil
+		}
+	}
+	return false
 }

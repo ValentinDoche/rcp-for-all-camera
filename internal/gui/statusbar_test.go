@@ -51,3 +51,17 @@ func TestStatusBarBeforeFirstRates(t *testing.T) {
 		t.Fatalf("status bar = %q, want placeholders", got)
 	}
 }
+
+func TestEmptySlotTabIsDisabled(t *testing.T) {
+	a, _, _ := newTestApp(t, true) // slots 1 to 3 assigned, 2 active
+	sized(a)
+	before := a.ctl.Active()
+	a.onSlotTab(6)
+	waitWrites(a.ctl)
+	if a.ctl.Active() != before {
+		t.Fatalf("empty slot 6 got selected (active %d)", a.ctl.Active())
+	}
+	if !a.slotTabs.Disabled(5) || a.slotTabs.Disabled(0) {
+		t.Fatal("tab 6 must be disabled and tab 1 enabled")
+	}
+}

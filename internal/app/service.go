@@ -125,6 +125,9 @@ func NewService(o Options) (*Service, error) {
 		s.slots[i] = st
 	}
 	s.active = rig.Active
+	if s.active > 0 && s.slots[s.active-1] == nil {
+		s.active = 0 // only an assigned slot can be selected
+	}
 	return s, nil
 }
 
@@ -239,7 +242,8 @@ func (s *Service) ClearSlot(slot int) error {
 	return nil
 }
 
-// SelectSlot makes slot the active camera; 0 selects none.
+// SelectSlot makes slot the active camera; 0 selects none. An empty slot
+// cannot be selected (EMPTY_SLOT).
 func (s *Service) SelectSlot(slot int) error {
 	if slot != 0 {
 		if err := checkSlot(slot); err != nil {
@@ -250,6 +254,10 @@ func (s *Service) SelectSlot(slot int) error {
 	if s.active == slot {
 		s.mu.Unlock()
 		return nil
+	}
+	if slot != 0 && s.slots[slot-1] == nil {
+		s.mu.Unlock()
+		return &Error{Code: CodeEmptySlot, Message: fmt.Sprintf("slot %d has no camera", slot)}
 	}
 	prev := s.active
 	s.active = slot

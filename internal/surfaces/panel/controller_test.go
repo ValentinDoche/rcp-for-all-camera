@@ -552,3 +552,25 @@ func TestControllerTallyFromEvents(t *testing.T) {
 	h.ctl.Emit(app.EventCamera, app.CameraEvent{Slot: 2, Event: core.Event{Status: &core.Status{State: core.StateConnected}}})
 	waitFor(t, "NETWORK on", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDNetwork) })
 }
+
+func TestControllerIgnoresCameraKeyOfEmptySlot(t *testing.T) {
+	h := start(t, sonyAPI(), Options{}) // slots 1, 2 and 4 assigned
+	<-h.status
+	h.input(t, micropanel.State{})
+	h.input(t, micropanel.State{Keys: []micropanel.Key{0x42}}) // CAM3: empty
+	h.input(t, micropanel.State{})
+	h.input(t, micropanel.State{Keys: []micropanel.Key{0x40}}) // CAM1: assigned
+	waitFor(t, "SelectSlot(1)", func() bool {
+		for _, c := range h.api.callsCopy() {
+			if c.select_ && c.slot == 1 {
+				return true
+			}
+		}
+		return false
+	})
+	for _, c := range h.api.callsCopy() {
+		if c.select_ && c.slot == 3 {
+			t.Fatal("CAM3 selected an empty slot")
+		}
+	}
+}

@@ -175,6 +175,8 @@ type TabItem struct {
 	Text string
 	Dim  bool // empty slot: shown muted
 	Live bool // on air: red marker before the label
+	// Disabled: not selectable (empty slot); drawn in the faint text color.
+	Disabled bool
 }
 
 // Tabs is the slot strip (Cam1 to Cam8): text tabs, the selected one in the
@@ -194,6 +196,9 @@ func NewTabs(items []TabItem, onSelect func(i int)) *Tabs {
 }
 
 func (t *Tabs) Selected() int { return t.selected }
+
+// Disabled reports whether tab i cannot be selected.
+func (t *Tabs) Disabled(i int) bool { return i >= 0 && i < len(t.items) && t.items[i].Disabled }
 
 func (t *Tabs) SetSelected(i int) {
 	if t.selected != i {
@@ -219,7 +224,7 @@ func (t *Tabs) originX() float32 {
 
 func (t *Tabs) Tapped(e *fyne.PointEvent) {
 	i := int((e.Position.X - t.originX()) / tabW)
-	if e.Position.X < t.originX() || i < 0 || i >= len(t.items) {
+	if e.Position.X < t.originX() || i < 0 || i >= len(t.items) || t.items[i].Disabled {
 		return
 	}
 	if i != t.selected {
@@ -291,6 +296,9 @@ func (r *tabsRenderer) Refresh() {
 		case i == r.t.selected:
 			tx.Color = style.C(style.AccentText)
 			tx.TextStyle = fyne.TextStyle{Bold: true}
+		case it.Disabled:
+			tx.Color = style.C(style.TextFaint)
+			tx.TextStyle = fyne.TextStyle{}
 		case it.Dim:
 			tx.Color = style.C(style.TextMuted)
 			tx.TextStyle = fyne.TextStyle{}

@@ -19,7 +19,7 @@ JSON tags are kept on every type so the API can be exported or logged in a stabl
 | `Rig()` | `Rig` | Always 8 slots, numbered 1 to 8, and the active slot (0 = none) |
 | `AssignSlot(slot, SlotInput)` | `Slot` | Create or replace the camera on a slot |
 | `ClearSlot(slot)` | | Remove the camera from a slot. Idempotent |
-| `SelectSlot(slot)` | | Make a slot active (what the panel drives). 0 = none. An empty slot may be selected |
+| `SelectSlot(slot)` | | Make a slot active (what the panel drives). 0 = none. An empty slot cannot be selected (`EMPTY_SLOT`) |
 | `Controls(slot)` | `[]ControlView` | Every control of the slot's camera with its last known value (nil = unknown) |
 | `SetControl(slot, id, core.Value)` | | Write one control. Validated before any I/O |
 | `ConnectSlot(slot)` | | Start connecting the slot's camera |

@@ -160,7 +160,8 @@ func (s *Service) ImportConfig(data []byte) error {
 	if len(doc.Slots) > SlotCount {
 		return invalid(fmt.Sprintf("more than %d cameras", SlotCount))
 	}
-	if doc.Active < 0 || doc.Active > SlotCount {
+	// Only an assigned slot can be the active one.
+	if doc.Active < 1 || doc.Active > len(doc.Slots) || doc.Slots[doc.Active-1] == nil {
 		doc.Active = 0
 	}
 

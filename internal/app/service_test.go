@@ -269,6 +269,7 @@ func TestClearSlotIsIdempotentAndDropsSecretAndSelection(t *testing.T) {
 
 func TestSelectSlot(t *testing.T) {
 	f := newFixture(t, config.Rig{Version: config.Version})
+	_, _ = f.svc.AssignSlot(5, validInput())
 	if err := f.svc.SelectSlot(5); err != nil {
 		t.Fatal(err)
 	}
@@ -376,5 +377,25 @@ func TestInternalErrorsDoNotLeakDetails(t *testing.T) {
 	err := toAPIError(errors.New(`open C:\Users\secret\rig.json: access denied`))
 	if code(t, err) != CodeInternal || strings.Contains(err.Error(), "secret") {
 		t.Fatalf("internal error leaked: %s", err)
+	}
+}
+
+func TestSelectSlotRefusesEmptySlots(t *testing.T) {
+	f := newFixture(t, config.Rig{Version: config.Version})
+	_, _ = f.svc.AssignSlot(2, validInput())
+	_ = f.svc.SelectSlot(2)
+	if c := code(t, f.svc.SelectSlot(3)); c != CodeEmptySlot {
+		t.Fatalf("SelectSlot(empty) code = %s, want EMPTY_SLOT", c)
+	}
+	if f.svc.Rig().Active != 2 {
+		t.Fatal("a refused selection changed the active slot")
+	}
+}
+
+func TestSavedSelectionOfAnEmptySlotIsDropped(t *testing.T) {
+	saved := config.Rig{Version: config.Version, Active: 6}
+	f := newFixture(t, saved)
+	if f.svc.Rig().Active != 0 {
+		t.Fatalf("active = %d, want 0 (slot 6 is empty)", f.svc.Rig().Active)
 	}
 }

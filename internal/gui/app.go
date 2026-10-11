@@ -341,6 +341,9 @@ func (a *App) scrollToActive() {
 }
 
 func (a *App) onSlotTab(slot int) {
+	if a.ctl.Camera(slot) == nil {
+		return // empty slot: the tab is disabled
+	}
 	a.ctl.Select(slot)
 	switch a.page {
 	case pageCameras:
@@ -404,9 +407,10 @@ func (a *App) syncChrome() {
 		slot := i + 1
 		v := a.ctl.Value(slot, core.Tally)
 		items[i] = widgets.TabItem{
-			Text: fmt.Sprintf("Cam%d", slot),
-			Dim:  a.ctl.Camera(slot) == nil,
-			Live: v != nil && v.On,
+			Text:     fmt.Sprintf("Cam%d", slot),
+			Dim:      a.ctl.Camera(slot) == nil,
+			Disabled: a.ctl.Camera(slot) == nil, // only an assigned slot can be selected
+			Live:     v != nil && v.On,
 		}
 	}
 	a.slotTabs.SetItems(items)
