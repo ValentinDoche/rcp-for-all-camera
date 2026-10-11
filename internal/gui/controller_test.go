@@ -162,7 +162,7 @@ func TestWriteSuccessUpdatesCacheAndNotifies(t *testing.T) {
 	var rec recorder
 	c.Subscribe(rec.fn)
 	c.Write(1, core.Iris, core.Number(0.7))
-	c.WaitWrites()
+	waitWrites(c)
 	if v := c.Value(1, core.Iris); v == nil || v.Number != 0.7 {
 		t.Fatalf("cache = %v", v)
 	}
@@ -182,7 +182,7 @@ func TestWriteNotImplementedKeepsLastKnownAndShowsDiscreetNotice(t *testing.T) {
 	var rec recorder
 	c.Subscribe(rec.fn)
 	c.Write(1, core.Iris, core.Number(0.9))
-	c.WaitWrites()
+	waitWrites(c)
 	if v := c.Value(1, core.Iris); v == nil || v.Number != 0.4 {
 		t.Errorf("value must stay at the last known 0.4, got %v", v)
 	}
@@ -201,13 +201,13 @@ func TestWriteInvalidValueIsAnError(t *testing.T) {
 	f.setErr = &app.Error{Code: app.CodeInvalidValue, Message: "x"}
 	c := newCtl(f)
 	c.Write(1, core.Iris, core.Number(5))
-	c.WaitWrites()
+	waitWrites(c)
 	if n := c.Notice(); n.Level != fr.LevelError || n.Text != "Valeur refusée par la caméra" {
 		t.Errorf("notice = %+v", n)
 	}
 	f.setErr = &app.Error{Code: app.CodeUnknownControl, Message: "x"}
 	c.Write(1, core.Iris, core.Number(0.5))
-	c.WaitWrites()
+	waitWrites(c)
 	if n := c.Notice(); n.Level != fr.LevelError || n.Text != "Contrôle inconnu pour cette caméra" {
 		t.Errorf("notice = %+v", n)
 	}
@@ -225,7 +225,7 @@ func TestWriteIsThrottledAndFinalValueAlwaysSent(t *testing.T) {
 		c.Write(1, core.Iris, core.Number(float64(i)/100))
 		time.Sleep(time.Millisecond)
 	}
-	c.WaitWrites()
+	waitWrites(c)
 	calls := f.setCalls()
 	if len(calls) == 0 || calls[len(calls)-1].V.Number != 1 {
 		t.Fatalf("final value not sent: %+v", calls[len(calls)-1:])
@@ -245,7 +245,7 @@ func TestActionWriteDoesNotStoreAValue(t *testing.T) {
 	f.assign(1, "acme.cam", core.StateConnected, app.ControlView{Spec: ai})
 	c := newCtl(f)
 	c.Write(1, core.AutoIris, core.Trigger())
-	c.WaitWrites()
+	waitWrites(c)
 	if c.Value(1, core.AutoIris) != nil {
 		t.Error("an action has no value")
 	}

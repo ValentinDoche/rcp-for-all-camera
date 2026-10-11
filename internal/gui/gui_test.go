@@ -59,8 +59,8 @@ func TestStripOnlyOffersWhatTheCameraDeclares(t *testing.T) {
 	if sony.wheel != nil || sony.selector != nil {
 		t.Error("FX6 declares no color wheels: none must be shown")
 	}
-	if pana.wheel != nil {
-		t.Error("UE150 declares no color wheels")
+	if pana.wheel == nil {
+		t.Error("UE150 declares pedestal R/G/B (lift): a wheel is expected")
 	}
 	if bmd.zoom == nil || bmd.focus == nil || bmd.pad == nil || bmd.meter == nil {
 		t.Error("Studio 6K Pro has zoom, focus, iris and master black")
@@ -181,7 +181,7 @@ func TestWheelDragWritesRGBThroughTheService(t *testing.T) {
 	cx, cy := s.Width/2, s.Height/2
 	wb.wheel.Dragged(&fyne.DragEvent{PointEvent: fyne.PointEvent{Position: fyne.NewPos(cx+60, cy)}})
 	wb.wheel.DragEnd()
-	a.ctl.WaitWrites()
+	waitWrites(a.ctl)
 	calls := (*cams)[0].setCalls()
 	got := map[core.ControlID]float64{}
 	for _, c := range calls {
@@ -209,7 +209,7 @@ func TestWheelSelectorSwitchesGroup(t *testing.T) {
 		t.Fatalf("group = %d, want 2 (Gain)", c.wheel.group)
 	}
 	c.wheel.onReset()
-	a.ctl.WaitWrites()
+	waitWrites(a.ctl)
 	got := map[core.ControlID]float64{}
 	for _, call := range (*cams)[0].setCalls() {
 		got[call.ID] = call.V.Number
@@ -228,7 +228,7 @@ func TestPadDragWritesIrisAndMasterBlack(t *testing.T) {
 	s := pad.Size()
 	pad.Dragged(&fyne.DragEvent{PointEvent: fyne.PointEvent{Position: fyne.NewPos(s.Width/2, 0)}}) // top centre
 	pad.DragEnd()
-	a.ctl.WaitWrites()
+	waitWrites(a.ctl)
 	got := map[core.ControlID]core.Value{}
 	for _, c := range (*cams)[0].setCalls() {
 		got[c.ID] = c.V
@@ -248,7 +248,7 @@ func TestNotImplementedDriverShowsNoticeAndRestoresValue(t *testing.T) {
 	s := pad.Size()
 	pad.Dragged(&fyne.DragEvent{PointEvent: fyne.PointEvent{Position: fyne.NewPos(s.Width/2, 0)}})
 	pad.DragEnd()
-	a.ctl.WaitWrites()
+	waitWrites(a.ctl)
 	if got := a.noticeTxt.Text(); got != "Contrôle pas encore disponible : pilote caméra en développement" {
 		t.Errorf("notice = %q", got)
 	}
@@ -324,14 +324,14 @@ func TestDetailsRowsWriteThroughTheService(t *testing.T) {
 	}
 	entry.SetText("18")
 	entry.OnSubmitted("18")
-	a.ctl.WaitWrites()
+	waitWrites(a.ctl)
 	last := (*cams)[0].setCalls()
 	if len(last) == 0 || last[len(last)-1].ID != core.Gain || last[len(last)-1].V.Number != 18 {
 		t.Errorf("calls = %+v", last)
 	}
 	// out of range is clamped, not rejected
 	entry.OnSubmitted("999")
-	a.ctl.WaitWrites()
+	waitWrites(a.ctl)
 	last = (*cams)[0].setCalls()
 	if last[len(last)-1].V.Number != 36 {
 		t.Errorf("999 must clamp to 36, got %v", last[len(last)-1].V.Number)
@@ -339,7 +339,7 @@ func TestDetailsRowsWriteThroughTheService(t *testing.T) {
 	// garbage: notice, no write
 	n := len(last)
 	entry.OnSubmitted("abc")
-	a.ctl.WaitWrites()
+	waitWrites(a.ctl)
 	if len((*cams)[0].setCalls()) != n {
 		t.Error("invalid text must not be written")
 	}

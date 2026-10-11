@@ -5,6 +5,9 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -19,13 +22,68 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
-// syncOptions makes the controller deterministic: UI and worker calls run
-// inline. Writes still go through the real throttler goroutines.
+// syncOptions makes the controller deterministic: worker calls run inline.
+// UI callbacks run inline on the test goroutine, like on Fyne's UI thread;
+// callbacks posted from another goroutine (the write throttler) are queued
+// and run by waitWrites, so UI state is never touched concurrently.
 func syncOptions() Options {
-	return Options{
-		UI: func(f func()) { f() },
-		Go: func(f func()) { f() },
+	q := &uiQueue{gid: goroutineID()}
+	testUI = q
+	return Options{UI: q.post, Go: func(f func()) { f() }}
+}
+
+// testUI is the queue of the controller built last (GUI tests are not parallel).
+var testUI *uiQueue
+
+type uiQueue struct {
+	gid uint64
+	mu  sync.Mutex
+	q   []func()
+}
+
+func (u *uiQueue) post(f func()) {
+	if goroutineID() == u.gid {
+		f()
+		return
 	}
+	u.mu.Lock()
+	u.q = append(u.q, f)
+	u.mu.Unlock()
+}
+
+// drain runs the queued callbacks; it reports whether any ran.
+func (u *uiQueue) drain() bool {
+	u.mu.Lock()
+	q := u.q
+	u.q = nil
+	u.mu.Unlock()
+	for _, f := range q {
+		f()
+	}
+	return len(q) > 0
+}
+
+// waitWrites waits for pending writes and applies their UI callbacks, until
+// nothing is left (a callback may start another write).
+func waitWrites(c *Controller) {
+	for {
+		c.WaitWrites()
+		if testUI == nil || !testUI.drain() {
+			return
+		}
+	}
+}
+
+// goroutineID parses the current goroutine id from the stack header.
+func goroutineID() uint64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	f := strings.Fields(string(buf[:n]))
+	if len(f) < 2 {
+		return 0
+	}
+	id, _ := strconv.ParseUint(f[1], 10, 64)
+	return id
 }
 
 type memStore struct {
@@ -216,7 +274,7 @@ func newTestApp(t *testing.T, seed bool) (*App, *app.Service, *[]*liveCam) {
 		seedRig(t, svc)
 	}
 	a := New(fa, svc, syncOptions())
-	t.Cleanup(func() { a.ctl.WaitWrites() })
+	t.Cleanup(func() { waitWrites(a.ctl) })
 	return a, svc, cams
 }
 

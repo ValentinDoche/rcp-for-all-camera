@@ -204,8 +204,7 @@ func TestThrottlerKeysAreIndependentAndSerial(t *testing.T) {
 	do := func(key string, ctr *int32) {
 		th.Do(key, func() {
 			n := atomic.AddInt32(&running, 1)
-			if n > maxRun {
-				atomic.StoreInt32(&maxRun, n)
+			for m := atomic.LoadInt32(&maxRun); n > m && !atomic.CompareAndSwapInt32(&maxRun, m, n); m = atomic.LoadInt32(&maxRun) {
 			}
 			time.Sleep(2 * time.Millisecond)
 			atomic.AddInt32(ctr, 1)
@@ -215,7 +214,7 @@ func TestThrottlerKeysAreIndependentAndSerial(t *testing.T) {
 	do("a", &a)
 	do("b", &b)
 	th.Wait()
-	if a != 1 || b != 1 {
+	if atomic.LoadInt32(&a) != 1 || atomic.LoadInt32(&b) != 1 {
 		t.Errorf("each key must run once: a=%d b=%d", a, b)
 	}
 	// same key never runs concurrently with itself
