@@ -180,3 +180,26 @@ func TestOlderModelsUnchanged(t *testing.T) {
 		t.Error("UE100 lacks pan")
 	}
 }
+
+func TestOnAirAndPowerControlsAreGuarded(t *testing.T) {
+	for _, id := range []core.ModelID{"panasonic.awue150", "panasonic.awue160"} {
+		specs, err := specsFor(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		byID := map[core.ControlID]core.ControlSpec{}
+		for _, s := range specs {
+			byID[s.ID] = s
+		}
+		for _, g := range []core.ControlID{"panasonic.power", "panasonic.frequency", "panasonic.systemFormat",
+			"panasonic.sdiOutputFormat", "panasonic.hdmiOutputFormat", "panasonic.osdMenuEnable",
+			"panasonic.sceneFile", "panasonic.presetStore", "panasonic.presetDelete", core.ColorBars} {
+			if s, ok := byID[g]; ok && !s.Guarded {
+				t.Errorf("%s: %s must be guarded", id, g)
+			}
+		}
+		if byID[core.Iris].Guarded || byID["panasonic.kneePointMaster"].Guarded {
+			t.Errorf("%s: picture controls must not be guarded", id)
+		}
+	}
+}

@@ -47,16 +47,45 @@ func model(id, name, notes string) core.ModelInfo {
 }
 
 func specsFor(id core.ModelID) ([]core.ControlSpec, error) {
+	var specs []core.ControlSpec
 	switch id {
 	case "panasonic.generic":
-		return family(opts{}), nil
+		specs = family(opts{})
 	case "panasonic.awue100":
 		// TODO(verify): UE100 may also have a built-in ND filter.
-		return family(opts{ptz: true}), nil
+		specs = family(opts{ptz: true})
 	case "panasonic.awue150":
-		return ue150Specs(), nil
+		specs = ue150Specs()
 	case "panasonic.awue160":
-		return ue160Specs(), nil
+		specs = ue160Specs()
+	default:
+		return nil, fmt.Errorf("%q: %w", id, core.ErrUnknownModel)
 	}
-	return nil, fmt.Errorf("%q: %w", id, core.ErrUnknownModel)
+	for i := range specs {
+		if guarded[specs[i].ID] {
+			specs[i].Guarded = true
+		}
+	}
+	return specs, nil
+}
+
+// guarded are the Panasonic controls that change power, the video format or
+// what goes on air (OSD and scene files show on the output; stores overwrite
+// camera memory). The operator lock asks before writing them.
+var guarded = map[core.ControlID]bool{
+	core.ColorBars:                     true,
+	"panasonic.power":                  true,
+	"panasonic.frequency":              true,
+	"panasonic.systemFormat":           true,
+	"panasonic.sdiOutputFormat":        true,
+	"panasonic.12GSDIOutputFormat":     true,
+	"panasonic.hdmiOutputFormat":       true,
+	"panasonic.monitorSDIOutputFormat": true,
+	"panasonic.osdMenuEnable":          true,
+	"panasonic.sceneFile":              true,
+	"panasonic.sceneFileStore":         true,
+	"panasonic.userFile":               true,
+	"panasonic.userFileStore":          true,
+	"panasonic.presetStore":            true,
+	"panasonic.presetDelete":           true,
 }
