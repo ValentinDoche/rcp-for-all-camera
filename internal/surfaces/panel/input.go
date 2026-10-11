@@ -89,6 +89,21 @@ func knobValue(s core.ControlSpec, cur float64, delta int) float64 {
 	return min(max(v, s.Min), s.Max)
 }
 
+// knobDeadband is the knob movement (in counts) ignored as noise: some
+// knobs jitter by one count at rest.
+const knobDeadband = 1
+
+// knobStep returns the movement to apply for a knob now at pos, measured
+// from ref, the position last applied. Moves within the deadband are not
+// applied and do not move ref, so jitter writes nothing while a slow turn
+// still accumulates.
+func knobStep(ref, pos int) (delta, newRef int) {
+	if d := pos - ref; d > knobDeadband || d < -knobDeadband {
+		return d, pos
+	}
+	return 0, ref
+}
+
 // knobControls maps the 0x0E knob indexes (micropanel.AnalogNames) to the
 // controls they drive. Indexes 6..8 (top-right knob, SENS, COARSE) are not
 // mapped.

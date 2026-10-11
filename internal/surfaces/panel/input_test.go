@@ -129,3 +129,27 @@ func TestPickupReachWithinToleranceAndUnknown(t *testing.T) {
 		t.Error("first move without a previous position must not take over far from the value")
 	}
 }
+
+func TestKnobDeadbandIgnoresJitterButKeepsSlowTurns(t *testing.T) {
+	ref := 500
+	for _, pos := range []int{501, 500, 499, 501, 500} {
+		var d int
+		d, ref = knobStep(ref, pos)
+		if d != 0 {
+			t.Fatalf("jitter to %d gave delta %d", pos, d)
+		}
+	}
+	if ref != 500 {
+		t.Fatalf("reference moved on jitter: %d", ref)
+	}
+	// a slow turn, one count at a time, still accumulates
+	total := 0
+	for pos := 501; pos <= 510; pos++ {
+		var d int
+		d, ref = knobStep(ref, pos)
+		total += d
+	}
+	if total < 9 || ref < 509 {
+		t.Fatalf("slow turn lost: total %d ref %d", total, ref)
+	}
+}

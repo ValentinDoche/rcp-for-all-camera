@@ -66,6 +66,7 @@ type Controller struct {
 	held      map[string]bool
 	prev      micropanel.State
 	havePrev  bool
+	knobRef   [len(knobControls)]int // knob positions last applied (deadband reference)
 	iris, mb  pickup
 	written   map[core.ControlID]float64 // last lever/ring value sent
 	connected bool
@@ -236,6 +237,9 @@ func (c *Controller) onInput(s micropanel.State) {
 	if !c.havePrev {
 		// First report after (re)connect: positions only, no action.
 		c.prev, c.havePrev, c.held = s, true, now
+		for i := range c.knobRef {
+			c.knobRef[i] = int(s.Analog[i])
+		}
 		c.iris.seed(leverPos(s.Lever))
 		c.mb.seed(leverPos(s.Ring))
 		return
@@ -250,7 +254,8 @@ func (c *Controller) onInput(s micropanel.State) {
 	slot := c.cam.slot
 	if slot != 0 && slot == c.rig.Active {
 		for i, id := range knobControls {
-			d := int(s.Analog[i]) - int(c.prev.Analog[i])
+			var d int
+			d, c.knobRef[i] = knobStep(c.knobRef[i], int(s.Analog[i]))
 			if d == 0 {
 				continue
 			}
