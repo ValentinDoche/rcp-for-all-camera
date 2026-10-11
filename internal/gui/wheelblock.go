@@ -8,20 +8,20 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
-	"github.com/valentindoche/rcp-for-all-camera/internal/gui/fr"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
 // Color groups, in the order of the Lift / Gamma / Gain selector. Each row is
 // Y, R, G, B.
 var wheelGroups = []struct {
-	Title string
-	IDs   [4]core.ControlID
+	Key string
+	IDs [4]core.ControlID
 }{
-	{"Lift", [4]core.ControlID{core.LiftY, core.LiftR, core.LiftG, core.LiftB}},
-	{"Gamma", [4]core.ControlID{core.GammaY, core.GammaR, core.GammaG, core.GammaB}},
-	{"Gain", [4]core.ControlID{core.GainY, core.GainR, core.GainG, core.GainB}},
+	{"wheel.lift", [4]core.ControlID{core.LiftY, core.LiftR, core.LiftG, core.LiftB}},
+	{"wheel.gamma", [4]core.ControlID{core.GammaY, core.GammaR, core.GammaG, core.GammaB}},
+	{"wheel.gain", [4]core.ControlID{core.GainY, core.GainR, core.GainG, core.GainB}},
 }
 
 // wheelControlIDs are the controls the wheel blocks own; the generic renderer
@@ -67,7 +67,7 @@ func newWheelBlock(ctl *Controller, slot int, diameter float32) *wheelBlock {
 	tokens := [4]fyne.ThemeColorName{style.Text, style.ChanR, style.ChanG, style.ChanB}
 	var cellObjs []fyne.CanvasObject
 	for i := range b.cells {
-		b.cells[i] = widgets.NewText(fr.Missing, style.Text, 12).Mono().Align(fyne.TextAlignCenter)
+		b.cells[i] = widgets.NewText(texts.Missing, style.Text, 12).Mono().Align(fyne.TextAlignCenter)
 		bar := widgets.Sized(0, 2, widgets.NewPanel(tokens[i], "", 0, nil))
 		cellObjs = append(cellObjs, container.NewVBox(b.cells[i], bar))
 	}
@@ -127,10 +127,10 @@ func (b *wheelBlock) apply() {
 		vals[i] = b.ctl.Value(b.slot, id)
 		sp, ok := b.ctl.Spec(b.slot, id)
 		if !ok {
-			b.cells[i].SetText(fr.Missing)
+			b.cells[i].SetText(texts.Missing)
 			continue
 		}
-		b.cells[i].SetText(fr.FormatValue(sp, vals[i]))
+		b.cells[i].SetText(b.ctl.tx.FormatValue(sp, vals[i]))
 	}
 	if sp, ok := b.ctl.Spec(b.slot, ids[0]); ok {
 		b.y.Min, b.y.Max, b.y.Step = sp.Min, sp.Max, stepOf(sp)
@@ -168,7 +168,7 @@ func (b *wheelBlock) onWheel(x, y float64) {
 			continue
 		}
 		v = widgets.Quantize(v, widgets.RangeOf(spec))
-		b.cells[i+1].SetText(fr.FormatValue(spec, &core.Value{Kind: core.KindRange, Number: v}))
+		b.cells[i+1].SetText(b.ctl.tx.FormatValue(spec, &core.Value{Kind: core.KindRange, Number: v}))
 		b.ctl.Write(b.slot, ids[i+1], core.Number(v))
 	}
 }
@@ -183,7 +183,7 @@ func (b *wheelBlock) onY(v float64) {
 		return
 	}
 	v = widgets.Quantize(v, widgets.RangeOf(sp))
-	b.cells[0].SetText(fr.FormatValue(sp, &core.Value{Kind: core.KindRange, Number: v}))
+	b.cells[0].SetText(b.ctl.tx.FormatValue(sp, &core.Value{Kind: core.KindRange, Number: v}))
 	b.ctl.Write(b.slot, id, core.Number(v))
 }
 

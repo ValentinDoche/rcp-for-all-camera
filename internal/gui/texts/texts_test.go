@@ -1,4 +1,4 @@
-package fr
+package texts
 
 import (
 	"errors"
@@ -7,7 +7,10 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/i18n"
 )
+
+func en() Texts { return New(i18n.Default().Translator("en")) }
 
 func rangeSpec(id core.ControlID, min, max, step float64, unit string) core.ControlSpec {
 	s := core.Std(id)
@@ -16,37 +19,48 @@ func rangeSpec(id core.ControlID, min, max, step float64, unit string) core.Cont
 }
 
 func TestControlLabelStandardAndFallback(t *testing.T) {
-	if got := ControlLabel(core.Std(core.ShutterAngle)); got != "Angle d'obturateur" {
+	fr := Default()
+	if got := fr.ControlLabel(core.Std(core.ShutterAngle)); got != "Angle d'obturateur" {
 		t.Errorf("shutterAngle = %q", got)
 	}
-	if got := ControlLabel(core.Std(core.AutoWhiteBalance)); got != "Balance des blancs auto" {
-		t.Errorf("awb = %q", got)
+	if got := en().ControlLabel(core.Std(core.ShutterAngle)); got != "Shutter angle" {
+		t.Errorf("en shutterAngle = %q", got)
 	}
 	custom := core.ControlSpec{ID: "sony.slowShutter", Label: "Slow shutter", Group: core.GroupMisc}
-	if got := ControlLabel(custom); got != "Slow shutter" {
-		t.Errorf("fallback = %q", got)
+	for _, x := range []Texts{fr, en()} {
+		if got := x.ControlLabel(custom); got != "Slow shutter" {
+			t.Errorf("driver label = %q", got)
+		}
+	}
+	if got := fr.ControlLabel(core.ControlSpec{ID: "x.y"}); got != "x.y" {
+		t.Errorf("id fallback = %q", got)
 	}
 }
 
-func TestEveryCatalogControlHasFrenchLabel(t *testing.T) {
-	for id := range labels {
-		if labels[id] == "" {
-			t.Errorf("empty label for %s", id)
-		}
-	}
-	for _, id := range []core.ControlID{core.Iris, core.AutoIris, core.Focus, core.AutoFocus, core.Zoom,
+func TestEveryStandardControlAndGroupIsTranslated(t *testing.T) {
+	ids := []core.ControlID{core.Iris, core.AutoIris, core.Focus, core.AutoFocus, core.Zoom,
 		core.Gain, core.ISO, core.ShutterAngle, core.ShutterSpeed, core.ND, core.MasterBlack,
 		core.WhiteBalance, core.Tint, core.AutoWhiteBalance, core.LiftR, core.LiftG, core.LiftB, core.LiftY,
 		core.GammaR, core.GammaG, core.GammaB, core.GammaY, core.GainR, core.GainG, core.GainB, core.GainY,
 		core.Contrast, core.Saturation, core.Hue, core.Detail, core.ColorBars, core.Pan, core.Tilt,
-		core.PresetRecall, core.Record, core.Tally} {
-		if _, ok := labels[id]; !ok {
-			t.Errorf("no French label for standard control %s", id)
+		core.PresetRecall, core.Record, core.Tally}
+	for _, l := range i18n.Default().Languages() {
+		tr := i18n.Default().Translator(l.Code)
+		for _, id := range ids {
+			if !tr.Has("control." + string(id)) {
+				t.Errorf("%s: no label for standard control %s", l.Code, id)
+			}
+		}
+		for _, g := range GroupOrder {
+			if !tr.Has("group." + string(g)) {
+				t.Errorf("%s: no title for group %s", l.Code, g)
+			}
 		}
 	}
 }
 
-func TestGroupTitlesCoverAllGroups(t *testing.T) {
+func TestGroupTitles(t *testing.T) {
+	fr := Default()
 	want := map[core.ControlGroup]string{
 		core.GroupLens: "Objectif", core.GroupExposure: "Exposition", core.GroupWhite: "Balance des blancs",
 		core.GroupColor: "Correction colorimétrique", core.GroupImage: "Image", core.GroupPTZ: "PTZ",
@@ -54,24 +68,30 @@ func TestGroupTitlesCoverAllGroups(t *testing.T) {
 		core.GroupSystem: "Système", core.GroupMisc: "Divers", "weird": "Divers",
 	}
 	for g, w := range want {
-		if got := GroupTitle(g); got != w {
+		if got := fr.GroupTitle(g); got != w {
 			t.Errorf("GroupTitle(%q) = %q, want %q", g, got, w)
 		}
+	}
+	if en().GroupTitle("weird") != "Other" || en().GroupTitle(core.GroupLens) != "Lens" {
+		t.Error("en group titles")
 	}
 	if len(GroupOrder) != 11 {
 		t.Errorf("GroupOrder has %d entries", len(GroupOrder))
 	}
 }
 
-func TestFormatNumberFrench(t *testing.T) {
+func TestFormatNumber(t *testing.T) {
 	cases := []struct {
-		v    float64
-		dec  int
-		want string
-	}{{0.5, 2, "0,50"}, {1, 2, "1,00"}, {-1.234, 1, "-1,2"}, {5600, 0, "5600"}, {0, 2, "0,00"}, {-0.001, 2, "0,00"}}
+		v        float64
+		dec      int
+		fr, want string
+	}{{0.5, 2, "0,50", "0.50"}, {-1.234, 1, "-1,2", "-1.2"}, {5600, 0, "5600", "5600"}, {-0.001, 2, "0,00", "0.00"}}
 	for _, c := range cases {
-		if got := FormatNumber(c.v, c.dec); got != c.want {
-			t.Errorf("FormatNumber(%v,%d) = %q, want %q", c.v, c.dec, got, c.want)
+		if got := Default().FormatNumber(c.v, c.dec); got != c.fr {
+			t.Errorf("fr FormatNumber(%v,%d) = %q, want %q", c.v, c.dec, got, c.fr)
+		}
+		if got := en().FormatNumber(c.v, c.dec); got != c.want {
+			t.Errorf("en FormatNumber(%v,%d) = %q, want %q", c.v, c.dec, got, c.want)
 		}
 	}
 }
@@ -117,9 +137,15 @@ func TestFormatValue(t *testing.T) {
 		{"wrong kind", gain, ch("x"), "--"},
 	}
 	for _, c := range cases {
-		if got := FormatValue(c.spec, c.v); got != c.want {
+		if got := Default().FormatValue(c.spec, c.v); got != c.want {
 			t.Errorf("%s: FormatValue = %q, want %q", c.name, got, c.want)
 		}
+	}
+	if got := en().FormatValue(ang, n(172.8)); got != "172.8°" {
+		t.Errorf("en angle = %q", got)
+	}
+	if got := en().FormatValue(tog, b(true)); got != "On" {
+		t.Errorf("en toggle = %q", got)
 	}
 }
 
@@ -139,17 +165,22 @@ func TestParseNumber(t *testing.T) {
 }
 
 func TestLabelsForSelects(t *testing.T) {
-	if TransportLabel(core.TransportUSBEthernet) != "Adaptateur USB-C Ethernet" ||
-		TransportLabel(core.TransportEthernet) != "Ethernet" || TransportLabel(core.TransportWiFi) != "Wi-Fi" {
-		t.Error("transport labels")
-	}
-	if SupportLabel(core.SupportPlanned) != "Prévu" || SupportLabel(core.SupportExperimental) != "Expérimental" ||
-		SupportLabel(core.SupportSupported) != "Pris en charge" {
+	fr := Default()
+	if fr.SupportLabel(core.SupportPlanned) != "Prévu" || fr.SupportLabel(core.SupportExperimental) != "Expérimental" ||
+		fr.SupportLabel(core.SupportSupported) != "Pris en charge" {
 		t.Error("support labels")
 	}
-	if ConnLabel(core.StateConnected) != "Connecté" || ConnLabel(core.StateConnecting) != "Connexion" ||
-		ConnLabel(core.StateDisconnected) != "Hors ligne" || ConnLabel(core.StateError) != "Erreur" {
+	if fr.ConnLabel(core.StateConnected) != "Connecté" || fr.ConnLabel(core.StateConnecting) != "Connexion" ||
+		fr.ConnLabel(core.StateDisconnected) != "Hors ligne" || fr.ConnLabel(core.StateError) != "Erreur" {
 		t.Error("connection labels")
+	}
+	if en().SupportLabel(core.SupportSupported) != "Supported" || en().ConnLabel(core.StateDisconnected) != "Offline" {
+		t.Error("en labels")
+	}
+	for _, s := range []core.SupportLevel{core.SupportPlanned, core.SupportExperimental, core.SupportSupported} {
+		if fr.SupportHelp(s) == "" || en().SupportHelp(s) == "" {
+			t.Errorf("no help for %s", s)
+		}
 	}
 }
 
@@ -171,14 +202,17 @@ func TestErrorNotice(t *testing.T) {
 		{fmt.Errorf("wrap: %w", mk(app.CodeNotImplemented, "x")), LevelInfo, "Contrôle pas encore disponible : pilote caméra en développement"},
 	}
 	for _, c := range cases {
-		n := NoticeFor(c.err)
+		n := Default().NoticeFor(c.err)
 		if n.Level != c.level || n.Text != c.want {
 			t.Errorf("NoticeFor(%v) = %+v, want %v %q", c.err, n, c.level, c.want)
 		}
 	}
+	if n := en().NoticeFor(mk(app.CodeNotConnected, "")); n.Text != "Camera not connected" {
+		t.Errorf("en notice = %q", n.Text)
+	}
 }
 
-func TestConfigErrorFrench(t *testing.T) {
+func TestConfigError(t *testing.T) {
 	cases := []struct{ code, msg, want string }{
 		{app.CodeInvalidConfig, "acme.cam: host must be an IP address or a host name: invalid camera config", "L'hôte doit être une adresse IP ou un nom d'hôte valide."},
 		{app.CodeInvalidConfig, "x: username is required: invalid camera config", "Le nom d'utilisateur est obligatoire pour ce modèle."},
@@ -192,43 +226,30 @@ func TestConfigErrorFrench(t *testing.T) {
 		{app.CodeInternal, "x", "Erreur interne, consultez rcp.log."},
 	}
 	for _, c := range cases {
-		if got := ConfigError(&app.Error{Code: c.code, Message: c.msg}); got != c.want {
+		if got := Default().ConfigError(&app.Error{Code: c.code, Message: c.msg}); got != c.want {
 			t.Errorf("ConfigError(%s,%q) = %q, want %q", c.code, c.msg, got, c.want)
 		}
 	}
+	if got := en().ConfigError(&app.Error{Code: app.CodeInvalidConfig, Message: "x: port 70000 out of range"}); got != "The port must be between 0 and 65535." {
+		t.Errorf("en ConfigError = %q", got)
+	}
 }
 
-func TestNoEmDashesInStrings(t *testing.T) {
-	var all []string
-	for _, l := range labels {
-		all = append(all, l)
-	}
-	for _, s := range all {
-		for _, r := range s {
-			if r == '—' || r == '–' {
-				t.Errorf("dash in %q", s)
-			}
+func TestSettingsErrors(t *testing.T) {
+	ni := &app.Error{Code: app.CodeNotImplemented}
+	in := &app.Error{Code: app.CodeInternal}
+	for _, x := range []Texts{Default(), en()} {
+		if x.AutoStartError(ni) == x.AutoStartError(in) {
+			t.Error("auto start errors must differ")
+		}
+		if x.BindError(&app.Error{Code: app.CodeInvalidConfig}) == x.BindError(in) {
+			t.Error("bind errors must differ")
 		}
 	}
 }
 
-func TestFormatRate(t *testing.T) {
-	cases := map[float64]string{
-		0:         "0 o/s",
-		512:       "512 o/s",
-		5329.3:    "5,2 ko/s",
-		1_572_864: "1,5 Mo/s",
-		3.2e9:     "3,0 Go/s",
-	}
-	for in, want := range cases {
-		if got := FormatRate(in); got != want {
-			t.Errorf("FormatRate(%v) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func TestFormatMemory(t *testing.T) {
-	if got := FormatMemory(23915626496, 67939266560); got != "22,3 / 63,3 Go" {
-		t.Fatalf("FormatMemory = %q", got)
+func TestShortLabel(t *testing.T) {
+	if ShortLabel("ND 1.2 (4 stops)") != "ND 1.2" || ShortLabel("Clair") != "Clair" {
+		t.Error("ShortLabel")
 	}
 }

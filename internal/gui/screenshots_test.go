@@ -58,6 +58,35 @@ func TestScreenshots(t *testing.T) {
 		save("3b-config-edit-offline-cam", mode)
 		a.ShowCameras()
 	}
+	// Configuration > General, in both languages and themes
+	a.SetLanguage("fr")
+	for _, mode := range []style.Mode{style.ModeDark, style.ModeLight} {
+		a.SetMode(mode)
+		a.ShowConfig(0)
+		a.config.SelectTab(tabGeneral)
+		a.Window().Resize(size)
+		save("5-general-fr", mode)
+	}
+	// the whole tab at once: a taller window
+	a.SetMode(style.ModeDark)
+	a.ShowConfig(0)
+	a.Window().Resize(fyne.NewSize(size.Width, 1250))
+	save("5b-general-fr-tall", style.ModeDark)
+	a.Window().Resize(size)
+	a.SetMode(style.ModeDark)
+	a.SetLanguage("en")
+	a.ShowConfig(0)
+	a.config.SelectTab(tabGeneral)
+	a.Window().Resize(size)
+	save("5-general-en", style.ModeDark)
+	a.ShowCameras()
+	a.Window().Resize(size)
+	save("6-cameras-en", style.ModeDark)
+	a.ShowConfig(2)
+	a.Window().Resize(size)
+	save("7-config-cameras-en", style.ModeDark)
+	a.SetLanguage("fr")
+
 	if os.Getenv("RCP_SHOTS_EMPTY") != "" {
 		// empty rig for the first-run look
 		a2, _, _ := newTestApp(t, false)

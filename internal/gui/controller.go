@@ -15,7 +15,7 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
-	"github.com/valentindoche/rcp-for-all-camera/internal/gui/fr"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
@@ -28,11 +28,40 @@ type API interface {
 	SelectSlot(slot int) error
 	Controls(slot int) ([]app.ControlView, error)
 	SetControl(slot int, id string, v core.Value) error
-	ConnectSlot(slot int) error
+	ConfirmSetControl(slot int, id string, v core.Value) error
 	PanelStatus() app.PanelStatus
 }
 
-var _ API = (*app.Service)(nil)
+// SettingsAPI is the part of app.Service behind Configuration > General.
+type SettingsAPI interface {
+	Settings() app.Settings
+	NetworkInterfaces() []app.NetInterface
+	SetBindIP(ip string) error
+	SetAutoStart(on bool) error
+	SetOperatorLock(on bool) error
+	SetLogLevel(level string) error
+	ExportConfig() ([]byte, error)
+	ImportConfig(data []byte) error
+}
+
+// AppAPI is everything the window needs (*app.Service implements it).
+type AppAPI interface {
+	API
+	SettingsAPI
+}
+
+var (
+	_ API         = (*app.Service)(nil)
+	_ SettingsAPI = (*app.Service)(nil)
+)
+
+// ConfirmRequest is a guarded write the service refused until the user
+// confirms it (operator lock).
+type ConfirmRequest struct {
+	Slot  int
+	Spec  core.ControlSpec
+	Value core.Value
+}
 
 // ChangeKind says what changed in the Controller.
 type ChangeKind int
@@ -88,6 +117,7 @@ type Options struct {
 // Controller is the UI-side model.
 type Controller struct {
 	api   API
+	tx    texts.Texts
 	ui    func(func())
 	async func(func())
 	thr   *widgets.Throttler
@@ -97,9 +127,10 @@ type Controller struct {
 	panel  app.PanelStatus
 	models []core.ModelInfo
 	slots  [app.SlotCount]*slotData
-	notice fr.Notice
+	notice texts.Notice
 	// latest write requested per slot/control, to tell stale answers apart.
-	latest map[string]core.Value
+	latest  map[string]core.Value
+	confirm func(ConfirmRequest)
 
 	lmu       sync.Mutex
 	listeners map[int]func(Change)
@@ -121,7 +152,7 @@ func NewController(api API, o Options) *Controller {
 		o.NoticeTTL = 8 * time.Second
 	}
 	return &Controller{
-		api: api, ui: o.UI, async: o.Go, ttl: o.NoticeTTL,
+		api: api, tx: texts.Default(), ui: o.UI, async: o.Go, ttl: o.NoticeTTL,
 		thr:       widgets.NewThrottler(o.WriteInterval),
 		latest:    map[string]core.Value{},
 		listeners: map[int]func(Change){},
@@ -169,7 +200,7 @@ func (c *Controller) notify(ch Change) {
 func (c *Controller) Rig() app.Rig             { return c.rig }
 func (c *Controller) Panel() app.PanelStatus   { return c.panel }
 func (c *Controller) Models() []core.ModelInfo { return c.models }
-func (c *Controller) Notice() fr.Notice        { return c.notice }
+func (c *Controller) Notice() texts.Notice     { return c.notice }
 func (c *Controller) Active() int              { return c.rig.Active }
 func (c *Controller) Camera(slot int) *app.CameraView {
 	if slot < 1 || slot > app.SlotCount {
@@ -370,7 +401,7 @@ func (c *Controller) loadControls(slot int) {
 				return
 			}
 			if err != nil {
-				c.setNotice(fr.NoticeFor(err))
+				c.setNotice(c.tx.NoticeFor(err))
 				return
 			}
 			cur.specs = make([]core.ControlSpec, len(views))
@@ -402,7 +433,7 @@ func (c *Controller) Select(slot int) {
 	c.async(func() {
 		if err := c.api.SelectSlot(slot); err != nil {
 			c.ui(func() {
-				c.setNotice(fr.NoticeFor(err))
+				c.setNotice(c.tx.NoticeFor(err))
 				c.RefreshRig()
 			})
 		}
@@ -424,8 +455,12 @@ func (c *Controller) Write(slot int, id core.ControlID, v core.Value) {
 func (c *Controller) writeDone(slot int, id core.ControlID, key string, v core.Value, err error) {
 	if err != nil {
 		delete(c.latest, key)
-		c.setNotice(fr.NoticeFor(err))
 		c.notify(Change{Kind: ChValue, Slot: slot, ID: id}) // back to the last known value
+		if IsAPIError(err, app.CodeConfirmRequired) {
+			c.askConfirm(slot, id, v)
+			return
+		}
+		c.setNotice(c.tx.NoticeFor(err))
 		return
 	}
 	sd := c.data(slot)
@@ -445,17 +480,33 @@ func (c *Controller) writeDone(slot int, id core.ControlID, key string, v core.V
 	}
 }
 
-// Connect asks the slot's camera to connect.
-func (c *Controller) Connect(slot int) {
+// OnConfirm sets the function that asks the user to confirm a guarded write.
+// Without one the write is dropped with a notice: it is never confirmed on
+// its own.
+func (c *Controller) OnConfirm(f func(ConfirmRequest)) { c.confirm = f }
+
+func (c *Controller) askConfirm(slot int, id core.ControlID, v core.Value) {
+	spec, _ := c.Spec(slot, id)
+	if c.confirm == nil {
+		c.setNotice(c.tx.NoticeFor(&app.Error{Code: app.CodeConfirmRequired}))
+		return
+	}
+	c.confirm(ConfirmRequest{Slot: slot, Spec: spec, Value: v})
+}
+
+// Confirm sends a guarded write the user approved.
+func (c *Controller) Confirm(r ConfirmRequest) {
+	key := fmt.Sprintf("%d/%s", r.Slot, r.Spec.ID)
+	c.latest[key] = r.Value
 	c.async(func() {
-		err := c.api.ConnectSlot(slot)
-		c.ui(func() {
-			if err != nil {
-				c.setNotice(fr.NoticeFor(err))
-			}
-			c.RefreshRig()
-		})
+		err := c.api.ConfirmSetControl(r.Slot, string(r.Spec.ID), r.Value)
+		c.ui(func() { c.writeDone(r.Slot, r.Spec.ID, key, r.Value, err) })
 	})
+}
+
+// Decline puts the control back to its last known value.
+func (c *Controller) Decline(r ConfirmRequest) {
+	c.notify(Change{Kind: ChValue, Slot: r.Slot, ID: r.Spec.ID})
 }
 
 // Assign creates or edits a slot. The error is returned as is so the form can
@@ -478,9 +529,9 @@ func (c *Controller) Clear(slot int) error {
 }
 
 // SetNotice shows a message in the status bar.
-func (c *Controller) SetNotice(n fr.Notice) { c.setNotice(n) }
+func (c *Controller) SetNotice(n texts.Notice) { c.setNotice(n) }
 
-func (c *Controller) setNotice(n fr.Notice) {
+func (c *Controller) setNotice(n texts.Notice) {
 	c.notice = n
 	c.notify(Change{Kind: ChNotice})
 	if n.Text == "" {
@@ -489,7 +540,7 @@ func (c *Controller) setNotice(n fr.Notice) {
 	time.AfterFunc(c.ttl, func() {
 		c.ui(func() {
 			if c.notice == n {
-				c.notice = fr.Notice{}
+				c.notice = texts.Notice{}
 				c.notify(Change{Kind: ChNotice})
 			}
 		})
@@ -503,4 +554,14 @@ func (c *Controller) WaitWrites() { c.thr.Wait() }
 func IsAPIError(err error, code string) bool {
 	var ae *app.Error
 	return errors.As(err, &ae) && ae.Code == code
+}
+
+// Tx returns the texts of the current language.
+func (c *Controller) Tx() texts.Texts { return c.tx }
+
+// SetTexts switches the language of the texts the Controller produces
+// (notices, errors). Widgets are rebuilt by the App.
+func (c *Controller) SetTexts(tx texts.Texts) {
+	c.tx = tx
+	c.notice = texts.Notice{}
 }

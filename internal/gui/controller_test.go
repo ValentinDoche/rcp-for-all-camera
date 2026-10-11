@@ -10,20 +10,22 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
-	"github.com/valentindoche/rcp-for-all-camera/internal/gui/fr"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 )
 
 // fakeAPI is a scriptable service for controller tests.
 type fakeAPI struct {
-	mu       sync.Mutex
-	rig      app.Rig
-	controls map[int][]app.ControlView
-	panel    app.PanelStatus
-	setErr   error
-	selErr   error
-	sets     []setCall
-	selects  []int
-	loads    int
+	mu         sync.Mutex
+	rig        app.Rig
+	controls   map[int][]app.ControlView
+	panel      app.PanelStatus
+	setErr     error
+	selErr     error
+	sets       []setCall
+	selects    []int
+	loads      int
+	confirms   []setCall
+	confirmErr error
 }
 
 func newFakeAPI() *fakeAPI {
@@ -94,7 +96,17 @@ func (f *fakeAPI) SetControl(slot int, id string, v core.Value) error {
 	f.sets = append(f.sets, setCall{core.ControlID(id), v})
 	return f.setErr
 }
-func (f *fakeAPI) ConnectSlot(int) error        { return nil }
+func (f *fakeAPI) ConfirmSetControl(slot int, id string, v core.Value) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.confirms = append(f.confirms, setCall{core.ControlID(id), v})
+	return f.confirmErr
+}
+func (f *fakeAPI) confirmCalls() []setCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]setCall(nil), f.confirms...)
+}
 func (f *fakeAPI) PanelStatus() app.PanelStatus { return f.panel }
 func (f *fakeAPI) setCalls() []setCall {
 	f.mu.Lock()
@@ -187,7 +199,7 @@ func TestWriteNotImplementedKeepsLastKnownAndShowsDiscreetNotice(t *testing.T) {
 		t.Errorf("value must stay at the last known 0.4, got %v", v)
 	}
 	n := c.Notice()
-	if n.Level != fr.LevelInfo || n.Text != "Contrôle pas encore disponible : pilote caméra en développement" {
+	if n.Level != texts.LevelInfo || n.Text != "Contrôle pas encore disponible : pilote caméra en développement" {
 		t.Errorf("notice = %+v", n)
 	}
 	if rec.count(ChValue) != 1 {
@@ -202,13 +214,13 @@ func TestWriteInvalidValueIsAnError(t *testing.T) {
 	c := newCtl(f)
 	c.Write(1, core.Iris, core.Number(5))
 	waitWrites(c)
-	if n := c.Notice(); n.Level != fr.LevelError || n.Text != "Valeur refusée par la caméra" {
+	if n := c.Notice(); n.Level != texts.LevelError || n.Text != "Valeur refusée par la caméra" {
 		t.Errorf("notice = %+v", n)
 	}
 	f.setErr = &app.Error{Code: app.CodeUnknownControl, Message: "x"}
 	c.Write(1, core.Iris, core.Number(0.5))
 	waitWrites(c)
-	if n := c.Notice(); n.Level != fr.LevelError || n.Text != "Contrôle inconnu pour cette caméra" {
+	if n := c.Notice(); n.Level != texts.LevelError || n.Text != "Contrôle inconnu pour cette caméra" {
 		t.Errorf("notice = %+v", n)
 	}
 }
@@ -378,7 +390,7 @@ func TestNoticeExpires(t *testing.T) {
 	o.UI = func(fn func()) { mu.Lock(); defer mu.Unlock(); fn() }
 	c := NewController(f, o)
 	c.Load()
-	c.SetNotice(fr.Notice{Text: "x"})
+	c.SetNotice(texts.Notice{Text: "x"})
 	time.Sleep(80 * time.Millisecond)
 	mu.Lock()
 	got := c.Notice().Text
@@ -417,5 +429,53 @@ func TestIsAPIError(t *testing.T) {
 	err := fmt.Errorf("w: %w", &app.Error{Code: app.CodeInvalidConfig})
 	if !IsAPIError(err, app.CodeInvalidConfig) || IsAPIError(err, app.CodeInternal) || IsAPIError(errors.New("x"), app.CodeInternal) {
 		t.Error("IsAPIError")
+	}
+}
+
+func TestConfirmRequiredAsksAndNeverAutoConfirms(t *testing.T) {
+	f := newFakeAPI()
+	bars := rangeSpec(core.ColorBars, 0, 1, 1)
+	f.assign(1, "acme.cam", core.StateConnected, numView(bars, 0))
+	f.setErr = &app.Error{Code: app.CodeConfirmRequired}
+	c := newCtl(f)
+	rec := &recorder{}
+	c.Subscribe(rec.fn)
+
+	// no handler: the write is dropped with a notice, not confirmed
+	c.Write(1, core.ColorBars, core.Number(1))
+	waitWrites(c)
+	if len(f.confirmCalls()) != 0 || c.Notice().Text == "" {
+		t.Fatalf("without a handler: confirms %v notice %q", f.confirmCalls(), c.Notice().Text)
+	}
+
+	var asked []ConfirmRequest
+	c.OnConfirm(func(r ConfirmRequest) { asked = append(asked, r) })
+	c.Write(1, core.ColorBars, core.Number(1))
+	waitWrites(c)
+	if len(asked) != 1 || asked[0].Slot != 1 || asked[0].Value.Number != 1 || asked[0].Spec.ID != core.ColorBars {
+		t.Fatalf("asked = %+v", asked)
+	}
+	if len(f.confirmCalls()) != 0 {
+		t.Fatal("nothing may be confirmed before the user answers")
+	}
+	if v := c.Value(1, core.ColorBars); v == nil || v.Number != 0 {
+		t.Fatalf("value while asking = %v, want the last known 0", v)
+	}
+
+	// cancel: the widget is told to show the last known value again
+	n := rec.count(ChValue)
+	c.Decline(asked[0])
+	if rec.count(ChValue) != n+1 || len(f.confirmCalls()) != 0 {
+		t.Error("decline must refresh the control and send nothing")
+	}
+
+	// confirm: ConfirmSetControl is called and the value is kept
+	c.Confirm(asked[0])
+	waitWrites(c)
+	if got := f.confirmCalls(); len(got) != 1 || got[0].ID != core.ColorBars || got[0].V.Number != 1 {
+		t.Fatalf("confirm calls = %v", got)
+	}
+	if v := c.Value(1, core.ColorBars); v == nil || v.Number != 1 {
+		t.Errorf("value after confirm = %v", v)
 	}
 }

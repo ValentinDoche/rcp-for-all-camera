@@ -12,8 +12,8 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
-	"github.com/valentindoche/rcp-for-all-camera/internal/gui/fr"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
@@ -62,8 +62,6 @@ type stripContent struct {
 	zoom    *widgets.Slider
 	focus   *widgets.Slider
 	quiet   bool
-
-	connect *widget.Button
 }
 
 type summaryCell struct {
@@ -179,12 +177,12 @@ func (s *strip) applyHeader(cam *app.CameraView) {
 	s.slotTxt.SetToken(main)
 	s.nameTxt.SetToken(sub)
 	if cam == nil {
-		s.stateTxt.SetText("Libre")
+		s.stateTxt.SetText(s.ctl.tx.T("strip.free"))
 		s.stateTxt.SetToken(sub)
-		s.nameTxt.SetText("Aucune caméra")
+		s.nameTxt.SetText(s.ctl.tx.T("strip.noCamera"))
 		return
 	}
-	text := fr.ConnLabel(cam.Status.State)
+	text := s.ctl.tx.ConnLabel(cam.Status.State)
 	tok := sub
 	if mode == 0 {
 		switch cam.Status.State {
@@ -195,7 +193,7 @@ func (s *strip) applyHeader(cam *app.CameraView) {
 		}
 	}
 	if live {
-		text = "À l'antenne"
+		text = s.ctl.tx.T("strip.onAir")
 	}
 	s.stateTxt.SetText(text)
 	s.stateTxt.SetToken(tok)
@@ -220,11 +218,11 @@ func (s *strip) emptyView() fyne.CanvasObject {
 	if s.empty != nil {
 		return s.empty
 	}
-	title := widgets.NewText("Emplacement libre", style.Text, 14).Bold().Align(fyne.TextAlignCenter)
-	hint := widget.NewLabel("Assignez un modèle de caméra pour la piloter depuis ce panneau.")
+	title := widgets.NewText(s.ctl.tx.T("strip.emptyTitle"), style.Text, 14).Bold().Align(fyne.TextAlignCenter)
+	hint := widget.NewLabel(s.ctl.tx.T("strip.emptyHint"))
 	hint.Wrapping = fyne.TextWrapWord
 	hint.Alignment = fyne.TextAlignCenter
-	btn := widget.NewButton("Assigner une caméra", func() {
+	btn := widget.NewButton(s.ctl.tx.T("strip.assign"), func() {
 		if s.actions.Assign != nil {
 			s.actions.Assign(s.slot)
 		}
@@ -235,7 +233,7 @@ func (s *strip) emptyView() fyne.CanvasObject {
 }
 
 func (s *strip) loadingView() fyne.CanvasObject {
-	return container.NewCenter(widgets.NewText("Lecture des contrôles...", style.TextMuted, 13))
+	return container.NewCenter(widgets.NewText(s.ctl.tx.T("strip.reading"), style.TextMuted, 13))
 }
 
 // --- content ---------------------------------------------------------------------------
@@ -253,7 +251,7 @@ func (s *strip) buildContent() *stripContent {
 	for g := range wheelGroups {
 		if wheelAvailable(ctl, slot, g) {
 			avail = append(avail, g)
-			titles = append(titles, wheelGroups[g].Title)
+			titles = append(titles, ctl.tx.T(wheelGroups[g].Key))
 		}
 	}
 	if len(avail) > 0 {
@@ -274,28 +272,28 @@ func (s *strip) buildContent() *stripContent {
 		if !ok {
 			return
 		}
-		val := widgets.NewText(fr.Missing, style.Text, 13).Bold().Mono().Align(fyne.TextAlignCenter)
+		val := widgets.NewText(texts.Missing, style.Text, 13).Bold().Mono().Align(fyne.TextAlignCenter)
 		c.summary = append(c.summary, summaryCell{spec: sp, val: val})
 		cells = append(cells, container.NewVBox(
 			widgets.NewText(caption, style.TextMuted, 10).Align(fyne.TextAlignCenter), val))
 	}
 	if has(core.ND) {
-		addCell("ND", core.ND)
+		addCell(ctl.tx.T("strip.nd"), core.ND)
 	}
 	switch {
 	case has(core.Gain):
-		addCell("GAIN", core.Gain)
+		addCell(ctl.tx.T("strip.gain"), core.Gain)
 	case has(core.ISO):
-		addCell("ISO", core.ISO)
+		addCell(ctl.tx.T("strip.iso"), core.ISO)
 	}
 	switch {
 	case has(core.ShutterSpeed):
-		addCell("OBTURATEUR", core.ShutterSpeed)
+		addCell(ctl.tx.T("strip.shutter"), core.ShutterSpeed)
 	case has(core.ShutterAngle):
-		addCell("OBTURATEUR", core.ShutterAngle)
+		addCell(ctl.tx.T("strip.shutter"), core.ShutterAngle)
 	}
 	if has(core.WhiteBalance) {
-		addCell("BALANCE", core.WhiteBalance)
+		addCell(ctl.tx.T("strip.balance"), core.WhiteBalance)
 	}
 	if len(cells) > 0 {
 		top = append(top, container.New(layout.NewCustomPaddedLayout(6, 0, 0, 0),
@@ -321,11 +319,11 @@ func (s *strip) buildContent() *stripContent {
 	var side []fyne.CanvasObject
 	if hasZoom {
 		c.zoom = s.vslider(c, core.Zoom)
-		side = append(side, labeledVertical("ZOOM", c.zoom))
+		side = append(side, labeledVertical(ctl.tx.T("strip.zoom"), c.zoom))
 	}
 	if hasFocus {
 		c.focus = s.vslider(c, core.Focus)
-		side = append(side, labeledVertical("FOCUS", c.focus))
+		side = append(side, labeledVertical(ctl.tx.T("strip.focus"), c.focus))
 	}
 	if len(side) > 0 {
 		row = container.NewBorder(nil, nil, nil, container.NewHBox(side...), row)
@@ -337,7 +335,7 @@ func (s *strip) buildContent() *stripContent {
 	for _, a := range []struct {
 		id    core.ControlID
 		label string
-	}{{core.AutoFocus, "Auto focus"}, {core.AutoIris, "Auto iris"}, {core.AutoWhiteBalance, "AWB"}} {
+	}{{core.AutoFocus, ctl.tx.T("strip.autoFocus")}, {core.AutoIris, ctl.tx.T("strip.autoIris")}, {core.AutoWhiteBalance, ctl.tx.T("strip.awb")}} {
 		if !has(a.id) {
 			continue
 		}
@@ -348,15 +346,11 @@ func (s *strip) buildContent() *stripContent {
 	if len(acts) > 0 {
 		bottom = append(bottom, container.NewGridWithColumns(len(acts), acts...))
 	}
-	c.connect = widget.NewButton("Connecter", func() { ctl.Connect(slot) })
-	var foot []fyne.CanvasObject
-	foot = append(foot, c.connect)
 	if s.actions.Details != nil {
-		d := widget.NewButton("Détails", func() { s.actions.Details(slot) })
+		d := widget.NewButton(ctl.tx.T("strip.details"), func() { s.actions.Details(slot) })
 		d.Importance = widget.MediumImportance
-		foot = append(foot, d)
+		bottom = append(bottom, d)
 	}
-	bottom = append(bottom, container.NewGridWithColumns(len(foot), foot...))
 
 	c.obj = container.NewBorder(container.NewVBox(top...), container.NewVBox(bottom...), nil, nil, padArea)
 	return c
@@ -418,7 +412,7 @@ func (s *strip) applyContent() {
 		c.wheel.apply()
 	}
 	for _, cell := range c.summary {
-		cell.val.SetText(fr.ShortLabel(fr.FormatValue(cell.spec, s.ctl.Value(s.slot, cell.spec.ID))))
+		cell.val.SetText(texts.ShortLabel(s.ctl.tx.FormatValue(cell.spec, s.ctl.Value(s.slot, cell.spec.ID))))
 	}
 	if c.pad != nil {
 		c.pad.SetActive(s.ctl.Active() == s.slot)
@@ -467,18 +461,6 @@ func (s *strip) applyContent() {
 			p.sl.Set(v.Number)
 		} else {
 			p.sl.Set(sp.Min)
-		}
-	}
-	if cam != nil {
-		switch cam.Status.State {
-		case core.StateConnected:
-			c.connect.Hide()
-		case core.StateError:
-			c.connect.SetText("Reconnecter")
-			c.connect.Show()
-		default:
-			c.connect.SetText("Connecter")
-			c.connect.Show()
 		}
 	}
 }

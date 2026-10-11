@@ -27,7 +27,7 @@ func findButton(o fyne.CanvasObject, text string) *widget.Button {
 	return nil
 }
 
-func texts(o fyne.CanvasObject) []string {
+func allTexts(o fyne.CanvasObject) []string {
 	var out []string
 	for _, c := range all(o) {
 		switch w := c.(type) {
@@ -37,6 +37,8 @@ func texts(o fyne.CanvasObject) []string {
 			out = append(out, w.Text)
 		case *widget.Button:
 			out = append(out, w.Text)
+		case *widget.RichText:
+			out = append(out, w.String())
 		}
 	}
 	return out
@@ -81,7 +83,7 @@ func TestStripOnlyOffersWhatTheCameraDeclares(t *testing.T) {
 	}
 }
 
-func TestOfflineStripShowsDashesAndConnectButton(t *testing.T) {
+func TestOfflineStripShowsDashesAndNoConnectButton(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
 	sized(a)
 	c := a.strips[2].content // 192.168.1.44 is offline
@@ -90,11 +92,11 @@ func TestOfflineStripShowsDashesAndConnectButton(t *testing.T) {
 			t.Errorf("unknown value must show --, got %q", cell.val.Text())
 		}
 	}
-	if findButton(a.strips[2].root, "Connecter") == nil {
-		t.Error("an offline camera offers Connecter")
-	}
-	if a.strips[0].content.connect.Visible() {
-		t.Error("a connected camera must not offer Connecter")
+	// cameras connect by themselves: no manual connect button anywhere
+	for _, st := range a.strips {
+		if findButton(st.root, "Connecter") != nil || findButton(st.root, "Reconnecter") != nil {
+			t.Error("strips must not offer a connect button")
+		}
 	}
 }
 
@@ -164,8 +166,12 @@ func TestPanelIndicator(t *testing.T) {
 		t.Errorf("initial = %q", got)
 	}
 	a.Emit(app.EventPanelStatus, app.PanelStatus{Connected: true})
-	if got := a.panelTxt.Text(); got != "Micro Camera Panel connecté" {
-		t.Errorf("connected = %q", got)
+	if got := a.panelTxt.Text(); got != "Micro Camera Panel connecté (non piloté)" {
+		t.Errorf("connected but not driven = %q", got)
+	}
+	a.Emit(app.EventPanelStatus, app.PanelStatus{Connected: true, Active: true})
+	if got := a.panelTxt.Text(); got != "Micro Camera Panel actif" {
+		t.Errorf("active = %q", got)
 	}
 	a.Emit(app.EventPanelStatus, app.PanelStatus{Detail: "détection USB indisponible"})
 	if got := a.panelTxt.Text(); !strings.Contains(got, "détection USB indisponible") {
@@ -502,12 +508,7 @@ func TestThemeSettingIsStored(t *testing.T) {
 	a, _, _ := newTestApp(t, false)
 	sized(a)
 	a.ShowConfig(0)
-	var seg *widgets.Segmented
-	for _, o := range all(a.config.obj) {
-		if s, ok := o.(*widgets.Segmented); ok {
-			seg = s
-		}
-	}
+	seg := a.config.general.themeSeg
 	if seg == nil {
 		t.Fatal("theme selector missing")
 	}
@@ -538,7 +539,7 @@ func TestNoDashesInVisibleTextAndAllFrench(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
 	sized(a)
 	check := func(page string) {
-		for _, s := range texts(a.Window().Content()) {
+		for _, s := range allTexts(a.Window().Content()) {
 			if strings.ContainsAny(s, "—–") {
 				t.Errorf("%s: dash in %q", page, s)
 			}
@@ -556,7 +557,7 @@ func TestNoPasswordInVisibleText(t *testing.T) {
 	sized(a)
 	for slot := 1; slot <= 3; slot++ {
 		a.ShowConfig(slot)
-		for _, s := range texts(a.Window().Content()) {
+		for _, s := range allTexts(a.Window().Content()) {
 			if strings.Contains(s, "secret") {
 				t.Errorf("password leaked into %q", s)
 			}

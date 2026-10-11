@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"math"
@@ -103,6 +104,7 @@ type liveCam struct {
 	state  core.ConnState
 	values map[core.ControlID]core.Value
 	setErr error
+	refuse bool // Connect fails: the camera stays offline or in error
 	sets   []setCall
 }
 
@@ -111,11 +113,18 @@ type setCall struct {
 	V  core.Value
 }
 
-func (c *liveCam) Status() core.Status { return core.Status{State: c.state} }
+func (c *liveCam) Status() core.Status {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return core.Status{State: c.state}
+}
 func (c *liveCam) Connect(context.Context) error {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.refuse {
+		return errors.New("unreachable")
+	}
 	c.state = core.StateConnected
-	c.mu.Unlock()
 	return nil
 }
 func (c *liveCam) Get(_ context.Context, id core.ControlID) (core.Value, error) {
@@ -210,9 +219,9 @@ func (d liveDriver) New(m core.ModelInfo, cfg core.CameraConfig) (core.Camera, e
 	lc := &liveCam{Camera: inner, values: map[core.ControlID]core.Value{}, state: core.StateConnected}
 	switch {
 	case len(cfg.Host) > 3 && cfg.Host[len(cfg.Host)-3:] == ".44":
-		lc.state = core.StateDisconnected
+		lc.state, lc.refuse = core.StateDisconnected, true
 	case len(cfg.Host) > 3 && cfg.Host[len(cfg.Host)-3:] == ".45":
-		lc.state = core.StateError
+		lc.state, lc.refuse = core.StateError, true
 	}
 	for _, sp := range inner.Controls() {
 		if sp.Kind != core.KindAction {
@@ -225,10 +234,49 @@ func (d liveDriver) New(m core.ModelInfo, cfg core.CameraConfig) (core.Camera, e
 	return lc, nil
 }
 
+// fakeAuto is the start-with-Windows switch of the tests.
+type fakeAuto struct {
+	mu  sync.Mutex
+	on  bool
+	err error
+}
+
+func (f *fakeAuto) Enabled() (bool, error) { f.mu.Lock(); defer f.mu.Unlock(); return f.on, nil }
+func (f *fakeAuto) SetEnabled(on bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.on = on
+	return nil
+}
+
+// ifaceList is the set of local addresses the tests expose.
+type ifaceList struct {
+	mu  sync.Mutex
+	nic []app.NetInterface
+}
+
+func (l *ifaceList) list() []app.NetInterface {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]app.NetInterface(nil), l.nic...)
+}
+func (l *ifaceList) set(n ...app.NetInterface) { l.mu.Lock(); l.nic = n; l.mu.Unlock() }
+
+// testAuto and testIfaces are fresh for every newLiveService call.
+var (
+	testAuto   *fakeAuto
+	testIfaces *ifaceList
+)
+
 // newLiveService builds a Service whose three real drivers are wrapped.
 func newLiveService(t testing.TB) (*app.Service, *memStore, *[]*liveCam) {
 	t.Helper()
 	cams := &[]*liveCam{}
+	testAuto = &fakeAuto{}
+	testIfaces = &ifaceList{nic: []app.NetInterface{{Name: "Ethernet", IP: "192.168.1.110"}, {Name: "Wi-Fi", IP: "10.0.0.5"}}}
 	reg := core.NewRegistry()
 	for _, d := range []core.Driver{blackmagic.Driver{}, sony.Driver{}, panasonic.Driver{}} {
 		if err := reg.Register(liveDriver{Driver: d, cams: cams}); err != nil {
@@ -238,7 +286,9 @@ func newLiveService(t testing.TB) (*app.Service, *memStore, *[]*liveCam) {
 	st := &memStore{}
 	svc, err := app.NewService(app.Options{
 		Registry: reg, Store: st, Secrets: config.NewMemorySecrets(),
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Interfaces: testIfaces.list, AutoStart: testAuto, LogDir: t.TempDir(),
+		Go: func(f func()) { f() },
 	})
 	if err != nil {
 		t.Fatal(err)

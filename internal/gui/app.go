@@ -3,6 +3,7 @@ package gui
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,9 +15,10 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
-	"github.com/valentindoche/rcp-for-all-camera/internal/gui/fr"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
+	"github.com/valentindoche/rcp-for-all-camera/internal/i18n"
 	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
@@ -29,7 +31,10 @@ const WindowTitle = "RCP For All Camera"
 // MinWindow is the smallest supported window.
 var MinWindow = fyne.NewSize(1280, 720)
 
-const themePref = "theme"
+const (
+	themePref = "theme"
+	langPref  = "language"
+)
 
 type pageKind int
 
@@ -44,8 +49,15 @@ type App struct {
 	fa  fyne.App
 	win fyne.Window
 	ctl *Controller
+	api AppAPI
 
-	mode style.Mode
+	mode      style.Mode
+	bundle    *i18n.Bundle
+	lang      string
+	configTab int
+	lastStats sysinfo.Stats
+	openURL   func(*url.URL) error
+	unsub     func()
 
 	root      *fyne.Container
 	host      *fyne.Container
@@ -70,15 +82,22 @@ type App struct {
 var _ app.Emitter = (*App)(nil)
 
 // New builds the window around api. Pass Options{} in production.
-func New(fa fyne.App, api API, o Options) *App {
-	a := &App{fa: fa, ctl: NewController(api, o)}
+func New(fa fyne.App, api AppAPI, o Options) *App {
+	a := &App{fa: fa, api: api, ctl: NewController(api, o), bundle: i18n.Default()}
+	a.openURL = fa.OpenURL
+	a.lang = fa.Preferences().StringWithFallback(langPref, "fr")
+	if !a.bundle.Has(a.lang) {
+		a.lang = i18n.FallbackLang
+	}
+	a.ctl.SetTexts(texts.New(a.bundle.Translator(a.lang)))
 	a.mode = style.ParseMode(fa.Preferences().StringWithFallback(themePref, string(style.ModeSystem)))
 	fa.Settings().SetTheme(style.NewTheme(a.mode))
 	a.win = fa.NewWindow(WindowTitle)
 	a.build()
 	a.ctl.Load()
 	a.syncChrome()
-	a.ctl.Subscribe(a.onChange)
+	a.unsub = a.ctl.Subscribe(a.onChange)
+	a.ctl.OnConfirm(a.askConfirm)
 	a.win.SetContent(a.root)
 	a.win.SetPadded(false)
 	a.win.Resize(fyne.NewSize(1600, 900))
@@ -135,6 +154,7 @@ func (a *App) build() {
 			a.ShowConfig(0)
 		}
 	})
+	a.strips = nil
 	a.gear.Importance = widget.LowImportance
 	var statObjs []fyne.CanvasObject
 	for i := 0; i < 5; i++ {
@@ -219,13 +239,84 @@ func (a *App) ShowDetails(slot int) {
 func (a *App) ShowConfig(slot int) {
 	a.closeSubpages()
 	a.page = pageConfig
-	a.config = newConfigPage(a.ctl, a.win, a.mode, a.SetMode)
+	tab := a.configTab
+	if slot > 0 {
+		tab = tabCameras
+	}
+	a.config = newConfigPage(a.ctl, a.configEnv(), tab)
 	if slot > 0 {
 		a.config.Edit(slot)
 	}
 	a.setPage(a.config.obj)
 	a.gear.Importance = widget.HighImportance
 	a.gear.Refresh()
+}
+
+func (a *App) configEnv() *configEnv {
+	return &configEnv{
+		win: a.win, api: a.api, mode: a.mode, setMode: a.SetMode,
+		lang: a.lang, langs: a.bundle.Languages(), setLang: a.SetLanguage,
+		openURL: func(u *url.URL) error { return a.openURL(u) }, setTab: func(t int) { a.configTab = t },
+	}
+}
+
+// Language returns the code of the current language.
+func (a *App) Language() string { return a.lang }
+
+// SetLanguage switches the interface language: the choice is stored and the
+// window content is rebuilt in place, keeping the current page.
+func (a *App) SetLanguage(code string) {
+	if !a.bundle.Has(code) || code == a.lang {
+		return
+	}
+	a.lang = code
+	a.fa.Preferences().SetString(langPref, code)
+	a.ctl.SetTexts(texts.New(a.bundle.Translator(code)))
+	a.rebuild()
+}
+
+// rebuild recreates every widget (after a language switch) and returns to
+// the page that was open.
+func (a *App) rebuild() {
+	page, slot, stats := a.page, a.detailSlot, a.lastStats
+	a.closeSubpages()
+	for _, s := range a.strips {
+		s.Close()
+	}
+	if a.unsub != nil {
+		a.unsub()
+	}
+	a.build()
+	a.syncChrome()
+	a.setStats(stats)
+	a.unsub = a.ctl.Subscribe(a.onChange)
+	a.win.SetContent(a.root)
+	switch page {
+	case pageDetails:
+		a.ShowDetails(slot)
+	case pageConfig:
+		a.ShowConfig(0)
+	default:
+		a.page = pageCameras
+	}
+}
+
+// askConfirm shows the operator-lock dialog for a guarded write. The write is
+// sent only if the user confirms; otherwise the control returns to its value.
+func (a *App) askConfirm(r ConfirmRequest) {
+	tx := a.ctl.Tx()
+	control := tx.ControlLabel(r.Spec)
+	body := tx.T("confirm.actionBody", "slot", r.Slot, "control", control)
+	if r.Spec.Kind != core.KindAction {
+		body = tx.T("confirm.valueBody", "slot", r.Slot, "control", control, "value", tx.FormatValue(r.Spec, &r.Value))
+	}
+	showConfirm(a.win, tx.T("confirm.title"), body, tx.T("confirm.yes"), tx.T("confirm.no"), func(ok bool) {
+		if ok {
+			a.ctl.Confirm(r)
+		} else {
+			a.ctl.Decline(r)
+		}
+	})
 }
 
 func (a *App) scrollToActive() {
@@ -284,19 +375,28 @@ func (a *App) onChange(ch Change) {
 // syncChrome refreshes the top bar, the slot tabs and the notice.
 func (a *App) syncChrome() {
 	p := a.ctl.Panel()
+	tx := a.ctl.Tx()
 	switch {
-	case p.Connected:
+	case p.Connected && p.Active:
 		a.panelDot.SetToken(style.OK)
 		a.panelTxt.SetToken(style.Text)
-		a.panelTxt.SetText("Micro Camera Panel connecté")
+		a.panelTxt.SetText(tx.T("app.panel.active"))
+	case p.Connected:
+		a.panelDot.SetToken(style.Warn)
+		a.panelTxt.SetToken(style.Text)
+		if p.Detail != "" {
+			a.panelTxt.SetText(tx.T("app.panel.idleDetail", "detail", p.Detail))
+		} else {
+			a.panelTxt.SetText(tx.T("app.panel.idle"))
+		}
 	case p.Detail != "":
 		a.panelDot.SetToken(style.Warn)
 		a.panelTxt.SetToken(style.Text)
-		a.panelTxt.SetText("Micro Camera Panel : " + p.Detail)
+		a.panelTxt.SetText(tx.T("app.panel.detail", "detail", p.Detail))
 	default:
 		a.panelDot.SetToken(style.TextFaint)
 		a.panelTxt.SetToken(style.TextMuted)
-		a.panelTxt.SetText("Micro Camera Panel non détecté")
+		a.panelTxt.SetText(tx.T("app.panel.absent"))
 	}
 
 	items := make([]widgets.TabItem, app.SlotCount)
@@ -316,7 +416,7 @@ func (a *App) syncChrome() {
 	switch {
 	case n.Text == "":
 		a.noticeTxt.SetText("")
-	case n.Level == fr.LevelError:
+	case n.Level == texts.LevelError:
 		a.noticeTxt.SetToken(style.Danger)
 		a.noticeTxt.SetText(n.Text)
 	default:
@@ -346,18 +446,21 @@ func (a *App) sampleHost(ctx context.Context, interval time.Duration) {
 }
 
 func (a *App) setStats(st sysinfo.Stats) {
-	cpu, down, up, ip := "CPU --", "↓ --", "↑ --", "IP --"
+	a.lastStats = st
+	tx := a.ctl.Tx()
+	lab := func(k string) string { return tx.T(k) }
+	cpu, down, up, ip := lab("status.cpu")+" --", "↓ --", "↑ --", lab("status.ip")+" --"
 	if st.HasRates {
-		cpu = "CPU " + fr.FormatNumber(st.CPU, 0) + " %"
-		down = "↓ " + fr.FormatRate(st.DownBps)
-		up = "↑ " + fr.FormatRate(st.UpBps)
+		cpu = lab("status.cpu") + " " + a.ctl.tx.FormatNumber(st.CPU, 0) + " %"
+		down = "↓ " + a.ctl.tx.FormatRate(st.DownBps)
+		up = "↑ " + a.ctl.tx.FormatRate(st.UpBps)
 	}
-	ram := "RAM --"
+	ram := lab("status.ram") + " --"
 	if st.MemTotal > 0 {
-		ram = "RAM " + fr.FormatMemory(st.MemUsed, st.MemTotal)
+		ram = lab("status.ram") + " " + a.ctl.tx.FormatMemory(st.MemUsed, st.MemTotal)
 	}
 	if st.IP != "" {
-		ip = "IP " + st.IP
+		ip = lab("status.ip") + " " + st.IP
 	}
 	for i, txt := range []string{cpu, ram, down, up, ip} {
 		a.stats[i].SetText(txt)

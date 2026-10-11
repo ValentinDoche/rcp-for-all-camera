@@ -40,7 +40,7 @@ func newDetailsPage(ctl *Controller, slot int, back func()) *detailsPage {
 	p := &detailsPage{ctl: ctl, slot: slot, back: back}
 	p.strip = newStrip(ctl, slot, stripActions{})
 	p.body = container.NewStack()
-	backBtn := widget.NewButtonWithIcon("Caméras", theme.NavigateBackIcon(), func() {
+	backBtn := widget.NewButtonWithIcon(ctl.tx.T("details.back"), theme.NavigateBackIcon(), func() {
 		if p.back != nil {
 			p.back()
 		}
@@ -48,7 +48,7 @@ func newDetailsPage(ctl *Controller, slot int, back func()) *detailsPage {
 	title := widgets.NewText("", style.Text, 16).Bold()
 	sub := widgets.NewText("", style.TextMuted, 12)
 	setTitle := func() {
-		title.SetText(fmt.Sprintf("Cam%d : détails", slot))
+		title.SetText(ctl.tx.T("details.title", "slot", slot))
 		if cam := ctl.Camera(slot); cam != nil {
 			sub.SetText(fmt.Sprintf("%s %s", cam.Brand, cam.ModelName))
 		}
@@ -86,7 +86,7 @@ func (p *detailsPage) Close() {
 func (p *detailsPage) rebuild() {
 	if !p.ctl.Loaded(p.slot) {
 		p.body.Objects = []fyne.CanvasObject{
-			container.NewCenter(widgets.NewText("Lecture des contrôles...", style.TextMuted, 13)),
+			container.NewCenter(widgets.NewText(p.ctl.tx.T("strip.reading"), style.TextMuted, 13)),
 		}
 		p.body.Refresh()
 		p.sig = ""
@@ -117,7 +117,7 @@ func (p *detailsPage) rebuild() {
 		wb := newWheelBlock(p.ctl, p.slot, 200)
 		wb.setGroup(g)
 		p.wheels = append(p.wheels, wb)
-		title := widgets.NewText(wheelGroups[g].Title, style.Text, 14).Bold().Align(fyne.TextAlignCenter)
+		title := widgets.NewText(p.ctl.tx.T(wheelGroups[g].Key), style.Text, 14).Bold().Align(fyne.TextAlignCenter)
 		cols = append(cols, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(title, wb.obj)))
 	}
 	if len(cols) > 0 {
@@ -138,7 +138,7 @@ func (p *detailsPage) rebuild() {
 	}
 	if len(sl) > 0 {
 		blocks = append(blocks, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(
-			widgets.NewText("Image", style.Text, 14).Bold(),
+			widgets.NewText(p.ctl.tx.T("details.image"), style.Text, 14).Bold(),
 			widgets.Sized(0, 1, widgets.NewHairline()),
 			container.NewGridWithColumns(len(sl), sl...),
 		)))
@@ -153,7 +153,7 @@ func (p *detailsPage) rebuild() {
 		blocks = append(blocks, sectionObject(s))
 	}
 	if len(blocks) == 0 {
-		blocks = append(blocks, container.NewCenter(widgets.NewText("Cette caméra ne déclare aucun contrôle.", style.TextMuted, 13)))
+		blocks = append(blocks, container.NewCenter(widgets.NewText(p.ctl.tx.T("details.noControl"), style.TextMuted, 13)))
 	}
 	p.body.Objects = []fyne.CanvasObject{container.NewVBox(spaced(blocks)...)}
 	p.body.Refresh()

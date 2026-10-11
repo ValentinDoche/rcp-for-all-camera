@@ -7,25 +7,37 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
-	"github.com/valentindoche/rcp-for-all-camera/internal/gui/fr"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
-// configPage lists the 8 slots and edits one at a time, and holds the theme
-// setting.
+// Configuration tabs.
+const (
+	tabGeneral = iota
+	tabCameras
+)
+
+// configPage is Configuration: a General tab (app settings) and a Cameras
+// tab (the 8 slots and the form of one).
 type configPage struct {
-	ctl    *Controller
-	win    fyne.Window
-	mode   style.Mode
-	setTh  func(style.Mode)
-	obj    fyne.CanvasObject
+	ctl *Controller
+	win fyne.Window
+	env *configEnv
+	tx  texts.Texts
+
+	obj     fyne.CanvasObject
+	tabs    *widgets.Tabs
+	body    *fyne.Container
+	tab     int
+	general *generalTab
+	cameras fyne.CanvasObject
+
 	list   *fyne.Container
 	right  *fyne.Container
 	cancel func()
@@ -34,16 +46,24 @@ type configPage struct {
 	form     *slotForm
 }
 
-func newConfigPage(ctl *Controller, win fyne.Window, mode style.Mode, setTheme func(style.Mode)) *configPage {
-	p := &configPage{ctl: ctl, win: win, mode: mode, setTh: setTheme}
+func newConfigPage(ctl *Controller, env *configEnv, tab int) *configPage {
+	p := &configPage{ctl: ctl, win: env.win, env: env, tx: ctl.Tx()}
 	p.list = container.NewVBox()
 	p.right = container.NewVBox()
-	title := widgets.NewText("Emplacements", style.Text, 16).Bold()
+	title := widgets.NewText(p.tx.T("config.slots"), style.Text, 16).Bold()
 	left := container.NewBorder(container.New(layout.NewCustomPaddedLayout(0, 6, 2, 0), title), nil, nil, nil,
 		container.NewVScroll(p.list))
-	p.obj = container.NewBorder(nil, nil,
+	p.cameras = container.NewBorder(nil, nil,
 		container.New(layout.NewCustomPaddedLayout(0, 0, 0, 12), widgets.Sized(440, 0, left)), nil,
 		container.New(layout.NewCustomPaddedLayout(0, 0, 0, 8), container.NewVScroll(p.right)))
+	p.general = newGeneralTab(ctl, env)
+
+	p.tabs = widgets.NewTabs([]widgets.TabItem{
+		{Text: p.tx.T("config.tab.general")}, {Text: p.tx.T("config.tab.cameras")},
+	}, func(i int) { p.SelectTab(i) })
+	p.body = container.NewStack()
+	p.obj = container.NewBorder(p.tabs, nil, nil, nil, container.New(layout.NewCustomPaddedLayout(8, 0, 0, 0), p.body))
+
 	p.cancel = ctl.Subscribe(func(ch Change) {
 		if ch.Kind == ChRig {
 			p.rebuildList()
@@ -51,7 +71,24 @@ func newConfigPage(ctl *Controller, win fyne.Window, mode style.Mode, setTheme f
 	})
 	p.rebuildList()
 	p.rebuildRight()
+	p.SelectTab(tab)
 	return p
+}
+
+// SelectTab shows one tab; the General tab re-reads the settings each time.
+func (p *configPage) SelectTab(i int) {
+	p.tab = i
+	p.tabs.SetSelected(i)
+	if i == tabCameras {
+		p.body.Objects = []fyne.CanvasObject{p.cameras}
+	} else {
+		p.general.Refresh()
+		p.body.Objects = []fyne.CanvasObject{p.general.obj}
+	}
+	p.body.Refresh()
+	if p.env.setTab != nil {
+		p.env.setTab(i)
+	}
 }
 
 // Close stops listening.
@@ -62,11 +99,14 @@ func (p *configPage) Close() {
 	}
 }
 
-// Edit opens the form for a slot.
+// Edit opens the form for a slot (on the Cameras tab).
 func (p *configPage) Edit(slot int) {
 	p.editSlot = slot
 	p.rebuildList()
 	p.rebuildRight()
+	if slot > 0 && p.tab != tabCameras {
+		p.SelectTab(tabCameras)
+	}
 }
 
 func (p *configPage) rebuildList() {
@@ -83,8 +123,8 @@ func (p *configPage) slotRow(slot int) fyne.CanvasObject {
 	var mid fyne.CanvasObject
 	var btn *widget.Button
 	if cam == nil {
-		mid = widgets.NewText("Emplacement libre", style.TextMuted, 13)
-		btn = widget.NewButton("Assigner", func() { p.Edit(slot) })
+		mid = widgets.NewText(p.tx.T("config.freeSlot"), style.TextMuted, 13)
+		btn = widget.NewButton(p.tx.T("config.assign"), func() { p.Edit(slot) })
 	} else {
 		title := cam.Name
 		if title == "" {
@@ -95,7 +135,7 @@ func (p *configPage) slotRow(slot int) fyne.CanvasObject {
 			widgets.NewText(title, style.Text, 13).Bold().Clip(),
 			widgets.NewText(line2, style.TextMuted, 11).Clip(),
 		)
-		btn = widget.NewButton("Modifier", func() { p.Edit(slot) })
+		btn = widget.NewButton(p.tx.T("config.edit"), func() { p.Edit(slot) })
 	}
 	fill := style.Surface
 	if p.editSlot == slot {
@@ -110,7 +150,7 @@ func (p *configPage) slotRow(slot int) fyne.CanvasObject {
 		case core.StateError:
 			tok = style.Danger
 		}
-		state = widgets.NewText(fr.ConnLabel(cam.Status.State), tok, 11).Align(fyne.TextAlignTrailing)
+		state = widgets.NewText(p.tx.ConnLabel(cam.Status.State), tok, 11).Align(fyne.TextAlignTrailing)
 	}
 	right := container.NewHBox(widgets.Sized(70, 0, state), btn)
 	row := container.NewBorder(nil, nil, widgets.Sized(54, 0, name), right, mid)
@@ -120,37 +160,15 @@ func (p *configPage) slotRow(slot int) fyne.CanvasObject {
 func (p *configPage) rebuildRight() {
 	p.right.Objects = nil
 	if p.editSlot == 0 {
-		hint := widget.NewLabel("Choisissez un emplacement à gauche pour assigner ou modifier une caméra.")
+		hint := widget.NewLabel(p.tx.T("config.pickHint"))
 		hint.Wrapping = fyne.TextWrapWord
 		p.right.Add(widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(
-			widgets.NewText("Aucun emplacement sélectionné", style.Text, 14).Bold(), hint)))
+			widgets.NewText(p.tx.T("config.noneSelected"), style.Text, 14).Bold(), hint)))
 	} else {
 		p.form = newSlotForm(p, p.editSlot)
 		p.right.Add(widgets.NewPanel(style.Surface, style.Border, 12, p.form.obj))
 	}
-	p.right.Add(widgets.NewPanel(style.Surface, style.Border, 12, p.appearance()))
 	p.right.Refresh()
-}
-
-func (p *configPage) appearance() fyne.CanvasObject {
-	modes := []style.Mode{style.ModeSystem, style.ModeLight, style.ModeDark}
-	seg := widgets.NewSegmented([]string{"Système", "Clair", "Sombre"}, func(i int) {
-		p.mode = modes[i]
-		if p.setTh != nil {
-			p.setTh(modes[i])
-		}
-	})
-	for i, m := range modes {
-		if m == p.mode {
-			seg.SetSelected(i)
-		}
-	}
-	return container.NewVBox(
-		widgets.NewText("Apparence", style.Text, 14).Bold(),
-		widgets.Sized(0, 1, widgets.NewHairline()),
-		widgets.NewText("Thème de l'application", style.TextMuted, 12),
-		container.NewHBox(seg),
-	)
 }
 
 // --- slot form ------------------------------------------------------------------------
@@ -158,6 +176,7 @@ func (p *configPage) appearance() fyne.CanvasObject {
 type slotForm struct {
 	p    *configPage
 	slot int
+	tx   texts.Texts
 	cam  *app.CameraView
 	obj  fyne.CanvasObject
 
@@ -185,7 +204,7 @@ func fieldBlock(label string, in fyne.CanvasObject) fyne.CanvasObject {
 }
 
 func newSlotForm(p *configPage, slot int) *slotForm {
-	f := &slotForm{p: p, slot: slot, cam: p.ctl.Camera(slot)}
+	f := &slotForm{p: p, slot: slot, cam: p.ctl.Camera(slot), tx: p.tx}
 	all := p.ctl.Models()
 	var brands []string
 	seen := map[string]bool{}
@@ -196,36 +215,36 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 		}
 	}
 
-	verb := "Assigner une caméra"
+	titleKey := "config.title.assign"
 	if f.cam != nil {
-		verb = "Modifier la caméra"
+		titleKey = "config.title.edit"
 	}
-	f.title = widgets.NewText(fmt.Sprintf("Cam%d : %s", slot, strings.ToLower(verb[:1])+verb[1:]), style.Text, 16).Bold()
+	f.title = widgets.NewText(f.tx.T(titleKey, "slot", slot), style.Text, 16).Bold()
 
 	f.brand = widget.NewSelect(brands, nil)
-	f.brand.PlaceHolder = "Choisir une marque"
+	f.brand.PlaceHolder = f.tx.T("config.pickBrand")
 	f.model = widget.NewSelect(nil, nil)
-	f.model.PlaceHolder = "Choisir un modèle"
+	f.model.PlaceHolder = f.tx.T("config.pickModel")
 	f.name = widget.NewEntry()
 	f.name.PlaceHolder = fmt.Sprintf("Cam%d", slot)
 	f.host = widget.NewEntry()
-	f.host.PlaceHolder = "192.168.1.20 ou camera.local"
+	f.host.PlaceHolder = f.tx.T("config.hostHint")
 	f.port = widget.NewEntry()
 	f.port.PlaceHolder = "80"
 	f.user = widget.NewEntry()
 	f.pass = widget.NewPasswordEntry()
-	f.pass.PlaceHolder = "Mot de passe"
+	f.pass.PlaceHolder = f.tx.T("config.password")
 
-	f.userLabel = widgets.NewText("Nom d'utilisateur", style.TextMuted, 12)
+	f.userLabel = widgets.NewText(f.tx.T("config.user.optional"), style.TextMuted, 12)
 	f.userBox = container.NewVBox(f.userLabel, f.user)
 	f.pwHint = widgets.NewText("", style.TextMuted, 11)
-	f.clearBtn = widget.NewButton("Effacer le mot de passe enregistré", func() {
+	f.clearBtn = widget.NewButton(f.tx.T("config.pw.clear"), func() {
 		f.clearPw = true
 		f.pass.SetText("")
 		f.updatePwHint()
 	})
 	f.clearBtn.Importance = widget.LowImportance
-	f.passBox = container.NewVBox(widgets.NewText("Mot de passe", style.TextMuted, 12), f.pass, f.pwHint, container.NewHBox(f.clearBtn))
+	f.passBox = container.NewVBox(widgets.NewText(f.tx.T("config.password"), style.TextMuted, 12), f.pass, f.pwHint, container.NewHBox(f.clearBtn))
 	f.pass.OnChanged = func(string) {
 		if f.pass.Text != "" {
 			f.clearPw = false
@@ -250,12 +269,12 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 		}
 	}
 
-	save := widget.NewButton("Enregistrer", f.save)
+	save := widget.NewButton(f.tx.T("config.save"), f.save)
 	save.Importance = widget.HighImportance
-	cancel := widget.NewButton("Annuler", func() { p.Edit(0) })
+	cancel := widget.NewButton(f.tx.T("config.cancel"), func() { p.Edit(0) })
 	buttons := []fyne.CanvasObject{save, cancel}
 	if f.cam != nil {
-		rm := widget.NewButton("Retirer la caméra", f.remove)
+		rm := widget.NewButton(f.tx.T("config.remove"), f.remove)
 		rm.Importance = widget.DangerImportance
 		buttons = append(buttons, layout.NewSpacer(), rm)
 	}
@@ -263,10 +282,10 @@ func newSlotForm(p *configPage, slot int) *slotForm {
 	f.obj = container.NewVBox(spaced([]fyne.CanvasObject{
 		f.title,
 		widgets.Sized(0, 1, widgets.NewHairline()),
-		container.NewGridWithColumns(2, fieldBlock("Marque", f.brand), fieldBlock("Modèle", f.model)),
+		container.NewGridWithColumns(2, fieldBlock(f.tx.T("config.brand"), f.brand), fieldBlock(f.tx.T("config.model"), f.model)),
 		container.NewVBox(container.NewHBox(f.support), f.notes, f.supportHelp),
-		fieldBlock("Nom affiché", f.name),
-		container.NewGridWithColumns(2, fieldBlock("Adresse de la caméra", f.host), fieldBlock("Port", f.port)),
+		fieldBlock(f.tx.T("config.name"), f.name),
+		container.NewGridWithColumns(2, fieldBlock(f.tx.T("config.host"), f.host), fieldBlock(f.tx.T("config.port"), f.port)),
 		container.NewGridWithColumns(2, f.userBox, f.passBox),
 		f.errTxt,
 		container.NewHBox(buttons...),
@@ -326,7 +345,7 @@ func (f *slotForm) setModel(m *core.ModelInfo) {
 	f.port.PlaceHolder = strconv.Itoa(m.DefaultPort)
 	f.port.Refresh()
 	f.notes.SetText(m.Notes)
-	f.support.SetText("Prise en charge : " + fr.SupportLabel(m.Support))
+	f.support.SetText(f.tx.T("support.line", "level", f.tx.SupportLabel(m.Support)))
 	switch m.Support {
 	case core.SupportSupported:
 		f.support.SetToken(style.OK)
@@ -335,7 +354,7 @@ func (f *slotForm) setModel(m *core.ModelInfo) {
 	default:
 		f.support.SetToken(style.TextMuted)
 	}
-	f.supportHelp.SetText(fr.SupportHelp(m.Support))
+	f.supportHelp.SetText(f.tx.SupportHelp(m.Support))
 	f.updateAuth()
 }
 
@@ -354,9 +373,9 @@ func (f *slotForm) updateAuth() {
 		f.passBox.Hide()
 	}
 	if auth == core.AuthRequired {
-		f.userLabel.SetText("Nom d'utilisateur (obligatoire)")
+		f.userLabel.SetText(f.tx.T("config.user.required"))
 	} else {
-		f.userLabel.SetText("Nom d'utilisateur (facultatif)")
+		f.userLabel.SetText(f.tx.T("config.user.optional"))
 	}
 	f.updatePwHint()
 }
@@ -364,13 +383,13 @@ func (f *slotForm) updateAuth() {
 func (f *slotForm) updatePwHint() {
 	switch {
 	case f.clearPw:
-		f.pwHint.SetText("Le mot de passe enregistré sera effacé.")
+		f.pwHint.SetText(f.tx.T("config.pw.willClear"))
 		f.clearBtn.Hide()
 	case f.cam != nil && f.cam.HasPassword && f.pass.Text == "":
-		f.pwHint.SetText("Mot de passe enregistré. Laissez vide pour le conserver.")
+		f.pwHint.SetText(f.tx.T("config.pw.stored"))
 		f.clearBtn.Show()
 	default:
-		f.pwHint.SetText("Stocké hors du fichier de configuration.")
+		f.pwHint.SetText(f.tx.T("config.pw.elsewhere"))
 		f.clearBtn.Hide()
 	}
 }
@@ -379,18 +398,18 @@ func (f *slotForm) updatePwHint() {
 func (f *slotForm) input() (app.SlotInput, string) {
 	var in app.SlotInput
 	if f.current == nil {
-		return in, "Choisissez une marque et un modèle."
+		return in, f.tx.T("config.needModel")
 	}
 	m := f.current
 	host := strings.TrimSpace(f.host.Text)
 	if host == "" {
-		return in, "L'adresse de la caméra est obligatoire."
+		return in, f.tx.T("config.needHost")
 	}
 	port := 0
 	if t := strings.TrimSpace(f.port.Text); t != "" {
 		n, err := strconv.Atoi(t)
 		if err != nil {
-			return in, "Le port doit être un nombre."
+			return in, f.tx.T("config.portNumber")
 		}
 		port = n
 	}
@@ -421,28 +440,25 @@ func (f *slotForm) save() {
 		return
 	}
 	if err := f.p.ctl.Assign(f.slot, in); err != nil {
-		f.errTxt.SetText(fr.ConfigError(err))
+		f.errTxt.SetText(f.tx.ConfigError(err))
 		return
 	}
 	f.errTxt.SetText("")
-	f.p.ctl.SetNotice(fr.Notice{Text: fmt.Sprintf("Cam%d enregistrée", f.slot), Level: fr.LevelInfo})
+	f.p.ctl.SetNotice(texts.Notice{Text: f.tx.T("config.saved", "slot", f.slot), Level: texts.LevelInfo})
 	f.p.Edit(0)
 }
 
 func (f *slotForm) remove() {
-	body := widget.NewLabel(fmt.Sprintf("La caméra de Cam%d sera retirée de la configuration, son mot de passe enregistré sera effacé.", f.slot))
-	body.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm(fmt.Sprintf("Retirer Cam%d", f.slot), "Retirer", "Annuler",
-		widgets.Sized(360, 0, body), func(ok bool) {
+	showConfirm(f.p.win, f.tx.T("config.removeTitle", "slot", f.slot), f.tx.T("config.removeBody", "slot", f.slot),
+		f.tx.T("config.removeConfirm"), f.tx.T("config.cancel"), func(ok bool) {
 			if !ok {
 				return
 			}
 			if err := f.p.ctl.Clear(f.slot); err != nil {
-				f.errTxt.SetText(fr.ConfigError(err))
+				f.errTxt.SetText(f.tx.ConfigError(err))
 				return
 			}
-			f.p.ctl.SetNotice(fr.Notice{Text: fmt.Sprintf("Cam%d retirée", f.slot), Level: fr.LevelInfo})
+			f.p.ctl.SetNotice(texts.Notice{Text: f.tx.T("config.removed", "slot", f.slot), Level: texts.LevelInfo})
 			f.p.Edit(0)
-		}, f.p.win)
-	d.Show()
+		})
 }

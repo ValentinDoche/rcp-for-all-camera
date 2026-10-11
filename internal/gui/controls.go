@@ -1,16 +1,14 @@
 package gui
 
 import (
-	"fmt"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
-	"github.com/valentindoche/rcp-for-all-camera/internal/gui/fr"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
@@ -29,7 +27,7 @@ const labelColWidth = 132
 func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow {
 	r := &controlRow{spec: spec, kind: widgets.ChooseKind(spec)}
 	write := func(v core.Value) { ctl.Write(slot, spec.ID, v) }
-	label := fr.ControlLabel(spec)
+	label := ctl.tx.ControlLabel(spec)
 	quiet := false
 
 	name := func(caption string) fyne.CanvasObject {
@@ -48,25 +46,25 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 	case widgets.KindSlider:
 		rng := widgets.RangeOf(spec)
 		step := stepOf(spec)
-		dec := fr.Decimals(spec.Step)
+		dec := texts.Decimals(spec.Step)
 		sl := widgets.NewSlider(spec.Min, spec.Max)
 		sl.Step = step
 		entry := widget.NewEntry()
-		entry.Text = fr.Missing
+		entry.Text = texts.Missing
 		unit := ""
 		if spec.Unit != "" {
 			unit = spec.Unit
 		}
-		show := func(v float64) { entry.SetText(fr.FormatNumber(v, dec)) }
+		show := func(v float64) { entry.SetText(ctl.tx.FormatNumber(v, dec)) }
 		sl.OnChanged = func(v float64) {
 			v = widgets.Quantize(v, rng)
 			show(v)
 			write(core.Number(v))
 		}
 		entry.OnSubmitted = func(s string) {
-			v, ok := fr.ParseNumber(s)
+			v, ok := texts.ParseNumber(s)
 			if !ok {
-				ctl.SetNotice(fr.Notice{Text: "Valeur numérique attendue pour " + label, Level: fr.LevelError})
+				ctl.SetNotice(texts.Notice{Text: ctl.tx.T("controlrow.numberExpected", "label", label), Level: texts.LevelError})
 				r.apply(ctl.Value(slot, spec.ID))
 				return
 			}
@@ -75,12 +73,12 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 			show(v)
 			write(core.Number(v))
 		}
-		caption := fmt.Sprintf("de %s à %s", fr.FormatNumber(spec.Min, dec), fr.FormatNumber(spec.Max, dec))
+		caption := ctl.tx.T("controlrow.range", "min", ctl.tx.FormatNumber(spec.Min, dec), "max", ctl.tx.FormatNumber(spec.Max, dec))
 		if unit != "" {
 			caption += " " + unit
 		}
 		if spec.Step > 0 {
-			caption += ", pas " + fr.FormatNumber(spec.Step, dec)
+			caption += ", " + ctl.tx.T("controlrow.step", "step", ctl.tx.FormatNumber(spec.Step, dec))
 		}
 		right := []fyne.CanvasObject{widgets.Sized(76, 0, entry)}
 		if unit != "" {
@@ -93,7 +91,7 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 				show(v.Number)
 			} else {
 				sl.Set(widgets.Neutral(spec.ID, spec.Min, spec.Max))
-				entry.SetText(fr.Missing)
+				entry.SetText(texts.Missing)
 			}
 		}
 
@@ -118,7 +116,7 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 			labels[i] = o.Label
 		}
 		sel := widget.NewSelect(labels, nil)
-		sel.PlaceHolder = fr.Missing
+		sel.PlaceHolder = texts.Missing
 		sel.OnChanged = func(string) {
 			if quiet {
 				return
@@ -139,15 +137,15 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 		}
 
 	case widgets.KindCheck:
-		chk := widget.NewCheck("Désactivé", nil)
+		chk := widget.NewCheck(ctl.tx.T("value.off"), nil)
 		chk.OnChanged = func(on bool) {
 			if quiet {
 				return
 			}
 			if on {
-				chk.Text = "Activé"
+				chk.Text = ctl.tx.T("value.on")
 			} else {
-				chk.Text = "Désactivé"
+				chk.Text = ctl.tx.T("value.off")
 			}
 			chk.Refresh()
 			write(core.Bool(on))
@@ -159,24 +157,24 @@ func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow
 			on := v != nil && v.Kind == core.KindToggle && v.On
 			chk.SetChecked(on)
 			if v == nil {
-				chk.Text = fr.Missing
+				chk.Text = texts.Missing
 			} else if on {
-				chk.Text = "Activé"
+				chk.Text = ctl.tx.T("value.on")
 			} else {
-				chk.Text = "Désactivé"
+				chk.Text = ctl.tx.T("value.off")
 			}
 			chk.Refresh()
 		}
 
 	case widgets.KindButton:
-		btn := widget.NewButton("Lancer", func() { write(core.Trigger()) })
-		r.obj = container.NewBorder(nil, nil, name("action"), nil, container.NewHBox(btn))
+		btn := widget.NewButton(ctl.tx.T("controlrow.run"), func() { write(core.Trigger()) })
+		r.obj = container.NewBorder(nil, nil, name(ctl.tx.T("controlrow.action")), nil, container.NewHBox(btn))
 		r.apply = func(*core.Value) {}
 
 	default: // read-only
-		val := widgets.NewText(fr.Missing, style.Text, 13).Bold().Mono()
-		r.obj = container.NewBorder(nil, nil, name("lecture seule"), nil, val)
-		r.apply = func(v *core.Value) { val.SetText(fr.FormatValue(spec, v)) }
+		val := widgets.NewText(texts.Missing, style.Text, 13).Bold().Mono()
+		r.obj = container.NewBorder(nil, nil, name(ctl.tx.T("controlrow.readOnly")), nil, val)
+		r.apply = func(v *core.Value) { val.SetText(ctl.tx.FormatValue(spec, v)) }
 	}
 	r.apply(ctl.Value(slot, spec.ID))
 	return r
@@ -206,7 +204,7 @@ type section struct {
 func buildSections(ctl *Controller, slot int, skip map[core.ControlID]bool) []*section {
 	byGroup := map[core.ControlGroup]*section{}
 	norm := func(g core.ControlGroup) core.ControlGroup {
-		for _, k := range fr.GroupOrder {
+		for _, k := range texts.GroupOrder {
 			if g == k {
 				return g
 			}
@@ -220,13 +218,13 @@ func buildSections(ctl *Controller, slot int, skip map[core.ControlID]bool) []*s
 		g := norm(sp.Group)
 		s := byGroup[g]
 		if s == nil {
-			s = &section{group: g, title: fr.GroupTitle(g)}
+			s = &section{group: g, title: ctl.tx.GroupTitle(g)}
 			byGroup[g] = s
 		}
 		s.rows = append(s.rows, newControlRow(ctl, slot, sp))
 	}
 	var out []*section
-	for _, g := range fr.GroupOrder {
+	for _, g := range texts.GroupOrder {
 		if s := byGroup[g]; s != nil {
 			out = append(out, s)
 		}
