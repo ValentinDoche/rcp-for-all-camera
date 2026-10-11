@@ -63,6 +63,9 @@ type App struct {
 	host      *fyne.Container
 	slotTabs  *widgets.Tabs
 	slotBar   fyne.CanvasObject
+	topBar    fyne.CanvasObject
+	header    *fyne.Container // top bar + slot tabs (not on Configuration)
+	body      *fyne.Container
 	gear      *widget.Button
 	stats     []*widgets.Text // CPU, RAM, down, up, IP
 	panelDot  *widgets.Dot
@@ -184,9 +187,11 @@ func (a *App) build() {
 	a.host = container.NewStack(a.scroll)
 
 	bg := widgets.NewPanel(style.Bg, "", 0, nil)
-	body := container.NewBorder(container.NewVBox(top, a.slotBar), bottom, nil, nil,
+	a.topBar = top
+	a.header = container.NewVBox(top, a.slotBar)
+	a.body = container.NewBorder(a.header, bottom, nil, nil,
 		container.New(layout.NewCustomPaddedLayout(0, 0, 8, 8), a.host))
-	a.root = container.NewStack(bg, widgets.Sized(MinWindow.Width, MinWindow.Height, body))
+	a.root = container.NewStack(bg, widgets.Sized(MinWindow.Width, MinWindow.Height, a.body))
 }
 
 // --- navigation -------------------------------------------------------------------------
@@ -194,6 +199,19 @@ func (a *App) build() {
 func (a *App) setPage(obj fyne.CanvasObject) {
 	a.host.Objects = []fyne.CanvasObject{obj}
 	a.host.Refresh()
+}
+
+// showSlotTabs adds or removes the slot tabs from the header. The tabs are
+// removed rather than hidden, and the whole body is laid out again: hiding
+// alone left the page at its old position (tabs drawn over the strips).
+func (a *App) showSlotTabs(show bool) {
+	objs := []fyne.CanvasObject{a.topBar}
+	if show {
+		objs = append(objs, a.slotBar)
+	}
+	a.header.Objects = objs
+	a.header.Refresh()
+	a.body.Refresh()
 }
 
 func (a *App) closeSubpages() {
@@ -212,6 +230,7 @@ func (a *App) ShowCameras() {
 	a.closeSubpages()
 	a.page = pageCameras
 	a.setPage(a.scroll)
+	a.showSlotTabs(true)
 	a.gear.Importance = widget.LowImportance
 	a.gear.Refresh()
 	a.scrollToActive()
@@ -231,6 +250,7 @@ func (a *App) ShowDetails(slot int) {
 	}
 	a.details = newDetailsPage(a.ctl, slot, a.ShowCameras)
 	a.setPage(a.details.obj)
+	a.showSlotTabs(true)
 	a.gear.Importance = widget.LowImportance
 	a.gear.Refresh()
 }
@@ -248,6 +268,7 @@ func (a *App) ShowConfig(slot int) {
 		a.config.Edit(slot)
 	}
 	a.setPage(a.config.obj)
+	a.showSlotTabs(false) // owner request: no slot tabs in Configuration
 	a.gear.Importance = widget.HighImportance
 	a.gear.Refresh()
 }
