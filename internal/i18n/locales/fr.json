@@ -101,7 +101,6 @@
   "details.back": "Caméras",
   "details.title": "Cam{slot} : détails",
   "details.noControl": "Cette caméra ne déclare aucun contrôle.",
-  "details.image": "Image",
   "details.onAir": "À l'antenne",
   "details.rec": "REC",
   "details.iris": "Iris",

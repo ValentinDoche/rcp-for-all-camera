@@ -13,9 +13,6 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
-// imageSliderIDs get a dedicated block under the wheels.
-var imageSliderIDs = []core.ControlID{core.Contrast, core.Saturation, core.Hue}
-
 // detailsPage shows one camera in full: its strip on the left; on the right a
 // header with the camera's state, the exposure cards (iris, gain, shutter,
 // ND, white balance), the lens cards (focus, zoom), the presets, the three
@@ -37,7 +34,6 @@ type detailsPage struct {
 	wheels  []*wheelBlock
 	rows    map[core.ControlID]*controlRow
 	secs    []*section
-	sliders []*controlRow
 	presets *presetsBlock
 	// cards lists the controls the exposure and lens cards drive; appliers
 	// push the controller's values into those cards.
@@ -114,7 +110,6 @@ func (p *detailsPage) rebuild() {
 	p.sig = string(sb)
 	p.rows = map[core.ControlID]*controlRow{}
 	p.wheels = nil
-	p.sliders = nil
 	p.cards = map[core.ControlID]bool{}
 	p.appliers = nil
 
@@ -147,8 +142,7 @@ func (p *detailsPage) rebuild() {
 		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
 	}
 
-	// contrast, saturation, hue, then the other controls, in half-width
-	// panels side by side
+	// the other controls, in half-width panels side by side
 	skip := wheelControlIDs()
 	for id := range p.cards {
 		skip[id] = true
@@ -159,23 +153,6 @@ func (p *detailsPage) rebuild() {
 		p.cards[core.MasterBlack] = true
 	}
 	var lower []fyne.CanvasObject
-	var sl []fyne.CanvasObject
-	for _, id := range imageSliderIDs {
-		if sp, ok := p.ctl.Spec(p.slot, id); ok {
-			row := newControlRow(p.ctl, p.slot, sp)
-			p.sliders = append(p.sliders, row)
-			p.rows[id] = row
-			sl = append(sl, container.New(layout.NewCustomPaddedLayout(2, 2, 4, 4), row.obj))
-			skip[id] = true
-		}
-	}
-	if len(sl) > 0 {
-		lower = append(lower, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(
-			cardTitle(icons.Palette, p.ctl.tx.T("details.image"), nil),
-			widgets.Sized(0, 1, widgets.NewHairline()),
-			container.NewVBox(sl...),
-		)))
-	}
 
 	// every remaining control
 	p.secs = buildSections(p.ctl, p.slot, skip)

@@ -7,7 +7,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -162,9 +161,10 @@ func (p *detailsPage) askValue(sp core.ControlSpec) {
 
 // --- exposure ---------------------------------------------------------------------
 
-// exposureBlock lays the cards out in rows of equal height: on the left the
-// iris, then the lens (focus and zoom) under it; on the right gain and
-// shutter, then ND and white balance. nil when the camera has none of them.
+// exposureBlock lays the cards out in two halves of equal height: on the
+// left the iris, then the lens (focus and zoom) under it; on the right
+// compact half-height cards in two columns: gain, shutter, ND, white
+// balance, then contrast, saturation and hue. nil when there is none.
 func (p *detailsPage) exposureBlock() fyne.CanvasObject {
 	var left, right []fyne.CanvasObject
 	for _, f := range []func() fyne.CanvasObject{p.irisCard, p.lensCard} {
@@ -177,6 +177,11 @@ func (p *detailsPage) exposureBlock() fyne.CanvasObject {
 			right = append(right, c)
 		}
 	}
+	for _, id := range imageIDs {
+		if c := p.imageCard(id); c != nil {
+			right = append(right, c)
+		}
+	}
 	switch {
 	case len(left) == 0 && len(right) == 0:
 		return nil
@@ -185,19 +190,9 @@ func (p *detailsPage) exposureBlock() fyne.CanvasObject {
 	case len(right) == 0:
 		return container.NewGridWithColumns(len(left), left...)
 	}
-	pairs := (len(right) + 1) / 2
-	var rows []fyne.CanvasObject
-	for i := 0; i < max(len(left), pairs); i++ {
-		var l, r fyne.CanvasObject = layout.NewSpacer(), layout.NewSpacer()
-		if i < len(left) {
-			l = left[i]
-		}
-		if i < pairs {
-			r = container.NewGridWithColumns(2, right[2*i:min(2*i+2, len(right))]...)
-		}
-		rows = append(rows, container.NewGridWithColumns(2, l, r))
-	}
-	return container.NewVBox(spaced(rows)...)
+	return container.NewGridWithColumns(2,
+		container.NewGridWithRows(len(left), left...),
+		container.NewGridWithColumns(2, right...))
 }
 
 // irisCard: the f-stop in large, − / + by a third of a stop, « » by a full
@@ -260,40 +255,34 @@ func (p *detailsPage) gainCard() fyne.CanvasObject {
 	tx := p.ctl.tx
 	if sp, ok := p.ctl.Spec(p.slot, core.Gain); ok {
 		p.cards[core.ISO] = true // hidden: the gain says it
-		st := p.newStepper(core.Gain, 18, stepOf(sp))
-		sub := caption()
-		sub.SetText(tx.T("details.range", "min", tx.Explicit(sp, sp.Min), "max", tx.Explicit(sp, sp.Max)))
-		return card(icons.Brightness, tx.T("details.gain"), nil, st.obj, sub)
+		return card(icons.Brightness, tx.T("details.gain"), nil, p.newStepper(core.Gain, 16, stepOf(sp)).obj)
 	}
 	if _, ok := p.ctl.Spec(p.slot, core.ISO); ok {
-		st := p.newStepper(core.ISO, 18, 0)
-		sub := caption()
-		sub.SetText("ISO")
-		return card(icons.Brightness, tx.T("details.gain"), nil, st.obj, sub)
+		return card(icons.Brightness, "ISO", nil, p.newStepper(core.ISO, 16, 0).obj)
 	}
 	return nil
 }
 
-// shutterCard shows the speed with the matching angle, or the angle alone.
+// shutterCard shows the speed, with the matching angle next to the title,
+// or the angle alone.
 func (p *detailsPage) shutterCard() fyne.CanvasObject {
 	tx := p.ctl.tx
 	if _, ok := p.ctl.Spec(p.slot, core.ShutterSpeed); ok {
-		st := p.newStepper(core.ShutterSpeed, 18, 0)
-		p.cards[core.ShutterAngle] = true // shown under the speed
-		sub := caption()
+		st := p.newStepper(core.ShutterSpeed, 16, 0)
+		p.cards[core.ShutterAngle] = true // shown next to the title
+		angle := widgets.NewText("", style.TextMuted, 11)
 		p.appliers = append(p.appliers, func() {
-			sub.SetText("")
+			angle.SetText("")
 			if a, ok := p.ctl.Spec(p.slot, core.ShutterAngle); ok {
 				if v := p.ctl.Value(p.slot, core.ShutterAngle); v != nil {
-					sub.SetText(tx.FormatValue(a, v))
+					angle.SetText(tx.FormatValue(a, v))
 				}
 			}
 		})
-		return card(icons.Stopwatch, tx.T("details.shutter"), nil, st.obj, sub)
+		return card(icons.Stopwatch, tx.T("details.shutter"), angle, st.obj)
 	}
 	if sp, ok := p.ctl.Spec(p.slot, core.ShutterAngle); ok {
-		st := p.newStepper(core.ShutterAngle, 18, math.Max(stepOf(sp), 1))
-		return card(icons.Stopwatch, tx.T("details.shutter"), nil, st.obj)
+		return card(icons.Stopwatch, tx.T("details.shutter"), nil, p.newStepper(core.ShutterAngle, 16, math.Max(stepOf(sp), 1)).obj)
 	}
 	return nil
 }
@@ -320,32 +309,48 @@ func (p *detailsPage) ndCard() fyne.CanvasObject {
 		}
 	})
 	seg.SetDisabled(sp.ReadOnly)
-	sub := caption()
 	p.appliers = append(p.appliers, func() {
-		v := p.ctl.Value(p.slot, core.ND)
 		quiet = true
-		seg.SetSelected(optionIndex(sp, v))
+		seg.SetSelected(optionIndex(sp, p.ctl.Value(p.slot, core.ND)))
 		quiet = false
-		sub.SetText(tx.FormatValue(sp, v))
 	})
-	return card(icons.Filter, tx.T("details.nd"), nil, seg, sub)
+	return card(icons.Filter, tx.T("details.nd"), nil, seg)
 }
 
-// balanceCard: colour temperature and tint, with AWB.
+// balanceCard: colour temperature and tint side by side, with AWB.
 func (p *detailsPage) balanceCard() fyne.CanvasObject {
 	tx := p.ctl.tx
-	var rows []fyne.CanvasObject
+	var cells []fyne.CanvasObject
 	if sp, ok := p.ctl.Spec(p.slot, core.WhiteBalance); ok {
-		rows = append(rows, p.newStepper(core.WhiteBalance, 18, math.Max(stepOf(sp), 100)).obj)
+		cells = append(cells, p.newStepper(core.WhiteBalance, 16, math.Max(stepOf(sp), 100)).obj)
 	}
 	if sp, ok := p.ctl.Spec(p.slot, core.Tint); ok {
-		st := p.newStepper(core.Tint, 13, stepOf(sp))
-		rows = append(rows, container.NewBorder(nil, nil, widgets.NewText(tx.T("details.tint"), style.TextMuted, 11), nil, st.obj))
+		cells = append(cells, p.newStepper(core.Tint, 14, stepOf(sp)).obj)
 	}
-	if len(rows) == 0 {
+	if len(cells) == 0 {
 		return nil
 	}
-	return card(icons.Temperature, tx.T("details.balance"), p.actionButton(core.AutoWhiteBalance, icons.Wand, tx.T("strip.awb")), rows...)
+	return card(icons.Temperature, tx.T("details.balance"), p.actionButton(core.AutoWhiteBalance, icons.Wand, tx.T("strip.awb")),
+		container.NewGridWithColumns(len(cells), cells...))
+}
+
+// imageIDs are the image controls shown as compact cards next to the
+// exposure.
+var imageIDs = []core.ControlID{core.Contrast, core.Saturation, core.Hue}
+
+// imageCard: contrast, saturation or hue with − / +, in %, or degrees for
+// the hue, and a reset to neutral.
+func (p *detailsPage) imageCard(id core.ControlID) fyne.CanvasObject {
+	sp, ok := p.ctl.Spec(p.slot, id)
+	if !ok || sp.Kind != core.KindRange {
+		return nil
+	}
+	st := p.newStepper(id, 16, stepOf(sp))
+	var reset fyne.CanvasObject
+	if n, ok := neutralOf(sp); ok && !sp.ReadOnly {
+		reset = widgets.NewIconButton(icons.Reset, "", func() { p.ctl.Write(p.slot, id, core.Number(n)) })
+	}
+	return card(icons.Palette, p.ctl.tx.ControlLabel(sp), reset, st.obj)
 }
 
 // --- lens -------------------------------------------------------------------------

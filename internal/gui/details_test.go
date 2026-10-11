@@ -78,7 +78,7 @@ func TestExplicitValuesOnTheDetailsPage(t *testing.T) {
 	sized(a)
 	a.ShowDetails(1)
 	texts := allTextsJoined(a.details.obj)
-	for _, want := range []string{"f/4.0", "+12 dB", "1/120 s", "5600 K", "35 mm", "objectif de 0,38 m à ∞", "0 % … 200 %", "-180° … +180°"} {
+	for _, want := range []string{"f/4.0", "+12 dB", "1/120 s", "5600 K", "35 mm", "objectif de 0,38 m à ∞", "100 %", "0°", "180,0°"} {
 		if !containsText(a, want) {
 			t.Errorf("%q missing in %s", want, texts)
 		}
