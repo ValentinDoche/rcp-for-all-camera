@@ -48,9 +48,35 @@ func notConnected(slot int) error {
 	return &Error{Code: CodeNotConnected, Message: fmt.Sprintf("camera %d is not connected", slot)}
 }
 
+// SetStoreArmed arms or disarms "Store": while armed, the next preset number
+// pressed (panel scene key or GUI number) stores instead of recalling. The
+// state is global (one operator) and shared by the panel and the GUI.
+// EventStoreArmed is emitted only when the state changes.
+func (s *Service) SetStoreArmed(on bool) {
+	s.mu.Lock()
+	if s.storeArmed == on {
+		s.mu.Unlock()
+		return
+	}
+	s.storeArmed = on
+	emit := s.emit
+	s.mu.Unlock()
+	emit.Emit(EventStoreArmed, StoreArmedState{Armed: on})
+}
+
+// StoreArmed reports whether Store is armed.
+func (s *Service) StoreArmed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.storeArmed
+}
+
 // StorePreset snapshots the storable controls of the slot's camera as
-// preset n, replacing any preset already stored there.
+// preset n, replacing any preset already stored there. Whatever the
+// outcome, Store is disarmed afterwards: the gesture is over, and a failed
+// store must not leave the next number press storing by surprise.
 func (s *Service) StorePreset(slot, n int) error {
+	defer s.SetStoreArmed(false)
 	if err := checkSlot(slot); err != nil {
 		return err
 	}

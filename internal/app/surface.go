@@ -15,6 +15,12 @@ type SurfaceAPI interface {
 	Lens(slot int) (core.Lens, error)
 	SetControl(slot int, id string, v core.Value) error
 	SelectSlot(slot int) error
+	// StorePreset and RecallPreset: see Service. StorePreset disarms Store.
+	StorePreset(slot, n int) error
+	RecallPreset(slot, n int) error
+	// SetStoreArmed / StoreArmed: the Store arming shared with the GUI.
+	SetStoreArmed(on bool)
+	StoreArmed() bool
 }
 
 // SurfaceStatus is what a surface reports about its device.

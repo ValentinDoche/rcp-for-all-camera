@@ -162,11 +162,18 @@ type presetFixture struct {
 
 // rigLog keeps the Rig payloads of rig:changed.
 type rigLog struct {
-	mu   sync.Mutex
-	rigs []Rig
+	mu    sync.Mutex
+	rigs  []Rig
+	armed []bool // payloads of preset:storeArmed
 }
 
 func (l *rigLog) Emit(name string, p any) {
+	if name == EventStoreArmed {
+		l.mu.Lock()
+		l.armed = append(l.armed, p.(StoreArmedState).Armed)
+		l.mu.Unlock()
+		return
+	}
 	if name != EventRigChanged {
 		return
 	}
@@ -642,5 +649,51 @@ func TestImportKeepsPresetsOnlyWhereTheModelStays(t *testing.T) {
 	}
 	if len(f.store.rig.Presets) != 1 {
 		t.Fatalf("stored presets after import = %+v", f.store.rig.Presets)
+	}
+}
+
+func (l *rigLog) armedEvents() []bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]bool(nil), l.armed...)
+}
+
+func TestStoreArmingEmitsOnlyOnChange(t *testing.T) {
+	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	if f.svc.StoreArmed() {
+		t.Fatal("must start disarmed")
+	}
+	f.svc.SetStoreArmed(false)
+	if got := f.events.armedEvents(); len(got) != 0 {
+		t.Fatalf("disarming a disarmed Store emitted %v", got)
+	}
+	f.svc.SetStoreArmed(true)
+	f.svc.SetStoreArmed(true)
+	if got := f.events.armedEvents(); !f.svc.StoreArmed() || !reflect.DeepEqual(got, []bool{true}) {
+		t.Fatalf("armed=%v events=%v", f.svc.StoreArmed(), got)
+	}
+	f.svc.SetStoreArmed(false)
+	if got := f.events.armedEvents(); f.svc.StoreArmed() || !reflect.DeepEqual(got, []bool{true, false}) {
+		t.Fatalf("armed=%v events=%v", f.svc.StoreArmed(), got)
+	}
+}
+
+func TestStorePresetDisarmsStore(t *testing.T) {
+	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	assigned(t, f, 1)
+	f.svc.SetStoreArmed(true)
+	if err := f.svc.StorePreset(1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.events.armedEvents(); f.svc.StoreArmed() || !reflect.DeepEqual(got, []bool{true, false}) {
+		t.Fatalf("armed=%v events=%v", f.svc.StoreArmed(), got)
+	}
+	// A failed store also ends the gesture.
+	f.svc.SetStoreArmed(true)
+	if c := code(t, f.svc.StorePreset(1, 99)); c != CodeInvalidPreset {
+		t.Fatalf("code = %s", c)
+	}
+	if f.svc.StoreArmed() {
+		t.Fatal("a failed store must disarm")
 	}
 }

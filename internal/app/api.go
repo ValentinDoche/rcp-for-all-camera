@@ -25,7 +25,16 @@ const (
 	// EventCommandFailed: a control write (from any surface or a preset
 	// recall) failed. Payload CommandFailed. The panel flashes ALARM.
 	EventCommandFailed = "camera:commandFailed"
+	// EventStoreArmed: the shared "Store" arming changed (the panel's STORE
+	// key and the GUI's Store button). Payload StoreArmedState. Emitted
+	// only on a real change.
+	EventStoreArmed = "preset:storeArmed"
 )
+
+// StoreArmedState is the payload of EventStoreArmed.
+type StoreArmedState struct {
+	Armed bool `json:"armed"`
+}
 
 // CommandFailed tells which write failed, with its error code.
 type CommandFailed struct {

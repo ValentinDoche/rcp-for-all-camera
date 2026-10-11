@@ -27,6 +27,8 @@ JSON tags are kept on every type so the API can be exported or logged in a stabl
 | `StorePreset(slot, n)` | | Snapshot the camera's storable controls as preset `n` (1 to `PresetCount` = 5), replacing any preset there |
 | `RecallPreset(slot, n)` | | Write preset `n` back to the camera |
 | `DeletePreset(slot, n)` | | Remove preset `n`. Idempotent |
+| `SetStoreArmed(on)` | | Arm or disarm "Store" (global, shared by the panel's STORE key and the GUI's Store button). Emits `preset:storeArmed` only on change |
+| `StoreArmed()` | `bool` | Whether Store is armed |
 
 `SlotInput.Password`: nil keeps the stored password, `""` clears it, anything else replaces
 it. Passwords are never returned; `CameraView.HasPassword` says whether one is stored.
@@ -56,6 +58,9 @@ correction), so they work the same with every driver.
 - A preset belongs to the slot and to the camera model. Assigning a different model to the
   slot, clearing the slot, or importing a configuration that changes the slot's model drops
   its presets; editing the name, address or credentials of the same model keeps them.
+- Store arming is one global flag. While armed, the next preset number pressed stores
+  instead of recalling. `StorePreset` always disarms afterwards, success or failure (the
+  gesture is over), so a failed store never leaves a surprise store armed.
 - Store and delete emit `rig:changed`, so the GUI gets the new `presets` list.
 - At startup, saved presets are dropped with a warning when their slot or number is out of
   range, the slot is empty, or the model differs; for duplicates the last one wins, and
@@ -67,6 +72,7 @@ correction), so they work the same with every driver.
 |---|---|---|
 | `panel:status` | `PanelStatus` | Panel plugged, unplugged, driven or released (sent on change only) |
 | `rig:changed` | `Rig` | A slot was assigned, cleared or selected, or a preset was stored or deleted |
+| `preset:storeArmed` | `StoreArmedState{Armed}` | The shared Store arming changed (only on a real change) |
 | `camera:event` | `CameraEvent{Slot, Event}` | A camera changed state (`Event.Status`), a control value (`Event.Control`, `Event.Value`) or its lens information (`Event.Lens`) |
 | `camera:commandFailed` | `CommandFailed{Slot, Control, Code}` | A control write failed after reaching the slot's camera (from any surface, or a preset recall). The panel flashes ALARM |
 

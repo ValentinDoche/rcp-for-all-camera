@@ -62,15 +62,16 @@ type Service struct {
 	goFn       func(func())
 	timeout    time.Duration // commandTimeout captured at construction
 
-	mu       sync.Mutex
-	slots    [SlotCount]*slotState
-	presets  [SlotCount]slotPresets
-	active   int
-	bindIP   string
-	lock     bool
-	logLevel string
-	panel    PanelStatus
-	emit     Emitter
+	mu         sync.Mutex
+	slots      [SlotCount]*slotState
+	presets    [SlotCount]slotPresets
+	active     int
+	bindIP     string
+	lock       bool
+	logLevel   string
+	panel      PanelStatus
+	storeArmed bool // shared Store arming, see SetStoreArmed
+	emit       Emitter
 }
 
 type slotState struct {

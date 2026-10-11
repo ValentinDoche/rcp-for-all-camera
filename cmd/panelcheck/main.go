@@ -133,6 +133,11 @@ func (a *fakeAPI) SelectSlot(slot int) error {
 	return nil
 }
 
+func (a *fakeAPI) StorePreset(slot, n int) error  { return nil }
+func (a *fakeAPI) RecallPreset(slot, n int) error { return nil }
+func (a *fakeAPI) SetStoreArmed(on bool)          {}
+func (a *fakeAPI) StoreArmed() bool               { return false }
+
 func fx6Specs() []core.ControlSpec {
 	r := func(id core.ControlID, lo, hi, st float64, unit string) core.ControlSpec {
 		s := core.Std(id)

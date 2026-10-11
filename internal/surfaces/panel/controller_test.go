@@ -72,6 +72,11 @@ func (a *fakeAPI) SelectSlot(slot int) error {
 	return nil
 }
 
+func (a *fakeAPI) StorePreset(slot, n int) error  { return nil }
+func (a *fakeAPI) RecallPreset(slot, n int) error { return nil }
+func (a *fakeAPI) SetStoreArmed(on bool)          {}
+func (a *fakeAPI) StoreArmed() bool               { return false }
+
 func (a *fakeAPI) callsCopy() []call {
 	a.mu.Lock()
 	defer a.mu.Unlock()
