@@ -24,8 +24,8 @@ func (Driver) Models() []core.ModelInfo {
 	return []core.ModelInfo{
 		model("generic", "Autre modèle Panasonic", "Commandes HTTP/CGI Panasonic AW ; le modèle exact et les commandes prises en charge sont à vérifier."),
 		model("awue100", "AW-UE100", "Commandes HTTP/CGI Panasonic AW ; la présence d'un filtre ND et les plages sont à vérifier."),
-		model("awue150", "AW-UE150", "Commandes HTTP/CGI Panasonic AW ; les plages de gain, d'obturateur et de preset sont à vérifier."),
-		model("awue160", "AW-UE160", "Commandes HTTP/CGI Panasonic AW ; les plages de gain, d'obturateur et de preset sont à vérifier."),
+		model("awue150", "AW-UE150", "La liste des paramètres vient de la référence SKAARHOJ core-panasonic-ptz ; le protocole (Panasonic AW HTTP/CGI) reste à écrire."),
+		model("awue160", "AW-UE160", "La liste des paramètres vient de la référence SKAARHOJ core-panasonic-ptz ; le protocole (Panasonic AW HTTP/CGI) reste à écrire."),
 	}
 }
 
@@ -51,10 +51,12 @@ func specsFor(id core.ModelID) ([]core.ControlSpec, error) {
 	case "panasonic.generic":
 		return family(opts{}), nil
 	case "panasonic.awue100":
-		return family(opts{ptz: true}), nil
-	case "panasonic.awue150", "panasonic.awue160":
 		// TODO(verify): UE100 may also have a built-in ND filter.
-		return family(opts{ptz: true, nd: true}), nil
+		return family(opts{ptz: true}), nil
+	case "panasonic.awue150":
+		return ue150Specs(), nil
+	case "panasonic.awue160":
+		return ue160Specs(), nil
 	}
 	return nil, fmt.Errorf("%q: %w", id, core.ErrUnknownModel)
 }

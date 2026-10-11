@@ -6,7 +6,7 @@ import (
 )
 
 type opts struct {
-	ptz, nd bool
+	ptz, nd bool // nd: kept for the generic family; UE150/UE160 use their own lists
 }
 
 func family(o opts) []core.ControlSpec {
