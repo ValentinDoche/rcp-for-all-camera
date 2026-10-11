@@ -55,6 +55,9 @@ type ModelInfo struct {
 	// a power zoom is a per-camera setting (CameraConfig.PowerZoom). Models
 	// with a built-in zoom lens (PTZ) leave it false.
 	InterchangeableLens bool `json:"interchangeableLens,omitempty"`
+	// NoAddress: the camera is not on the network (the demo camera); the
+	// config needs no host or port.
+	NoAddress bool `json:"noAddress,omitempty"`
 }
 
 // Check reports whether the model declaration is well formed.
@@ -144,7 +147,7 @@ func ValidateConfig(m ModelInfo, c CameraConfig) error {
 	if len(c.Name) > maxNameLen || !printable(c.Name) {
 		return bad("name must be at most %d printable characters", maxNameLen)
 	}
-	if !validHost(c.Host) {
+	if !m.NoAddress && !validHost(c.Host) {
 		return bad("host must be an IP address or a host name")
 	}
 	if c.Port < 0 || c.Port > 65535 {

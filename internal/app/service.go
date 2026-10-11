@@ -438,6 +438,9 @@ func (s *Service) build(cfg core.CameraConfig) (*slotState, error) {
 	if cfg.Port == 0 {
 		cfg.Port = info.DefaultPort
 	}
+	if info.NoAddress { // nothing to reach: no address is kept
+		cfg.Host, cfg.Port = "", 0
+	}
 	// A built-in lens has its zoom or not whatever the user says.
 	cfg.PowerZoom = cfg.PowerZoom && info.InterchangeableLens
 	cfg.BindIP = s.bindIP
