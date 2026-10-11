@@ -14,7 +14,7 @@ JSON tags are kept on every type so the API can be exported or logged in a stabl
 
 | Method | Returns | Notes |
 |---|---|---|
-| `PanelStatus()` | `PanelStatus` | Whether the ATEM Micro Camera Panel is plugged in |
+| `PanelStatus()` | `PanelStatus` | Panel state: `connected` (plugged in), `active` (driven by the app), `serial`, `detail` (see below) |
 | `Models()` | `[]core.ModelInfo` | Every known camera model, in display order |
 | `Rig()` | `Rig` | Always 8 slots, numbered 1 to 8, and the active slot (0 = none) |
 | `AssignSlot(slot, SlotInput)` | `Slot` | Create or replace the camera on a slot |
@@ -31,7 +31,7 @@ it. Passwords are never returned; `CameraView.HasPassword` says whether one is s
 
 | Name | Payload | When |
 |---|---|---|
-| `panel:status` | `PanelStatus` | Panel plugged or unplugged (sent on change only) |
+| `panel:status` | `PanelStatus` | Panel plugged, unplugged, driven or released (sent on change only) |
 | `rig:changed` | `Rig` | A slot was assigned, cleared or selected |
 | `camera:event` | `CameraEvent{Slot, Event}` | A camera changed state (`Event.Status`) or a control value (`Event.Control`, `Event.Value`) |
 
@@ -59,3 +59,25 @@ zero-width characters.
 
 While camera protocols are not written, `ConnectSlot` and `SetControl` with a valid value
 return `NOT_IMPLEMENTED`; the GUI shows this as "driver in development", not as a failure.
+
+## Panel status
+
+| `connected` | `active` | `detail` | Meaning |
+|---|---|---|---|
+| false | false | "" | No panel plugged in |
+| false | false | "détection USB indisponible" | USB enumeration failed |
+| true | false | "" | Plugged in, being opened (or between retries) |
+| true | false | "utilisé par un autre logiciel (fermez ATEM Software Control)" | ATEM Software Control is running; the app leaves the panel alone and retries |
+| true | false | "panneau détecté mais inaccessible, nouvel essai…" | Open or authentication failed; retried with backoff |
+| true | true | "" | Driven by the app: displays show the active camera, controls work |
+
+`active` was added on 2026-10-11 (additive). The panel mapping is in
+[panel-mapping.md](panel-mapping.md).
+
+## Control surfaces (Host)
+
+`Host.SetSurface(app.Surface)` (before `Start`) registers a control surface. The Host runs
+`Surface.Run(ctx, SurfaceAPI, report)` and forwards every Service event to the surface
+through `Emit`, next to the GUI emitter. `Host.Subscribe(Emitter)` adds any other listener.
+`SurfaceAPI` is the subset of Service a surface uses: `Rig`, `Controls`, `SetControl`,
+`SelectSlot`. Surfaces never call `ConfirmSetControl`.
