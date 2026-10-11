@@ -30,6 +30,9 @@ type API interface {
 	SetControl(slot int, id string, v core.Value) error
 	ConfirmSetControl(slot int, id string, v core.Value) error
 	PanelStatus() app.PanelStatus
+	StorePreset(slot, n int) error
+	RecallPreset(slot, n int) error
+	DeletePreset(slot, n int) error
 }
 
 // SettingsAPI is the part of app.Service behind Configuration > General.
@@ -207,6 +210,15 @@ func (c *Controller) Camera(slot int) *app.CameraView {
 		return nil
 	}
 	return c.rig.Slots[slot-1].Camera
+}
+
+// Presets returns the stored preset numbers of a slot (1..app.PresetCount,
+// sorted), nil when there is none.
+func (c *Controller) Presets(slot int) []int {
+	if slot < 1 || slot > len(c.rig.Slots) {
+		return nil
+	}
+	return c.rig.Slots[slot-1].Presets
 }
 
 // Specs returns the declared controls of a slot's camera (nil when empty).
@@ -507,6 +519,51 @@ func (c *Controller) Confirm(r ConfirmRequest) {
 // Decline puts the control back to its last known value.
 func (c *Controller) Decline(r ConfirmRequest) {
 	c.notify(Change{Kind: ChValue, Slot: r.Slot, ID: r.Spec.ID})
+}
+
+// StorePreset snapshots the camera of slot as preset n (replacing it).
+func (c *Controller) StorePreset(slot, n int) {
+	c.async(func() {
+		err := c.api.StorePreset(slot, n)
+		c.ui(func() {
+			if err != nil {
+				c.setNotice(c.tx.NoticeFor(err))
+				return
+			}
+			c.RefreshRig()
+			c.setNotice(texts.Notice{Text: c.tx.T("preset.stored", "slot", slot, "n", n)})
+		})
+	})
+}
+
+// RecallPreset writes preset n back to the camera of slot. The controls are
+// re-read afterwards, since the camera may not announce what it accepted.
+func (c *Controller) RecallPreset(slot, n int) {
+	c.async(func() {
+		err := c.api.RecallPreset(slot, n)
+		c.ui(func() {
+			c.loadControls(slot)
+			if err != nil {
+				c.setNotice(c.tx.NoticeFor(err))
+				return
+			}
+			c.setNotice(texts.Notice{Text: c.tx.T("preset.recalled", "slot", slot, "n", n)})
+		})
+	})
+}
+
+// DeletePreset removes preset n of slot.
+func (c *Controller) DeletePreset(slot, n int) {
+	c.async(func() {
+		err := c.api.DeletePreset(slot, n)
+		c.ui(func() {
+			if err != nil {
+				c.setNotice(c.tx.NoticeFor(err))
+				return
+			}
+			c.RefreshRig()
+		})
+	})
 }
 
 // Assign creates or edits a slot. The error is returned as is so the form can

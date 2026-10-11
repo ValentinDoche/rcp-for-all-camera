@@ -21,6 +21,7 @@ var imageSliderIDs = []core.ControlID{core.Contrast, core.Saturation, core.Hue}
 // wheels, the image sliders and a generated section for every other control.
 type detailsPage struct {
 	ctl  *Controller
+	win  fyne.Window
 	slot int
 	back func()
 
@@ -34,10 +35,11 @@ type detailsPage struct {
 	rows    map[core.ControlID]*controlRow
 	secs    []*section
 	sliders []*controlRow
+	presets *presetsBlock
 }
 
-func newDetailsPage(ctl *Controller, slot int, back func()) *detailsPage {
-	p := &detailsPage{ctl: ctl, slot: slot, back: back}
+func newDetailsPage(ctl *Controller, win fyne.Window, slot int, back func()) *detailsPage {
+	p := &detailsPage{ctl: ctl, win: win, slot: slot, back: back}
 	p.strip = newStrip(ctl, slot, stripActions{})
 	p.body = container.NewStack()
 	backBtn := widget.NewButtonWithIcon(ctl.tx.T("details.back"), theme.NavigateBackIcon(), func() {
@@ -67,6 +69,10 @@ func newDetailsPage(ctl *Controller, slot int, back func()) *detailsPage {
 		case ChValue:
 			if ch.Slot == slot {
 				p.apply(ch.ID)
+			}
+		case ChRig:
+			if p.presets != nil {
+				p.presets.refresh()
 			}
 		}
 	})
@@ -155,6 +161,9 @@ func (p *detailsPage) rebuild() {
 	if len(blocks) == 0 {
 		blocks = append(blocks, container.NewCenter(widgets.NewText(p.ctl.tx.T("details.noControl"), style.TextMuted, 13)))
 	}
+	// local presets come first, so they are reachable without scrolling
+	p.presets = newPresetsBlock(p.ctl, p.win, p.slot)
+	blocks = append([]fyne.CanvasObject{p.presets.obj}, blocks...)
 	p.body.Objects = []fyne.CanvasObject{container.NewVBox(spaced(blocks)...)}
 	p.body.Refresh()
 }

@@ -108,6 +108,9 @@ func (f *fakeAPI) confirmCalls() []setCall {
 	return append([]setCall(nil), f.confirms...)
 }
 func (f *fakeAPI) PanelStatus() app.PanelStatus { return f.panel }
+func (f *fakeAPI) StorePreset(int, int) error   { return nil }
+func (f *fakeAPI) RecallPreset(int, int) error  { return nil }
+func (f *fakeAPI) DeletePreset(int, int) error  { return nil }
 func (f *fakeAPI) setCalls() []setCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()

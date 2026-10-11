@@ -248,7 +248,7 @@ func (a *App) ShowDetails(slot int) {
 	if a.ctl.Active() != slot {
 		a.ctl.Select(slot)
 	}
-	a.details = newDetailsPage(a.ctl, slot, a.ShowCameras)
+	a.details = newDetailsPage(a.ctl, a.win, slot, a.ShowCameras)
 	a.setPage(a.details.obj)
 	a.showSlotTabs(true)
 	a.gear.Importance = widget.LowImportance

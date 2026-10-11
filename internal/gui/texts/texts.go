@@ -205,6 +205,10 @@ func (x Texts) NoticeFor(err error) Notice {
 		return Notice{x.T("notice.emptySlot"), LevelError}
 	case app.CodeInvalidSlot:
 		return Notice{x.T("notice.invalidSlot"), LevelError}
+	case app.CodeEmptyPreset:
+		return Notice{x.T("notice.emptyPreset"), LevelError}
+	case app.CodeInvalidPreset:
+		return Notice{x.T("notice.invalidPreset"), LevelError}
 	case app.CodeConfirmRequired:
 		return Notice{x.T("notice.confirmRequired"), LevelInfo}
 	}
