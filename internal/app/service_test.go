@@ -433,3 +433,22 @@ func TestLensOfACameraWithoutLensInfo(t *testing.T) {
 		t.Errorf("lens = %+v, %v", l, err)
 	}
 }
+
+func TestFailedWriteEmitsCommandFailed(t *testing.T) {
+	f := newFixture(t, config.Rig{Version: config.Version})
+	if _, err := f.svc.AssignSlot(1, validInput()); err != nil {
+		t.Fatal(err)
+	}
+	// the placeholder camera answers NOT_IMPLEMENTED
+	if err := f.svc.SetControl(1, string(core.Iris), core.Number(4)); err == nil {
+		t.Fatal("placeholder write must fail")
+	}
+	if f.events.count(EventCommandFailed) != 1 {
+		t.Errorf("%s emitted %d times, want 1", EventCommandFailed, f.events.count(EventCommandFailed))
+	}
+	// a write refused before reaching a camera (empty slot) is not a command
+	_ = f.svc.SetControl(2, string(core.Iris), core.Number(4))
+	if f.events.count(EventCommandFailed) != 1 {
+		t.Error("an empty slot must not raise the alarm")
+	}
+}

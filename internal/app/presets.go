@@ -150,6 +150,7 @@ func (s *Service) RecallPreset(slot, n int) error {
 			s.log.Debug("preset: control not written", "slot", slot, "control", sp.ID, "err", err)
 			if first == nil {
 				first = err
+				s.commandFailed(slot, sp.ID, toAPIError(err))
 			}
 			continue
 		}

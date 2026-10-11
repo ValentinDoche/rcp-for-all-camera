@@ -68,6 +68,7 @@ correction), so they work the same with every driver.
 | `panel:status` | `PanelStatus` | Panel plugged, unplugged, driven or released (sent on change only) |
 | `rig:changed` | `Rig` | A slot was assigned, cleared or selected, or a preset was stored or deleted |
 | `camera:event` | `CameraEvent{Slot, Event}` | A camera changed state (`Event.Status`), a control value (`Event.Control`, `Event.Value`) or its lens information (`Event.Lens`) |
+| `camera:commandFailed` | `CommandFailed{Slot, Control, Code}` | A control write failed after reaching the slot's camera (from any surface, or a preset recall). The panel flashes ALARM |
 
 Emit is called from service goroutines; the GUI must hop to its UI thread.
 

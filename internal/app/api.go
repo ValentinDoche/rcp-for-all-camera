@@ -22,7 +22,17 @@ const (
 	EventPanelStatus = "panel:status" // payload PanelStatus
 	EventRigChanged  = "rig:changed"  // payload Rig
 	EventCamera      = "camera:event" // payload CameraEvent
+	// EventCommandFailed: a control write (from any surface or a preset
+	// recall) failed. Payload CommandFailed. The panel flashes ALARM.
+	EventCommandFailed = "camera:commandFailed"
 )
+
+// CommandFailed tells which write failed, with its error code.
+type CommandFailed struct {
+	Slot    int            `json:"slot"`
+	Control core.ControlID `json:"control"`
+	Code    string         `json:"code"`
+}
 
 // PanelStatus is the USB panel state. Connected = plugged in; Active = opened,
 // authenticated and driven by the app. Connected && !Active with a Detail

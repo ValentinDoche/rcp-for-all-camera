@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -349,7 +350,25 @@ func (s *Service) setControl(slot int, id string, v core.Value, confirmed bool) 
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
 	s.log.Debug("set control", "slot", slot, "control", id, "value", v)
-	return toAPIError(cam.Set(ctx, core.ControlID(id), v))
+	if err := cam.Set(ctx, core.ControlID(id), v); err != nil {
+		ae := toAPIError(err)
+		s.commandFailed(slot, core.ControlID(id), ae)
+		return ae
+	}
+	return nil
+}
+
+// commandFailed announces a failed write (EventCommandFailed).
+func (s *Service) commandFailed(slot int, id core.ControlID, err error) {
+	code := CodeInternal
+	var ae *Error
+	if errors.As(err, &ae) {
+		code = ae.Code
+	}
+	s.mu.Lock()
+	emit := s.emit
+	s.mu.Unlock()
+	emit.Emit(EventCommandFailed, CommandFailed{Slot: slot, Control: id, Code: code})
 }
 
 // ConnectSlot starts connecting the slot's camera.
