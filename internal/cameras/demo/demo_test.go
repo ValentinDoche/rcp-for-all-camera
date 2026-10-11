@@ -2,9 +2,12 @@ package demo
 
 import (
 	"context"
+	"reflect"
+	"slices"
 	"sync"
 	"testing"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/blackmagic"
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/cameratest"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
@@ -57,8 +60,8 @@ func TestDemoAnswersLikeACamera(t *testing.T) {
 		t.Errorf("1/50 at 50 fps is 360°, got %v", v.Number)
 	}
 	_ = c.Set(ctx, core.ShutterAngle, core.Number(90))
-	if v := get(t, c, core.ShutterSpeed); v.Choice != "1/250" {
-		t.Errorf("90° at 50 fps is 1/200, nearest 1/250, got %v", v.Choice)
+	if v := get(t, c, core.ShutterSpeed); v.Choice != "1/200" {
+		t.Errorf("90° at 50 fps is 1/200, got %v", v.Choice)
 	}
 	_ = c.Set(ctx, core.MasterBlack, core.Number(0.1))
 	if v := get(t, c, core.LiftY); v.Number != 0.1 {
@@ -79,7 +82,21 @@ func TestDemoAnswersLikeACamera(t *testing.T) {
 	if !lensEvent {
 		t.Error("a zoom move announces the new focal length")
 	}
-	if err := c.Set(ctx, core.Tally, core.Bool(true)); err == nil {
-		t.Error("tally is read-only")
+}
+
+func TestDemoLooksLikeAStudio6kPro(t *testing.T) {
+	m := Driver{}.Models()[0]
+	for _, pz := range []bool{false, true} {
+		cam, err := Driver{}.New(m, core.CameraConfig{Model: m.ID, PowerZoom: pz})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := blackmagic.Studio6kProSpecs()
+		if !pz {
+			want = slices.DeleteFunc(want, func(s core.ControlSpec) bool { return s.ID == core.Zoom })
+		}
+		if got := cam.Controls(); !reflect.DeepEqual(got, want) {
+			t.Errorf("power zoom %v: the demo must declare the Studio 6K Pro controls", pz)
+		}
 	}
 }

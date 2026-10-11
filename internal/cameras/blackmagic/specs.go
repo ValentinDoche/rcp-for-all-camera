@@ -37,6 +37,10 @@ func studioSpecs(hasND bool) []core.ControlSpec {
 	return append(s, statusSpecs()...)
 }
 
+// Studio6kProSpecs are the controls of the Studio Camera 6K Pro, zoom
+// included. The demo camera borrows them so it looks exactly like one.
+func Studio6kProSpecs() []core.ControlSpec { return studio6kProSpecs() }
+
 // Studio Camera 6K Pro, from the REST API the camera serves itself
 // (/control/documentation.html, firmware read on 2026-10-11). Its API has no
 // tally, color bars or detail endpoint, so those controls are not declared.

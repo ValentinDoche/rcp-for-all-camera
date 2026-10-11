@@ -1,7 +1,7 @@
 // Package demo is a simulated camera with no network address. It declares
-// every standard control and answers like a real one (values, events, lens,
-// auto functions), so the whole GUI and the panel can be tried without a
-// camera.
+// the controls of a Blackmagic Studio Camera 6K Pro and answers like a real
+// one (values, events, lens, auto functions), so the whole GUI and the panel
+// can be tried without a camera.
 package demo
 
 import (
@@ -14,8 +14,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/blackmagic"
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/speckit"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -39,65 +39,41 @@ func (Driver) Models() []core.ModelInfo {
 	return []core.ModelInfo{{
 		ID: ModelID, Brand: "Démo", Name: "Caméra de démonstration", Driver: "demo",
 		Transports: []core.Transport{core.TransportEthernet}, Auth: core.AuthNone,
-		Support: core.SupportSupported, NoAddress: true,
-		Notes: "Caméra simulée, sans adresse : tous les réglages répondent, pour essayer l'interface et le panneau sans caméra.",
+		Support: core.SupportSupported, NoAddress: true, InterchangeableLens: true,
+		Notes: "Caméra simulée sans adresse, avec les réglages d'une Studio Camera 6K Pro : tout répond, pour essayer l'interface et le panneau sans caméra.",
 	}}
 }
 
-// New builds a demo camera; it does no I/O.
-func (Driver) New(m core.ModelInfo, _ core.CameraConfig) (core.Camera, error) {
+// New builds a demo camera; it does no I/O. Like a Studio Camera 6K Pro,
+// it has a zoom only when its config says the lens has a power zoom.
+func (Driver) New(m core.ModelInfo, cfg core.CameraConfig) (core.Camera, error) {
 	if m.ID != ModelID {
 		return nil, fmt.Errorf("%q: %w", m.ID, core.ErrUnknownModel)
 	}
-	return newCamera(), nil
+	c := newCamera()
+	if !cfg.PowerZoom {
+		c.specs = slices.DeleteFunc(c.specs, func(s core.ControlSpec) bool { return s.ID == core.Zoom })
+	}
+	return c, nil
 }
 
-func specs() []core.ControlSpec {
-	s := []core.ControlSpec{
-		speckit.Range(core.Iris, 1, 22, 0.1, "f"),
-		speckit.Action(core.AutoIris),
-		speckit.Range(core.Focus, 0, 1, 0.001, ""),
-		speckit.Action(core.AutoFocus),
-		speckit.Range(core.Zoom, 0, 1, 0.001, ""),
-		speckit.Range(core.Gain, -12, 36, 2, "dB"),
-		speckit.Enum(core.ShutterSpeed, speckit.Opts("1/25", "1/50", "1/60", "1/100", "1/120", "1/250", "1/500", "1/1000")),
-		speckit.Range(core.ShutterAngle, 11.2, 360, 0.1, "°"),
-		speckit.Enum(core.ND, speckit.Labeled("0", "Clear", "2", "ND 0.6 (2 stops)", "4", "ND 1.2 (4 stops)", "6", "ND 1.8 (6 stops)")),
-		speckit.Range(core.WhiteBalance, 2500, 10000, 50, "K"),
-		speckit.Range(core.Tint, -50, 50, 1, ""),
-		speckit.Action(core.AutoWhiteBalance),
-	}
-	for _, id := range []core.ControlID{core.LiftR, core.LiftG, core.LiftB, core.LiftY, core.MasterBlack} {
-		s = append(s, speckit.Range(id, -2, 2, 0.01, ""))
-	}
-	for _, id := range []core.ControlID{core.GammaR, core.GammaG, core.GammaB, core.GammaY} {
-		s = append(s, speckit.Range(id, -4, 4, 0.01, ""))
-	}
-	for _, id := range []core.ControlID{core.GainR, core.GainG, core.GainB, core.GainY} {
-		s = append(s, speckit.Range(id, 0, 16, 0.01, ""))
-	}
-	return append(s,
-		speckit.Range(core.Contrast, 0, 2, 0.01, ""),
-		speckit.Range(core.Saturation, 0, 2, 0.01, ""),
-		speckit.Range(core.Hue, -1, 1, 0.01, ""),
-		speckit.Enum(core.Detail, speckit.Labeled("off", "Off", "low", "Low", "medium", "Medium", "high", "High")),
-		speckit.Toggle(core.ColorBars),
-		speckit.Toggle(core.Record),
-		speckit.ReadOnly(speckit.Toggle(core.Tally)),
-	)
-}
+// specs are the Studio Camera 6K Pro's controls, so the demo shows the very
+// same interface.
+func specs() []core.ControlSpec { return blackmagic.Studio6kProSpecs() }
 
 // initial is the state the camera starts in.
 func initial() map[core.ControlID]core.Value {
 	v := map[core.ControlID]core.Value{
 		core.Iris: core.Number(4), core.Focus: core.Number(0.6), core.Zoom: core.Number(0.25),
-		core.Gain: core.Number(0), core.ShutterSpeed: core.Choice("1/100"), core.ShutterAngle: core.Number(180),
+		core.Gain: core.Number(0), core.ISO: core.Choice("400"),
+		core.ShutterSpeed: core.Choice("1/100"), core.ShutterAngle: core.Number(180),
 		core.ND: core.Choice("2"), core.WhiteBalance: core.Number(5600), core.Tint: core.Number(0),
 		core.Contrast: core.Number(1), core.Saturation: core.Number(1), core.Hue: core.Number(0),
-		core.Detail: core.Choice("medium"), core.ColorBars: core.Bool(false), core.Record: core.Bool(false),
-		core.Tally: core.Bool(false), core.MasterBlack: core.Number(0),
+		blackmagic.ContrastPivot: core.Number(0.5), blackmagic.LumaContribution: core.Number(1),
+		core.Record: core.Bool(false), core.MasterBlack: core.Number(0),
 	}
-	for _, id := range []core.ControlID{core.LiftR, core.LiftG, core.LiftB, core.LiftY, core.GammaR, core.GammaG, core.GammaB, core.GammaY} {
+	for _, id := range []core.ControlID{core.LiftR, core.LiftG, core.LiftB, core.LiftY, core.GammaR, core.GammaG, core.GammaB, core.GammaY,
+		blackmagic.OffsetR, blackmagic.OffsetG, blackmagic.OffsetB, blackmagic.OffsetY} {
 		v[id] = core.Number(0)
 	}
 	for _, id := range []core.ControlID{core.GainR, core.GainG, core.GainB, core.GainY} {

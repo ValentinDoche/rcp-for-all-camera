@@ -200,6 +200,10 @@ func TestDemoCameraNeedsNoAddressAndDrivesEverything(t *testing.T) {
 	if f.addrBox.Visible() {
 		t.Error("the demo camera has no address: host and port are hidden")
 	}
+	if !f.powerZoomBox.Visible() {
+		t.Error("like a Studio 6K Pro, the demo offers the power zoom setting")
+	}
+	f.powerZoom.SetChecked(true)
 	f.save()
 	cam := svc.Rig().Slots[3].Camera
 	if cam == nil || cam.Host != "" || cam.Status.State != core.StateConnected {
