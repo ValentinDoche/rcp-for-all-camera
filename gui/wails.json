@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "rcp-for-all-camera",
+  "outputfilename": "rcp-for-all-camera",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dir": "frontend",
+  "wailsjsdir": "",
+  "author": {
+    "name": "Valentin Doche",
+    "email": "contact@valentindoche.com"
+  }
+}
