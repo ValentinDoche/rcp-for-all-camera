@@ -282,6 +282,16 @@ func (s *Service) setPanel(p PanelStatus) {
 	emit.Emit(EventPanelStatus, p)
 }
 
+func (s *Service) closeAll() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, st := range s.slots {
+		if st != nil {
+			st.cam.Close()
+		}
+	}
+}
+
 func (s *Service) camera(slot int) (core.Camera, error) {
 	if err := checkSlot(slot); err != nil {
 		return nil, err
