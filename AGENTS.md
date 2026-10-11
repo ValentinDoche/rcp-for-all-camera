@@ -23,9 +23,9 @@ Owner: Valentin (writes in French, so answer in French).
 |---|---|
 | `surface-micro-panel` | **Driver done and verified on hardware** (Windows only): [internal/surfaces/micropanel](internal/surfaces/micropanel) |
 | panel controller | **Wired in the app**: [internal/surfaces/panel](internal/surfaces/panel), mapping in [docs/panel-mapping.md](docs/panel-mapping.md). Hardware render check pending owner photo (`go run ./cmd/panelcheck -t 60s`) |
-| `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, settings (bind NIC, autostart, operator lock, logs, export/import), camera event forwarding, `app.Service` API ([docs/app-api.md](docs/app-api.md)) |
+| `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, settings (bind NIC, autostart, operator lock, logs, export/import), camera event forwarding, local camera presets (snapshots of control values kept in `rig.json`, never on the camera), `app.Service` API incl. `StorePreset`/`RecallPreset`/`DeletePreset` ([docs/app-api.md](docs/app-api.md)) |
 | cameras | **Blackmagic Studio 6K Pro: real protocol** (REST + event WebSocket, [internal/cameras/blackmagic](internal/cameras/blackmagic)), read and write verified on hardware (`BMD_CAMERA=<ip> [BMD_CAMERA_WRITE=1] go test ./internal/cameras/blackmagic -run Live -v`). Other 14 models: specs declared, `camerakit.Placeholder` returns `NOT_IMPLEMENTED`. Panasonic UE150/UE160 complete from SKAARHOJ lists |
-| `gui` | Native Fyne GUI in [internal/gui](internal/gui), FR/EN via [internal/i18n](internal/i18n) ([docs/i18n.md](docs/i18n.md)), entry point [cmd/rcp](cmd/rcp) |
+| `gui` | Native Fyne GUI in [internal/gui](internal/gui), FR/EN via [internal/i18n](internal/i18n) ([docs/i18n.md](docs/i18n.md)), entry point [cmd/rcp](cmd/rcp). Presets panel (store, recall, delete) on the details page: [internal/gui/presets.go](internal/gui/presets.go) |
 | routers | **Not started** |
 
 Architecture overview: [docs/architecture.md](docs/architecture.md). Security model: [docs/security.md](docs/security.md).
@@ -142,6 +142,10 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
     `/control/api/v1/event/websocket`, and the subscribe answer carries the current
     values. Numbers come back as float32 (0.1 → 0.10000000149), so the driver rounds
     them to 6 decimals. The iris snaps to the lens' stops.
+    The camera's own presets (`.cset` files) do **not** save color correction (the CCU
+    section of the file is empty, so contrast, saturation, lift/gamma/gain are lost).
+    Presets are therefore local only ([internal/app/presets.go](internal/app/presets.go)),
+    and the driver must never use the camera's `/presets` endpoints.
 12. The username has a space (`C:\Users\VALENTIN DOCHE`), which breaks the MinGW linker.
     gcc is copied to `C:\mingw\mingw64\bin`, which is first on the user PATH.
 
@@ -178,6 +182,8 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
    `-layers` for the brightness question: no hardware brightness found so far), then the
    first real protocol (`camera-blackmagic` REST, or Panasonic AW CGI), then routers. Every control range marked `TODO(verify)` in
    `internal/cameras/*/specs.go` must be checked against official docs or hardware.
+9. Wire the panel's scene buttons 1–5 and STORE (key codes 0x48–0x4D, see §5) to
+   `RecallPreset`/`StorePreset`. Presets have numbers only for now (no names, no timestamps).
 
 ## 9. Working rules (from SPEC.md boundaries, plus the owner's preferences)
 
