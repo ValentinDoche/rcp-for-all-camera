@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -161,25 +162,42 @@ func (p *detailsPage) askValue(sp core.ControlSpec) {
 
 // --- exposure ---------------------------------------------------------------------
 
-// exposureBlock is the iris card on the left and gain, shutter, ND and white
-// balance on the right. nil when the camera has none of them.
+// exposureBlock lays the cards out in rows of equal height: on the left the
+// iris, then the lens (focus and zoom) under it; on the right gain and
+// shutter, then ND and white balance. nil when the camera has none of them.
 func (p *detailsPage) exposureBlock() fyne.CanvasObject {
-	var right []fyne.CanvasObject
+	var left, right []fyne.CanvasObject
+	for _, f := range []func() fyne.CanvasObject{p.irisCard, p.lensCard} {
+		if c := f(); c != nil {
+			left = append(left, c)
+		}
+	}
 	for _, f := range []func() fyne.CanvasObject{p.gainCard, p.shutterCard, p.ndCard, p.balanceCard} {
 		if c := f(); c != nil {
 			right = append(right, c)
 		}
 	}
-	iris := p.irisCard()
 	switch {
-	case iris == nil && len(right) == 0:
+	case len(left) == 0 && len(right) == 0:
 		return nil
-	case iris == nil:
-		return container.NewGridWithColumns(min(len(right), 4), right...)
+	case len(left) == 0:
+		return container.NewGridWithColumns(2, right...)
 	case len(right) == 0:
-		return iris
+		return container.NewGridWithColumns(len(left), left...)
 	}
-	return container.NewGridWithColumns(2, iris, container.NewGridWithColumns(2, right...))
+	pairs := (len(right) + 1) / 2
+	var rows []fyne.CanvasObject
+	for i := 0; i < max(len(left), pairs); i++ {
+		var l, r fyne.CanvasObject = layout.NewSpacer(), layout.NewSpacer()
+		if i < len(left) {
+			l = left[i]
+		}
+		if i < pairs {
+			r = container.NewGridWithColumns(2, right[2*i:min(2*i+2, len(right))]...)
+		}
+		rows = append(rows, container.NewGridWithColumns(2, l, r))
+	}
+	return container.NewVBox(spaced(rows)...)
 }
 
 // irisCard: the f-stop in large, − / + by a third of a stop, « » by a full
@@ -219,10 +237,6 @@ func (p *detailsPage) irisCard() fyne.CanvasObject {
 		container.NewHBox(stepButton(icons.ChevronsLeft, func() { move(-3) }), stepButton(icons.Minus, func() { move(-1) })),
 		container.NewHBox(stepButton(icons.Plus, func() { move(1) }), stepButton(icons.ChevronsRight, func() { move(3) })),
 		readout)
-	hint := caption()
-	if sp.Unit == "f" {
-		hint.SetText(tx.T("details.irisHint"))
-	}
 	p.appliers = append(p.appliers, func() {
 		k := scale()
 		v := p.ctl.Value(p.slot, core.Iris)
@@ -237,29 +251,25 @@ func (p *detailsPage) irisCard() fyne.CanvasObject {
 		ticks.SetTicks(ts)
 	})
 	return card(icons.Aperture, tx.T("details.iris"), p.actionButton(core.AutoIris, icons.Wand, tx.T("strip.autoIris")),
-		widgets.Sized(0, 44, row), hint, bar, ticks)
+		widgets.Sized(0, 40, row), bar, ticks)
 }
 
-// gainCard shows the gain in dB (the ISO under it), or the ISO alone.
+// gainCard shows the gain the way the camera takes it: in dB when it
+// declares a gain, else in ISO. The other one is not shown.
 func (p *detailsPage) gainCard() fyne.CanvasObject {
 	tx := p.ctl.tx
 	if sp, ok := p.ctl.Spec(p.slot, core.Gain); ok {
+		p.cards[core.ISO] = true // hidden: the gain says it
 		st := p.newStepper(core.Gain, 18, stepOf(sp))
 		sub := caption()
-		p.appliers = append(p.appliers, func() {
-			txt := tx.T("details.range", "min", tx.Explicit(sp, sp.Min), "max", tx.Explicit(sp, sp.Max))
-			if iso, ok := p.ctl.Spec(p.slot, core.ISO); ok {
-				if v := p.ctl.Value(p.slot, core.ISO); v != nil {
-					txt = "ISO " + tx.FormatValue(iso, v) + " · " + txt
-				}
-			}
-			sub.SetText(txt)
-		})
+		sub.SetText(tx.T("details.range", "min", tx.Explicit(sp, sp.Min), "max", tx.Explicit(sp, sp.Max)))
 		return card(icons.Brightness, tx.T("details.gain"), nil, st.obj, sub)
 	}
 	if _, ok := p.ctl.Spec(p.slot, core.ISO); ok {
 		st := p.newStepper(core.ISO, 18, 0)
-		return card(icons.Brightness, "ISO", nil, st.obj)
+		sub := caption()
+		sub.SetText("ISO")
+		return card(icons.Brightness, tx.T("details.gain"), nil, st.obj, sub)
 	}
 	return nil
 }
@@ -269,6 +279,7 @@ func (p *detailsPage) shutterCard() fyne.CanvasObject {
 	tx := p.ctl.tx
 	if _, ok := p.ctl.Spec(p.slot, core.ShutterSpeed); ok {
 		st := p.newStepper(core.ShutterSpeed, 18, 0)
+		p.cards[core.ShutterAngle] = true // shown under the speed
 		sub := caption()
 		p.appliers = append(p.appliers, func() {
 			sub.SetText("")
@@ -339,19 +350,21 @@ func (p *detailsPage) balanceCard() fyne.CanvasObject {
 
 // --- lens -------------------------------------------------------------------------
 
-// lensBlock is the focus card and, with a power zoom, the zoom card.
-func (p *detailsPage) lensBlock() fyne.CanvasObject {
-	var cards []fyne.CanvasObject
-	if c := p.focusCard(); c != nil {
-		cards = append(cards, c)
-	}
-	if c := p.zoomCard(); c != nil {
-		cards = append(cards, c)
-	}
-	if len(cards) == 0 {
+// lensCard is the focus and, with a power zoom, the zoom of the lens, in one
+// card under the iris.
+func (p *detailsPage) lensCard() fyne.CanvasObject {
+	tx := p.ctl.tx
+	focus, zoom := p.focusRows(), p.zoomRows()
+	af := p.actionButton(core.AutoFocus, icons.FocusAuto, tx.T("details.af"))
+	switch {
+	case focus == nil && zoom == nil:
 		return nil
+	case zoom == nil:
+		return card(icons.Focus, tx.T("details.focus"), af, focus...)
+	case focus == nil:
+		return card(icons.ZoomIn, tx.T("details.zoom"), nil, zoom...)
 	}
-	return container.NewGridWithColumns(len(cards), cards...)
+	return card(icons.Camera, tx.GroupTitle(core.GroupLens), af, append(focus, zoom...)...)
 }
 
 // travelSlider is a horizontal slider over a range control with step
@@ -389,10 +402,10 @@ func (p *detailsPage) travelSlider(id core.ControlID, fine, coarse float64, lo, 
 	return container.NewBorder(nil, nil, container.NewHBox(left...), container.NewHBox(right...), sl), sl
 }
 
-// focusCard: ‹ › fine and « » coarse steps around the focus travel, the
+// focusRows: ‹ › fine and « » coarse steps around the focus travel, the
 // lens' focus range and, when the camera reports them, the distance and
 // the focal length of a lens without power zoom.
-func (p *detailsPage) focusCard() fyne.CanvasObject {
+func (p *detailsPage) focusRows() []fyne.CanvasObject {
 	sp, ok := p.ctl.Spec(p.slot, core.Focus)
 	if !ok {
 		return nil
@@ -417,12 +430,12 @@ func (p *detailsPage) focusCard() fyne.CanvasObject {
 		}
 		sub.SetText(strings.Join(parts, " · "))
 	})
-	return card(icons.Focus, tx.T("details.focus"), p.actionButton(core.AutoFocus, icons.FocusAuto, tx.T("details.af")), row, sub)
+	return []fyne.CanvasObject{row, sub}
 }
 
-// zoomCard: hold the zoom buttons to zoom, or drag; the focal length in mm
+// zoomRows: hold the zoom buttons to zoom, or drag; the focal length in mm
 // when the camera reports it.
-func (p *detailsPage) zoomCard() fyne.CanvasObject {
+func (p *detailsPage) zoomRows() []fyne.CanvasObject {
 	sp, ok := p.ctl.Spec(p.slot, core.Zoom)
 	if !ok {
 		return nil
@@ -443,5 +456,5 @@ func (p *detailsPage) zoomCard() fyne.CanvasObject {
 		}
 		sub.SetText(txt)
 	})
-	return card(icons.ZoomIn, tx.T("details.zoom"), nil, row, sub)
+	return []fyne.CanvasObject{row, sub}
 }

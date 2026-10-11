@@ -135,3 +135,19 @@ func TestPowerZoomSettingShowsOrHidesTheZoom(t *testing.T) {
 		t.Error("a PTZ camera has its zoom built in: no power zoom setting")
 	}
 }
+
+func TestDetailsShowEachControlOnce(t *testing.T) {
+	a, _, _ := newTestApp(t, true)
+	sized(a)
+	a.ShowDetails(1)
+	for _, id := range []core.ControlID{core.ShutterAngle, core.MasterBlack, core.Record, core.ISO} {
+		if a.details.rows[id] != nil {
+			t.Errorf("%s has a generic row: it is already shown elsewhere", id)
+		}
+	}
+	for _, s := range a.details.secs {
+		if s.group == core.GroupTransport || s.group == core.GroupExposure {
+			t.Errorf("section %q left with controls shown elsewhere", s.title)
+		}
+	}
+}

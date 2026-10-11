@@ -124,8 +124,9 @@ func (p *detailsPage) rebuild() {
 	if b := p.exposureBlock(); b != nil {
 		blocks = append(blocks, b)
 	}
-	if b := p.lensBlock(); b != nil {
-		blocks = append(blocks, b)
+	// recording is the REC chip of the header
+	if sp, ok := p.ctl.Spec(p.slot, core.Record); ok && !sp.ReadOnly {
+		p.cards[core.Record] = true
 	}
 	p.presets = newPresetsBlock(p.ctl, p.win, p.slot)
 	blocks = append(blocks, p.presets.obj)
@@ -146,11 +147,18 @@ func (p *detailsPage) rebuild() {
 		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
 	}
 
-	// contrast, saturation, hue
+	// contrast, saturation, hue, then the other controls, in half-width
+	// panels side by side
 	skip := wheelControlIDs()
 	for id := range p.cards {
 		skip[id] = true
 	}
+	// the master black is the luma of the Lift wheel when there is one
+	if p.ctl.Has(p.slot, core.LiftY) && wheelAvailable(p.ctl, p.slot, 0) {
+		skip[core.MasterBlack] = true
+		p.cards[core.MasterBlack] = true
+	}
+	var lower []fyne.CanvasObject
 	var sl []fyne.CanvasObject
 	for _, id := range imageSliderIDs {
 		if sp, ok := p.ctl.Spec(p.slot, id); ok {
@@ -162,7 +170,7 @@ func (p *detailsPage) rebuild() {
 		}
 	}
 	if len(sl) > 0 {
-		blocks = append(blocks, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(
+		lower = append(lower, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(
 			cardTitle(icons.Palette, p.ctl.tx.T("details.image"), nil),
 			widgets.Sized(0, 1, widgets.NewHairline()),
 			container.NewVBox(sl...),
@@ -175,7 +183,13 @@ func (p *detailsPage) rebuild() {
 		for _, r := range s.rows {
 			p.rows[r.spec.ID] = r
 		}
-		blocks = append(blocks, sectionObject(s))
+		lower = append(lower, sectionObject(s, 1))
+	}
+	if len(lower) == 1 {
+		lower = append(lower, layout.NewSpacer())
+	}
+	if len(lower) > 0 {
+		blocks = append(blocks, container.NewGridWithColumns(2, lower...))
 	}
 	if len(p.cards) == 0 && len(p.rows) == 0 && len(p.wheels) == 0 {
 		blocks = append(blocks, container.NewCenter(widgets.NewText(p.ctl.tx.T("details.noControl"), style.TextMuted, 13)))

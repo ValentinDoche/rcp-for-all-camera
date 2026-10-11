@@ -257,10 +257,10 @@ func buildSections(ctl *Controller, slot int, skip map[core.ControlID]bool) []*s
 	return out
 }
 
-// sectionObject lays a section out as a titled panel with two columns of rows.
+// sectionObject lays a section out as a titled panel with cols columns of rows.
 // Rows sharing a spec.Section are gathered under a small sub-title, in the
 // order their section first appears.
-func sectionObject(s *section) fyne.CanvasObject {
+func sectionObject(s *section, cols int) fyne.CanvasObject {
 	var order []string
 	bySection := map[string][]fyne.CanvasObject{}
 	for _, r := range s.rows {
@@ -279,7 +279,7 @@ func sectionObject(s *section) fyne.CanvasObject {
 			body.Add(container.New(layout.NewCustomPaddedLayout(8, 2, 4, 4),
 				widgets.NewText(name, style.TextMuted, 12).Bold()))
 		}
-		body.Add(container.NewGridWithColumns(2, bySection[name]...))
+		body.Add(container.NewGridWithColumns(cols, bySection[name]...))
 	}
 	return widgets.NewPanel(style.Surface, style.Border, 12, body)
 }

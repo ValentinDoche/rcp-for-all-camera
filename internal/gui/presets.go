@@ -58,7 +58,8 @@ func newPresetsBlock(ctl *Controller, win fyne.Window, slot int) *presetsBlock {
 		gap(),
 		group(icons.Trash, "preset.delete", &b.del, b.onDelete),
 	)
-	b.obj = widgets.NewPanel(style.Surface, style.Border, 8, container.NewHScroll(row))
+	// No scroll container here: it would swallow the mouse wheel of the page.
+	b.obj = widgets.NewPanel(style.Surface, style.Border, 8, row)
 	b.refresh()
 	return b
 }
