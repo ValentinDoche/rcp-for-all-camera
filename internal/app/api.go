@@ -21,9 +21,13 @@ const (
 	EventCamera      = "camera:event" // payload CameraEvent
 )
 
-// PanelStatus is the USB panel detection state.
+// PanelStatus is the USB panel state. Connected = plugged in; Active = opened,
+// authenticated and driven by the app. Connected && !Active with a Detail
+// means the panel is there but cannot be driven (for example another
+// program holds it).
 type PanelStatus struct {
 	Connected bool   `json:"connected"`
+	Active    bool   `json:"active"`
 	Serial    string `json:"serial,omitempty"`
 	Detail    string `json:"detail,omitempty"`
 }
@@ -119,6 +123,10 @@ const (
 	CodeNotConnected   = "NOT_CONNECTED"
 	CodeNotImplemented = "NOT_IMPLEMENTED"
 	CodeInternal       = "INTERNAL"
+	// CodeConfirmRequired: a guarded control (record, color bars...) was
+	// written while the operator lock is on; ask the user, then call
+	// ConfirmSetControl.
+	CodeConfirmRequired = "CONFIRM_REQUIRED"
 )
 
 // Error is the only error type Service returns. Error() is the JSON

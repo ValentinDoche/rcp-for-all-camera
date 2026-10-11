@@ -33,6 +33,12 @@ type Options struct {
 	Interfaces func() []NetInterface
 	// AutoStart controls start with Windows; nil = not available.
 	AutoStart AutoStarter
+	// LogLevel is the level of the app logger, driven by Settings.LogLevel.
+	LogLevel *slog.LevelVar
+	// LogDir is the folder holding the log file (shown in the GUI).
+	LogDir string
+	// Go runs background work (default: a new goroutine). Tests run it inline.
+	Go func(func())
 }
 
 // commandTimeout bounds every camera call made from the GUI (a variable only
@@ -50,13 +56,19 @@ type Service struct {
 
 	interfaces func() []NetInterface
 	autoStart  AutoStarter
+	levelVar   *slog.LevelVar
+	logDir     string
+	goFn       func(func())
+	timeout    time.Duration // commandTimeout captured at construction
 
-	mu     sync.Mutex
-	slots  [SlotCount]*slotState
-	active int
-	bindIP string
-	panel  PanelStatus
-	emit   Emitter
+	mu       sync.Mutex
+	slots    [SlotCount]*slotState
+	active   int
+	bindIP   string
+	lock     bool
+	logLevel string
+	panel    PanelStatus
+	emit     Emitter
 }
 
 type slotState struct {
@@ -76,13 +88,23 @@ func NewService(o Options) (*Service, error) {
 		o.Logger = slog.Default()
 	}
 	s := &Service{reg: o.Registry, store: o.Store, secrets: o.Secrets, log: o.Logger, emit: nopEmitter{},
-		interfaces: o.Interfaces, autoStart: o.AutoStart}
+		interfaces: o.Interfaces, autoStart: o.AutoStart, levelVar: o.LogLevel, logDir: o.LogDir, goFn: o.Go}
+	s.timeout = commandTimeout
+	if s.goFn == nil {
+		s.goFn = func(f func()) { go f() }
+	}
 	rig, err := o.Store.Load()
 	if err != nil {
 		s.log.Warn("config not loaded, starting with an empty rig", "err", err)
 		rig = config.Rig{Version: config.Version}
 	}
 	s.bindIP = rig.BindIP
+	s.lock = rig.OperatorLock == nil || *rig.OperatorLock
+	s.logLevel = LogNormal
+	if rig.LogLevel == LogDebug {
+		s.logLevel = LogDebug
+	}
+	s.applyLogLevel()
 	for i, cfg := range rig.Slots {
 		if cfg == nil {
 			continue
@@ -179,6 +201,7 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 	out := Slot{Slot: slot, Camera: viewOf(st)}
 	rig, emit := s.rigLocked(), s.emit
 	s.mu.Unlock()
+	s.connectAsync(slot, st.cam)
 	s.log.Info("camera assigned", "slot", slot, "model", cfg.Model, "host", cfg.Host)
 	emit.Emit(EventRigChanged, rig)
 	return out, nil
@@ -251,7 +274,7 @@ func (s *Service) Controls(slot int) ([]ControlView, error) {
 	out := make([]ControlView, 0, len(specs))
 	// One deadline for the whole read: a slow camera must not block the GUI
 	// for commandTimeout per control.
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
 	for _, sp := range specs {
 		cv := ControlView{Spec: sp}
@@ -267,6 +290,11 @@ func (s *Service) Controls(slot int) ([]ControlView, error) {
 
 // SetControl writes one control of the slot's camera.
 func (s *Service) SetControl(slot int, id string, v core.Value) error {
+	return s.setControl(slot, id, v, false)
+}
+
+// setControl writes a control; confirmed skips the operator lock.
+func (s *Service) setControl(slot int, id string, v core.Value, confirmed bool) error {
 	if err := core.CheckControlID(core.ControlID(id)); err != nil {
 		return toAPIError(err)
 	}
@@ -277,7 +305,17 @@ func (s *Service) SetControl(slot int, id string, v core.Value) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	if !confirmed {
+		s.mu.Lock()
+		locked := s.lock
+		s.mu.Unlock()
+		if locked {
+			if spec, ok := findSpec(cam.Controls(), core.ControlID(id)); ok && spec.Guarded {
+				return &Error{Code: CodeConfirmRequired, Message: "this control needs confirmation while the operator lock is on"}
+			}
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
 	s.log.Debug("set control", "slot", slot, "control", id, "value", v)
 	return toAPIError(cam.Set(ctx, core.ControlID(id), v))
@@ -289,7 +327,7 @@ func (s *Service) ConnectSlot(slot int) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
 	return toAPIError(cam.Connect(ctx))
 }
@@ -305,7 +343,7 @@ func (s *Service) setPanel(p PanelStatus) {
 	s.panel = p
 	emit := s.emit
 	s.mu.Unlock()
-	s.log.Info("panel status", "connected", p.Connected)
+	s.log.Info("panel status", "connected", p.Connected, "active", p.Active, "detail", p.Detail)
 	emit.Emit(EventPanelStatus, p)
 }
 
@@ -363,7 +401,11 @@ func (s *Service) storePassword(slot int, pw string) error {
 }
 
 func (s *Service) saveLocked() error {
-	rig := config.Rig{Version: config.Version, Active: s.active, BindIP: s.bindIP}
+	lock := s.lock
+	rig := config.Rig{Version: config.Version, Active: s.active, BindIP: s.bindIP, OperatorLock: &lock}
+	if s.logLevel == LogDebug {
+		rig.LogLevel = LogDebug
+	}
 	for i, st := range s.slots {
 		if st != nil {
 			c := st.cfg

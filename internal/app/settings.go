@@ -21,6 +21,11 @@ type Settings struct {
 	BindIPAvailable bool `json:"bindIpAvailable"`
 	// AutoStart says whether the app starts with the Windows session.
 	AutoStart bool `json:"autoStart"`
+	// OperatorLock asks for confirmation before guarded controls are written.
+	OperatorLock bool `json:"operatorLock"`
+	// LogLevel is LogNormal or LogDebug; LogDir holds the log file.
+	LogLevel string `json:"logLevel"`
+	LogDir   string `json:"logDir"`
 }
 
 // AutoStarter turns "start with Windows" on and off (internal/autostart).
@@ -32,9 +37,10 @@ type AutoStarter interface {
 // Settings returns the current app-wide options.
 func (s *Service) Settings() Settings {
 	s.mu.Lock()
-	bind := s.bindIP
+	bind, lock, level := s.bindIP, s.lock, s.logLevel
 	s.mu.Unlock()
-	st := Settings{BindIP: bind, BindIPAvailable: bind == "" || s.hasLocalIP(bind)}
+	st := Settings{BindIP: bind, BindIPAvailable: bind == "" || s.hasLocalIP(bind),
+		OperatorLock: lock, LogLevel: level, LogDir: s.logDir}
 	if s.autoStart != nil {
 		on, err := s.autoStart.Enabled()
 		if err != nil {
