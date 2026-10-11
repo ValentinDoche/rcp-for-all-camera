@@ -142,7 +142,8 @@ func (p *detailsPage) rebuild() {
 		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
 	}
 
-	// the other controls, in half-width panels side by side
+	// the other controls: half-width panels side by side, or one full-width
+	// panel when there is a single section
 	skip := wheelControlIDs()
 	for id := range p.cards {
 		skip[id] = true
@@ -162,10 +163,11 @@ func (p *detailsPage) rebuild() {
 		}
 		lower = append(lower, sectionObject(s, 1))
 	}
-	if len(lower) == 1 {
-		lower = append(lower, layout.NewSpacer())
-	}
-	if len(lower) > 0 {
+	switch len(lower) {
+	case 0:
+	case 1: // a single section takes the full width, two columns of rows
+		blocks = append(blocks, sectionObject(p.secs[0], 2))
+	default:
 		blocks = append(blocks, container.NewGridWithColumns(2, lower...))
 	}
 	if len(p.cards) == 0 && len(p.rows) == 0 && len(p.wheels) == 0 {

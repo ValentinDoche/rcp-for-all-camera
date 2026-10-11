@@ -151,3 +151,33 @@ func TestDetailsShowEachControlOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestStripShowsTheFStop(t *testing.T) {
+	a, _, _ := newTestApp(t, true)
+	sized(a)
+	c := a.strips[0].content
+	if c.iris == nil || c.iris.Text() != "f/4.0" {
+		t.Fatalf("strip iris = %v", c.iris)
+	}
+}
+
+func TestOneSectionTakesTheFullWidth(t *testing.T) {
+	a, _, _ := newTestApp(t, true)
+	sized(a)
+	a.ShowDetails(1)
+	if len(a.details.secs) != 1 {
+		t.Skipf("%d sections", len(a.details.secs))
+	}
+	var w float32
+	for _, o := range all(a.details.body) {
+		if txt, ok := o.(*widgets.Text); ok && txt.Text() == "Correction colorimétrique" {
+			w = o.Size().Width
+		}
+	}
+	if w == 0 {
+		t.Fatal("section title not found")
+	}
+	if body := a.details.body.Size().Width; body > 0 && w < body*0.8 {
+		t.Errorf("section title spans %v of %v: the section must take the full width", w, body)
+	}
+}

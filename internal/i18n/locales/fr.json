@@ -84,6 +84,7 @@
   "strip.emptyHint": "Assignez un modèle de caméra pour la piloter depuis ce panneau.",
   "strip.assign": "Assigner une caméra",
   "strip.reading": "Lecture des contrôles...",
+  "strip.iris": "IRIS",
   "strip.nd": "ND",
   "strip.gain": "GAIN",
   "strip.iso": "ISO",

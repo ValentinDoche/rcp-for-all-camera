@@ -59,6 +59,7 @@ type stripContent struct {
 	summary []summaryCell
 	pad     *widgets.IrisPad
 	meter   *widgets.LevelMeter
+	iris    *widgets.Text // the f-stop above the pad
 	zoom    *widgets.Slider
 	focus   *widgets.Slider
 	quiet   bool
@@ -328,6 +329,11 @@ func (s *strip) buildContent() *stripContent {
 	if len(side) > 0 {
 		row = container.NewBorder(nil, nil, nil, container.NewHBox(side...), row)
 	}
+	if hasIris {
+		c.iris = widgets.NewText(texts.Missing, style.Text, 15).Bold().Mono()
+		row = container.NewBorder(container.NewHBox(
+			widgets.NewText(ctl.tx.T("strip.iris"), style.TextMuted, 10), c.iris), nil, nil, nil, row)
+	}
 	padArea := container.New(layout.NewCustomPaddedLayout(6, 0, 0, 0), row)
 
 	// quick actions
@@ -442,6 +448,11 @@ func (s *strip) applyContent() {
 			}
 		}
 		c.pad.SetPos(x, y)
+	}
+	if c.iris != nil {
+		if sp, ok := s.ctl.Spec(s.slot, core.Iris); ok {
+			c.iris.SetText(s.ctl.tx.FormatValue(sp, s.ctl.Value(s.slot, core.Iris)))
+		}
 	}
 	if c.meter != nil {
 		if k, ok := s.irisScale(); ok {

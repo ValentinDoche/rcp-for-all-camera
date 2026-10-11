@@ -84,6 +84,7 @@
   "strip.emptyHint": "Assign a camera model to control it from this panel.",
   "strip.assign": "Assign a camera",
   "strip.reading": "Reading controls...",
+  "strip.iris": "IRIS",
   "strip.nd": "ND",
   "strip.gain": "GAIN",
   "strip.iso": "ISO",
