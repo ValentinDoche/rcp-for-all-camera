@@ -25,7 +25,7 @@ Owner: Valentin (writes in French, so answer in French).
 | panel controller | **Wired in the app**: [internal/surfaces/panel](internal/surfaces/panel), mapping in [docs/panel-mapping.md](docs/panel-mapping.md). Hardware render check pending owner photo (`go run ./cmd/panelcheck -t 60s`) |
 | `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, settings (bind NIC, autostart, operator lock, logs, export/import), camera event forwarding, local camera presets (snapshots of control values kept in `rig.json`, never on the camera), `app.Service` API incl. `StorePreset`/`RecallPreset`/`DeletePreset` ([docs/app-api.md](docs/app-api.md)) |
 | cameras | **Blackmagic Studio 6K Pro: real protocol** (REST + event WebSocket, [internal/cameras/blackmagic](internal/cameras/blackmagic)), read and write verified on hardware (`BMD_CAMERA=<ip> [BMD_CAMERA_WRITE=1] go test ./internal/cameras/blackmagic -run Live -v`). Other 14 models: specs declared, `camerakit.Placeholder` returns `NOT_IMPLEMENTED`. Panasonic UE150/UE160 complete from SKAARHOJ lists |
-| `gui` | Native Fyne GUI in [internal/gui](internal/gui), FR/EN via [internal/i18n](internal/i18n) ([docs/i18n.md](docs/i18n.md)), entry point [cmd/rcp](cmd/rcp). Presets panel (store, recall, delete) on the details page: [internal/gui/presets.go](internal/gui/presets.go) |
+| `gui` | Native Fyne GUI in [internal/gui](internal/gui), FR/EN via [internal/i18n](internal/i18n) ([docs/i18n.md](docs/i18n.md)), entry point [cmd/rcp](cmd/rcp). Details page (layout "A"): exposure cards (iris in f-stops with ⅓ / 1 stop buttons, gain, shutter, ND, white balance), lens cards (focus with the lens' range, zoom only with a power zoom), one-line presets bar, wheels, then generic rows with − / + ([internal/gui/details.go](internal/gui/details.go), [details_cards.go](internal/gui/details_cards.go)). Every value is explicit (`texts.Explicit`: f/4.0, %, °, dB, K, mm, m). Line icons: Tabler subset embedded in [internal/gui/icons](internal/gui/icons) (MIT) |
 | routers | **Not started** |
 
 Architecture overview: [docs/architecture.md](docs/architecture.md). Security model: [docs/security.md](docs/security.md).
@@ -146,7 +146,14 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
     section of the file is empty, so contrast, saturation, lift/gamma/gain are lost).
     Presets are therefore local only ([internal/app/presets.go](internal/app/presets.go)),
     and the driver must never use the camera's `/presets` endpoints.
-12. The username has a space (`C:\Users\VALENTIN DOCHE`), which breaks the MinGW linker.
+12. **Iris is in f-stops** (`apertureStop`, unit `"f"`), no longer `normalised`. Presets
+    stored before this change hold a normalised iris (0..1): recalling them reports an
+    invalid iris value (the other controls are still written); store them again.
+    The REST API gives no current focus distance, only the lens' range
+    (`/lens/focus/description`), assumed in millimetres (`TODO(verify)` in `props.go`).
+13. Fyne only recolors SVG fills; Tabler icons are strokes, so `icons.Res` rewrites the
+    stroke color. The default font has no "→" glyph: write "de X à Y" instead.
+14. The username has a space (`C:\Users\VALENTIN DOCHE`), which breaks the MinGW linker.
     gcc is copied to `C:\mingw\mingw64\bin`, which is first on the user PATH.
 
 ## 7. What was tried and abandoned

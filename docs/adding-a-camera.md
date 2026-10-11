@@ -60,6 +60,12 @@ How camera support is organised, and how to add a brand or a model.
 - Log the commands sent to the device at debug level.
 - Ask before sending anything that could change recording or output on live gear.
 - No new runtime dependency without asking.
+- A model that takes any lens sets `ModelInfo.InterchangeableLens`, and `New` declares
+  `core.Zoom` only when `CameraConfig.PowerZoom` is set. A built-in zoom (PTZ) leaves
+  both alone.
+- An iris in f-stops uses unit `"f"`. If the camera knows its lens, implement
+  `core.LensReporter` and push `core.Event{Lens: ...}` on change: the GUI then shows the
+  focal length, the focus range and keeps the iris inside the lens' limits.
 
 ## Checklist
 

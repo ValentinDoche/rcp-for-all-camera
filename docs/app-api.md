@@ -21,6 +21,7 @@ JSON tags are kept on every type so the API can be exported or logged in a stabl
 | `ClearSlot(slot)` | | Remove the camera from a slot. Idempotent |
 | `SelectSlot(slot)` | | Make a slot active (what the panel drives). 0 = none. An empty slot cannot be selected (`EMPTY_SLOT`) |
 | `Controls(slot)` | `[]ControlView` | Every control of the slot's camera with its last known value (nil = unknown) |
+| `Lens(slot)` | `core.Lens` | What the camera reports about its lens: f-stop limits, focal length and range (mm), focus distance and range (m). Zero fields are unknown; zero for cameras that are not a `core.LensReporter` or are offline |
 | `SetControl(slot, id, core.Value)` | | Write one control. Validated before any I/O |
 | `ConnectSlot(slot)` | | Start connecting the slot's camera |
 | `StorePreset(slot, n)` | | Snapshot the camera's storable controls as preset `n` (1 to `PresetCount` = 5), replacing any preset there |
@@ -29,6 +30,11 @@ JSON tags are kept on every type so the API can be exported or logged in a stabl
 
 `SlotInput.Password`: nil keeps the stored password, `""` clears it, anything else replaces
 it. Passwords are never returned; `CameraView.HasPassword` says whether one is stored.
+
+`SlotInput.PowerZoom`: the mounted lens has a motorised zoom. It only counts for models
+with `ModelInfo.InterchangeableLens` (it is stored as false for the others). Without it,
+the camera declares no `zoom` control. `CameraView` returns `powerZoom` and
+`interchangeableLens` so the form can show the setting.
 
 ### Presets
 
@@ -61,7 +67,7 @@ correction), so they work the same with every driver.
 |---|---|---|
 | `panel:status` | `PanelStatus` | Panel plugged, unplugged, driven or released (sent on change only) |
 | `rig:changed` | `Rig` | A slot was assigned, cleared or selected, or a preset was stored or deleted |
-| `camera:event` | `CameraEvent{Slot, Event}` | A camera changed state (`Event.Status`) or a control value (`Event.Control`, `Event.Value`) |
+| `camera:event` | `CameraEvent{Slot, Event}` | A camera changed state (`Event.Status`), a control value (`Event.Control`, `Event.Value`) or its lens information (`Event.Lens`) |
 
 Emit is called from service goroutines; the GUI must hop to its UI thread.
 
