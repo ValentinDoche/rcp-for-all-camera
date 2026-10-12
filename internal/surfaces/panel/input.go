@@ -251,12 +251,42 @@ func mbWindow(s core.ControlSpec) window {
 
 // mbAt and mbPos map the master black ring linearly onto its window
 // (mbWindow).
+// mbDeadzone is the share of the ring travel, on each side of its centre,
+// that stays exactly at 0: without it the ring can hardly rest on 0.
+const mbDeadzone = 0.03
+
+// mbAt maps the ring (0..1) onto the master black. When the travel spans 0,
+// the centre ± mbDeadzone gives exactly 0, the left part covers lo..0 and
+// the right part 0..hi, so both ends are still reached.
 func mbAt(s core.ControlSpec, w window, pos float64) float64 {
-	return min(max(quantize(s, w.lo+pos*(w.hi-w.lo)), w.lo), w.hi)
+	if !(w.lo < 0 && w.hi > 0) {
+		return min(max(quantize(s, w.lo+pos*(w.hi-w.lo)), w.lo), w.hi)
+	}
+	var v float64
+	switch d := pos - 0.5; {
+	case math.Abs(d) <= mbDeadzone:
+		return 0
+	case d > 0:
+		v = (d - mbDeadzone) / (0.5 - mbDeadzone) * w.hi
+	default:
+		v = (-d - mbDeadzone) / (0.5 - mbDeadzone) * w.lo
+	}
+	return min(max(quantize(s, v), w.lo), w.hi)
 }
 
+// mbPos is the ring position of a master black value (inverse of mbAt; 0
+// sits at the centre of the dead zone).
 func mbPos(_ core.ControlSpec, w window, v float64) float64 {
-	return rangePos(core.ControlSpec{Min: w.lo, Max: w.hi}, v)
+	if !(w.lo < 0 && w.hi > 0) {
+		return rangePos(core.ControlSpec{Min: w.lo, Max: w.hi}, v)
+	}
+	switch {
+	case v > 0:
+		return clamp01(0.5 + mbDeadzone + min(v/w.hi, 1)*(0.5-mbDeadzone))
+	case v < 0:
+		return clamp01(0.5 - mbDeadzone - min(v/w.lo, 1)*(0.5-mbDeadzone))
+	}
+	return 0.5
 }
 
 // pickupTol is how close (in lever travel, 0..1) the control must come to

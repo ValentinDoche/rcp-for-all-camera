@@ -202,3 +202,24 @@ func TestKnobDeadbandIgnoresJitterButKeepsSlowTurns(t *testing.T) {
 		t.Fatalf("slow turn lost: total %d ref %d", total, ref)
 	}
 }
+
+func TestMasterBlackRingDeadZone(t *testing.T) {
+	s := rng(core.MasterBlack, -2, 2, 0.01, "")
+	w := mbWindow(s) // -0.99..0.99
+	for _, pos := range []float64{0.5, 0.5 + mbDeadzone, 0.5 - mbDeadzone, 0.51, 0.49} {
+		if got := mbAt(s, w, pos); got != 0 {
+			t.Errorf("ring at %v = %v, want exactly 0 in the dead zone", pos, got)
+		}
+	}
+	if mbAt(s, w, 1) != 0.99 || mbAt(s, w, 0) != -0.99 {
+		t.Errorf("ends = %v / %v, want ±0.99", mbAt(s, w, 0), mbAt(s, w, 1))
+	}
+	if got := mbAt(s, w, 0.5+mbDeadzone+0.01); got <= 0 {
+		t.Errorf("just past the dead zone = %v, want > 0", got)
+	}
+	for _, v := range []float64{-0.99, -0.5, 0, 0.25, 0.99} {
+		if got := mbAt(s, w, mbPos(s, w, v)); math.Abs(got-v) > 0.011 {
+			t.Errorf("mbAt(mbPos(%v)) = %v", v, got)
+		}
+	}
+}
