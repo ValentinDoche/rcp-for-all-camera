@@ -88,12 +88,32 @@ func quantize(s core.ControlSpec, v float64) float64 {
 	return math.Round((s.Min+n*s.Step)*1e9) / 1e9
 }
 
-// knobValue applies a color knob movement to cur: a full knob travel
-// (micropanel.AnalogMax counts) spans the whole control range. The result
-// is clamped, not quantized, so slow turns accumulate.
+// knobSpan is the width a full knob travel (micropanel.AnalogMax counts)
+// covers, centred on the control's neutral: gain 0.5..1.5, lift -0.5..+0.5.
+const knobSpan = 1.0
+
+// knobWindow is a color knob's travel: knobSpan around the neutral value
+// (1 for gain, 0 for lift), inside the control's range.
+func knobWindow(s core.ControlSpec) window {
+	n := 0.0
+	switch s.ID {
+	case core.GainR, core.GainG, core.GainB, core.GainY:
+		n = 1
+	}
+	if lo, hi := max(s.Min, n-knobSpan/2), min(s.Max, n+knobSpan/2); lo < hi {
+		return window{lo, hi}
+	}
+	return window{s.Min, s.Max}
+}
+
+// knobValue applies a color knob movement to cur: a full knob travel spans
+// the knob window (knobWindow), and the result stays inside it. It is not
+// quantized, so slow turns accumulate. A value set outside the window
+// elsewhere is brought back into it by the next movement.
 func knobValue(s core.ControlSpec, cur float64, delta int) float64 {
-	v := cur + float64(delta)/micropanel.AnalogMax*(s.Max-s.Min)
-	return min(max(v, s.Min), s.Max)
+	w := knobWindow(s)
+	v := cur + float64(delta)/micropanel.AnalogMax*(w.hi-w.lo)
+	return min(max(v, w.lo), w.hi)
 }
 
 // The panel counts each knob turn itself and clamps the count at 0 and

@@ -614,10 +614,11 @@ func TestControllerPanelActiveOff(t *testing.T) {
 	if c := api.callsCopy()[before:]; len(c) != 0 {
 		t.Fatalf("turning the panel on wrote %+v", c)
 	}
-	// The knob counts from where it is now: +64 = +1, not +400.
+	// The knob counts from where it is now: +64 counts = +0.0625 (a full
+	// travel spans 1), not the +400 counts it moved while off.
 	st.Analog[0] = 964
 	h.input(t, st)
-	h.waitCall(t, "gainR", func(v core.Value) bool { return v.Number > 1.99 && v.Number < 2.01 })
+	h.waitCall(t, "gainR", func(v core.Value) bool { return v.Number > 1.06 && v.Number < 1.065 })
 	// The lever must pick up the camera iris (F4) again.
 	st.Lever = raw(2.4)
 	h.input(t, st)
@@ -726,12 +727,12 @@ func TestControllerKnobsAreRelative(t *testing.T) {
 	var st micropanel.State
 	st.Analog[0] = 900 // the absolute position is irrelevant
 	h.input(t, st)
-	st.Analog[0] = 964 // +64 counts over span 16 = +1
+	st.Analog[0] = 964 // +64 counts over the gain travel (span 1) = +0.0625
 	h.input(t, st)
-	h.waitCall(t, "gainR", func(v core.Value) bool { return v.Number > 1.99 && v.Number < 2.01 })
-	st.Analog[1] = 512 // BLACK R from 0: lift unknown? lift known at 0 -> +2
+	h.waitCall(t, "gainR", func(v core.Value) bool { return v.Number > 1.06 && v.Number < 1.065 })
+	st.Analog[1] = 512 // BLACK R +512 counts: half the lift travel, 0 -> +0.5
 	h.input(t, st)
-	h.waitCall(t, "liftR", func(v core.Value) bool { return v.Number == 2 })
+	h.waitCall(t, "liftR", func(v core.Value) bool { return v.Number == 0.5 })
 }
 
 func TestControllerThrottlesContinuousWrites(t *testing.T) {

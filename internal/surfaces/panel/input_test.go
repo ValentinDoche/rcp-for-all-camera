@@ -48,15 +48,28 @@ func TestStepEnumAndRange(t *testing.T) {
 }
 
 func TestKnobValueIsRelativeAndClamped(t *testing.T) {
-	s := rng(core.LiftR, -2, 2, 0.01, "")
-	if got := knobValue(s, 0, 256); math.Abs(got-1) > 1e-9 {
-		t.Errorf("quarter turn over span 4 = %v, want 1", got)
+	lift := rng(core.LiftR, -2, 2, 0.01, "")
+	if got := knobValue(lift, 0, 256); math.Abs(got-0.25) > 1e-9 {
+		t.Errorf("quarter turn over the lift travel (span 1) = %v, want 0.25", got)
 	}
-	if got := knobValue(s, 1.9, 1024); got != 2 {
-		t.Errorf("clamp = %v", got)
+	if got := knobValue(lift, 0.4, 1024); got != 0.5 {
+		t.Errorf("lift clamp = %v, want 0.5", got)
 	}
-	if got := knobValue(s, 0, 1); got == 0 {
+	if got := knobValue(lift, 0, -1024); got != -0.5 {
+		t.Errorf("lift clamp = %v, want -0.5", got)
+	}
+	if got := knobValue(lift, 0, 1); got == 0 {
 		t.Error("one count must still move the value (no quantization)")
+	}
+	gain := rng(core.GainR, 0, 16, 0.01, "")
+	if got := knobValue(gain, 1, 1024); got != 1.5 {
+		t.Errorf("gain travel ends at 1.5, got %v", got)
+	}
+	if got := knobValue(gain, 1, -1024); got != 0.5 {
+		t.Errorf("gain travel starts at 0.5, got %v", got)
+	}
+	if got := knobValue(gain, 4, -1); got != 1.5 {
+		t.Errorf("a gain set beyond the travel comes back into it, got %v", got)
 	}
 }
 
