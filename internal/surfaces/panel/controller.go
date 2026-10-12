@@ -421,14 +421,38 @@ func (c *Controller) irisKnobsLocked(s micropanel.State) {
 		c.iris.release()
 		return
 	}
-	var d int
-	if d, c.knobs.coarse = knobStep(c.knobs.coarse, coarse); d != 0 {
+	var dc, ds int
+	if dc, c.knobs.coarse = knobStep(c.knobs.coarse, coarse); dc != 0 {
 		c.coarseAt = c.now()
 		c.iris.release()
 	}
-	if d, c.knobs.sens = knobStep(c.knobs.sens, sens); d != 0 {
+	if ds, c.knobs.sens = knobStep(c.knobs.sens, sens); ds != 0 {
 		c.sensAt = c.now()
 		c.iris.release()
+	}
+	if dc != 0 || ds != 0 {
+		c.fitIrisLocked()
+	}
+}
+
+// fitIrisLocked keeps the lever usable after COARSE or SENS moved its
+// window: a camera iris left outside the window is set to the value under
+// the lever, which then drives it.
+func (c *Controller) fitIrisLocked() {
+	spec, cur, known := c.cam.number(core.Iris)
+	slot := c.cam.slot
+	if !known || slot == 0 || slot != c.rig.Active || spec.ReadOnly || !c.iris.havePos {
+		return
+	}
+	w := c.irisWindowLocked(spec)
+	if w.reaches(spec, cur) {
+		return
+	}
+	c.iris.picked = true
+	if nv := irisAt(spec, w, c.iris.pos); nv != cur {
+		c.cam.values[core.Iris] = core.Number(nv)
+		c.written[core.Iris] = nv
+		c.w.set(slot, core.Iris, core.Number(nv))
 	}
 }
 
@@ -436,14 +460,18 @@ func (c *Controller) irisKnobsLocked(s micropanel.State) {
 func (c *Controller) irisWindowLocked(s core.ControlSpec) window { return irisWindow(s, c.knobs) }
 
 // moveLocked applies a lever/ring movement with soft takeover. A camera
-// value outside the control's window cannot be picked up.
+// value outside the control's window can never be reached, so the control
+// takes over at once instead of staying stuck.
 func (c *Controller) moveLocked(p *pickup, id core.ControlID, pos float64, win func(core.ControlSpec) window,
 	at func(core.ControlSpec, window, float64) float64, posOf func(core.ControlSpec, window, float64) float64) {
 	spec, cur, known := c.cam.number(id)
 	slot := c.cam.slot
 	w := win(spec)
-	if slot == 0 || slot != c.rig.Active || spec.ReadOnly || known && !w.reaches(spec, cur) {
+	if slot == 0 || slot != c.rig.Active || spec.ReadOnly {
 		known = false
+	}
+	if known && !w.reaches(spec, cur) {
+		p.picked = true
 	}
 	target := 0.0
 	if known {

@@ -937,18 +937,21 @@ func TestControllerRingLimitedTo99(t *testing.T) {
 		}
 	}
 
-	// Set to 1.5 from the GUI: out of the ring's reach.
+	// Set to 1.5 from the GUI: shown as 99, and beyond the ring's reach, so
+	// the ring takes over at once (never stuck) and stays within ±0.99.
 	h.ctl.Emit(app.EventCamera, app.CameraEvent{Slot: 2, Event: core.Event{Control: core.MasterBlack, Value: core.Number(1.5)}})
+	want := digitsOf(map[micropanel.Display]string{micropanel.DispMasterBlack: "99"})
+	waitFor(t, "99 shown", func() bool { d, _, _ := h.dev.snapshot(); return [3]byte(d[11:14]) == [3]byte(want[11:14]) })
 	before := len(api.callsCopy())
 	for r := int32(4096); r >= -4096; r -= 256 {
 		h.input(t, ring(r))
 	}
-	time.Sleep(30 * time.Millisecond)
-	if got := len(api.callsCopy()); got != before {
-		t.Fatalf("ring picked up a value beyond its travel: %+v", api.callsCopy()[before:])
+	h.waitCall(t, "masterBlack", func(v core.Value) bool { return v.Number == -0.99 })
+	for _, c := range api.callsCopy()[before:] {
+		if c.id == string(core.MasterBlack) && (c.v.Number > 0.99 || c.v.Number < -0.99) {
+			t.Errorf("ring asked for %v, beyond ±0.99", c.v.Number)
+		}
 	}
-	want := digitsOf(map[micropanel.Display]string{micropanel.DispMasterBlack: "99"})
-	waitFor(t, "99 shown", func() bool { d, _, _ := h.dev.snapshot(); return [3]byte(d[11:14]) == [3]byte(want[11:14]) })
 }
 
 // Held for a second, W/B runs the auto white balance once: its LED blinks

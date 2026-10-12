@@ -72,7 +72,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | SCENE 1–5 | Store armed: `StorePreset(active slot, n)` (the app disarms). Otherwise `RecallPreset(active slot, n)` if preset *n* is stored on the active slot, else nothing. No active camera: nothing. See [Presets](#presets-store-and-scene-15). |
 | BARS | Toggles `colorBars`, **only when its current value is known** (never guess what goes on air). |
 | Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when the camera reports them (`core.Lens`), so the lever never asks for an aperture the lens lacks, then to the **lever window** set by COARSE and SENS (whole range by default). Normalized iris: linear over the whole range, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
-| Master black ring | `masterBlack`, linear, soft takeover. The travel is limited to what the MB display shows as a number: −0.99..+0.99 for ranges shown ×100 (Blackmagic −2..2), −99..+99 for integer ranges, intersected with the range. A value set beyond that elsewhere cannot be picked up by the ring until it comes back inside. |
+| Master black ring | `masterBlack`, linear, soft takeover. The travel is limited to what the MB display shows as a number: −0.99..+0.99 for ranges shown ×100 (Blackmagic −2..2), −99..+99 for integer ranges, intersected with the range. A value set beyond that elsewhere (shown 99 / -99) cannot be reached, so the ring takes over at once on its next movement instead of staying stuck. |
 | WHITE R/G/B knobs | `gainR/G/B`, relative. |
 | BLACK R/G/B knobs | `liftR/G/B`, relative. |
 | COARSE, SENS | Set the iris lever window (below). They never write to the camera. |
@@ -172,9 +172,11 @@ Only for an iris in f-stops; a normalized iris always uses its whole range.
 - Window = C / 2^(W/4) .. C × 2^(W/4) in f-number (one stop = ×√2). When it passes an end
   of the range it is shifted to keep its width, then clamped.
 - The lever maps logarithmically over the window (back = its closed end, forward = its
-  open end). Turning COARSE or SENS writes nothing to the camera: it releases the iris
-  pickup, so the lever must reach the camera iris again in the new window. **A camera
-  iris outside the window cannot be picked up** until the window is moved over it.
+  open end). Turning COARSE or SENS releases the iris pickup: while the camera iris stays
+  inside the new window nothing is written and the lever must reach it again. **When the
+  camera iris falls outside the window, it is set at once to the value under the lever**,
+  which keeps control, so the lever is never stuck. Likewise a value set outside the
+  window elsewhere is taken over on the lever's next movement.
 - The knob positions are read at connect (feature 0x0E) and on every change, with the
   same ±1 count deadband as the color knobs. Until they have been read the window is the
   whole range. Knobs found at connect start no preview.

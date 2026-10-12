@@ -209,20 +209,42 @@ func TestControllerIrisLeverWindow(t *testing.T) {
 		}
 	}
 
+	// Window moved around F11: the camera iris (~F3.4) is left outside, so
+	// it is set to the value under the lever (fully open = the window's most
+	// open stop) and the lever keeps control instead of being stuck.
+	k2 := irisKnobs{coarse: coarseFor(s, 11), sens: 0, read: true}
+	w2 := irisWindow(s, k2)
 	before := len(h.api.callsCopy())
-	st.Analog[knobCoarse] = uint16(coarseFor(s, 11)) // window now around F11
+	st.Analog[knobCoarse] = uint16(k2.coarse)
 	h.input(t, st)
-	time.Sleep(20 * time.Millisecond)
-	if len(h.api.callsCopy()) != before {
-		t.Fatal("turning COARSE wrote to the camera")
-	}
-	// The camera iris (~F3.4) is outside the new window: no pickup.
+	h.waitCall(t, "iris", func(v core.Value) bool { return v.Number == quantize(s, w2.lo) })
 	for r := int32(4096); r >= -4096; r -= 256 {
 		st.Lever = r
 		h.input(t, st)
 	}
+	h.waitCall(t, "iris", func(v core.Value) bool { return v.Number == quantize(s, w2.hi) })
+	for _, c := range h.api.callsCopy()[before:] {
+		if c.id == string(core.Iris) && !w2.reaches(s, c.v.Number) {
+			t.Errorf("lever asked for f/%v outside the new window %+v", c.v.Number, w2)
+		}
+	}
+}
+
+// A COARSE move that keeps the camera iris inside the window writes
+// nothing: the lever simply has to pick the value up again.
+func TestControllerCoarseInsideTheWindowWritesNothing(t *testing.T) {
+	s := sonySpecs()[0]
+	h := start(t, sonyAPI(), Options{}) // camera at F4
+	<-h.status
+	h.loaded(t)
+	st := micropanel.State{AnalogRead: true, Lever: -4096}
+	st.Analog[knobCoarse], st.Analog[knobSens] = uint16(coarseFor(s, 4)), 1024 // full range
+	h.input(t, st)
+	before := len(h.api.callsCopy())
+	st.Analog[knobCoarse] = uint16(coarseFor(s, 5.6))
+	h.input(t, st)
 	time.Sleep(30 * time.Millisecond)
 	if got := h.api.callsCopy(); len(got) != before {
-		t.Fatalf("lever wrote with the iris out of its window: %+v", got[before:])
+		t.Fatalf("turning COARSE wrote to the camera: %+v", got[before:])
 	}
 }
