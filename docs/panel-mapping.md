@@ -39,7 +39,7 @@ Frames are rendered at ~30 Hz and only the reports that changed are sent.
 | GAIN (2 digits) | **W/B mode**: `tint`, see [White balance mode](#white-balance-mode-wb). Otherwise `gain` in dB: `00`, `06`, `-3`; `Lo`/`Hi` outside −9..99. Else `iso`: hundreds, read ×100 (`1.6` = 160, `16` = 1600), trailing point = thousands (`13.` = 12800). |
 | SHUTTER (4 digits) | **W/B mode**: `whiteBalance` in Kelvin (`5600`; from 10000 K in thousands, `10.0`, `12.5`). Otherwise `shutterSpeed` without `1/` (`50`, `2000`), else `shutterAngle` in degrees (`180`, `172.8`). The first one whose value is known wins. **While COARSE is turned** (and 5 s after its last movement): the iris window centre as an f-stop (`F5.6`, `F11`, `F22`), blinking at 2 Hz, with the SHUTTER ▲▼ LEDs off (see [Iris lever window](#iris-lever-window-coarse-and-sens)). |
 | IRIS (3 digits) | `iris` in f-stops (`F2.8`, `F11`); a normalized iris (range 0..1) as a percentage. |
-| MB (3 digits) | `masterBlack`, signed: `+12`, `-5`, `0` (no sign at zero). Ranges with a step below 1 are shown ×100 (`+12` = 0.12). Beyond ±99 (set from the GUI or the camera, the ring cannot go there) it shows `+Hi` / `-Lo`. The `+` is drawn with segments e, f, g (left half of a cross; TODO(verify) on the panel). |
+| MB (3 digits) | `masterBlack`: `12`, `-5`, `0`; only negatives carry a sign (a seven-segment `+` reads badly). Ranges with a step below 1 are shown ×100 (`12` = 0.12). Beyond ±99 (set from the GUI or the camera, the ring cannot go there) it shows `Hi` / `-Lo`. |
 | CC (1 digit) | Blank: no standard control yet. |
 | Any display | **Blank** when the camera does not declare the control, **dashes** when the value is unknown (camera not connected; always the case while drivers are placeholders). Blank everywhere when the active slot is empty or no slot is selected. |
 | Iris scale (LEDs 0–15) | Camera iris as a bar from the opening down to CLS (2.0, 2.8 … 16 on segments 1, 3 … 13), **masked to the lever window**: segments the lever cannot reach are always off (CLS too when the window does not reach the closed end). Off when unknown. While the lever waits for pickup, the segment under the **lever** blinks (2 Hz). **While SENS is turned** (and 5 s after): the window itself, every reachable segment lit. |
@@ -130,7 +130,7 @@ in the GUI lights the panel's STORE and vice versa.
 
 A short press on W/B (released within 1 s) toggles a mode where the SHUTTER and MASTER
 GAIN keys and displays set the white balance instead of shutter and gain, e.g. `5600`
-and `+3`. The W/B LED is lit while the mode is on. Holding W/B for 1 s runs the auto
+and `3`. The W/B LED is lit while the mode is on. Holding W/B for 1 s runs the auto
 white balance instead (the LED blinks while held, then stays on once triggered); a
 camera without auto white balance ignores the long press.
 
@@ -142,9 +142,8 @@ camera without auto white balance ignores the long press.
   | Tint | Display |
   |---|---|
   | 0 | `0` |
-  | +1..+9 | `+1`..`+9` (`+` = left half of a cross, as on MB) |
+  | +1..+99 | `1`..`99` (no `+`: it reads badly on seven segments) |
   | −1..−9 | `-1`..`-9` |
-  | +10..+99 | `10`..`99` (no sign: no room) |
   | −10..−99 | the two digits with **both decimal points lit** = minus (`1.2.` = −12, `5.0.` = −50) |
   | beyond ±99 | `Hi` / `Lo` |
 
@@ -157,8 +156,7 @@ camera without auto white balance ignores the long press.
 - The COARSE preview keeps priority on the SHUTTER display (and switches SHUTTER ▲▼ off)
   while it lasts, in the mode too; GAIN keeps showing the tint.
 
-TODO(verify) on hardware: readability of `+` and of the double decimal point for negative
-tints.
+TODO(verify) on hardware: readability of the double decimal point for negative tints.
 
 ### Iris lever window (COARSE and SENS)
 

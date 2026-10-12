@@ -92,8 +92,8 @@ func kelvinText(_ core.ControlSpec, v core.Value) string {
 	return strconv.Itoa(int(n))
 }
 
-// tintText: two digits. "0"; -9..+9 signed ("-5", "+5"); 10..99 as is
-// ("12"); -99..-10 with both decimal points lit as the minus sign ("1.2."
+// tintText: two digits. "0"; 1..99 as is ("5", "12"); -9..-1 with a minus ("-5");
+// -99..-10 with both decimal points lit as the minus sign ("1.2."
 // = -12); "Hi" / "Lo" beyond ±99.
 func tintText(_ core.ControlSpec, v core.Value) string {
 	n := int(math.Round(v.Number))
@@ -105,8 +105,6 @@ func tintText(_ core.ControlSpec, v core.Value) string {
 	case n <= -10:
 		d := strconv.Itoa(-n)
 		return d[:1] + "." + d[1:] + "."
-	case n > 0 && n < 10:
-		return "+" + strconv.Itoa(n)
 	}
 	return strconv.Itoa(n)
 }
@@ -148,17 +146,16 @@ func mbScale(s core.ControlSpec) float64 {
 // mbShown is the largest magnitude the MB display shows as a number.
 const mbShown = 99
 
-// mbText: three digits, signed ("+12", "-5", "0"). Values beyond ±99
-// (set elsewhere than the ring) show "+Hi" / "-Lo".
+// mbText: three digits; negatives carry a minus ("12", "-5", "0"; the
+// seven-segment '+' reads badly). Values beyond ±99 (set elsewhere than the
+// ring) show "Hi" / "-Lo".
 func mbText(s core.ControlSpec, v core.Value) string {
 	n := int(math.Round(v.Number * mbScale(s)))
 	switch {
 	case n > mbShown:
-		return "+Hi"
+		return "Hi"
 	case n < -mbShown:
 		return "-Lo"
-	case n > 0:
-		return "+" + strconv.Itoa(n)
 	}
 	return strconv.Itoa(n)
 }
