@@ -1,0 +1,6 @@
+# Go sources and project text files stay LF everywhere (gofmt requires it;
+# Windows checkouts would otherwise turn them into CRLF).
+* text=auto eol=lf
+*.exe binary
+*.dmg binary
+*.png binary
