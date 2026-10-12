@@ -1,0 +1,57 @@
+# On a version tag (v*): test, build rcp.exe, zip it with the README and
+# publish a GitHub release with the zip. A tag with a suffix (v0.1.0-ALPHA)
+# gives a pre-release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Toolchain
+        run: |
+          go version
+          gcc --version
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        shell: bash
+        run: |
+          mkdir -p "dist/RCPForAllCamera"
+          go build -trimpath -ldflags "-H windowsgui -s -w" -o "dist/RCPForAllCamera/rcp.exe" ./cmd/rcp
+          cp README.md "dist/RCPForAllCamera/"
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          $zip = "dist/RCPForAllCamera-$env:GITHUB_REF_NAME-windows-amd64.zip"
+          Compress-Archive -Path dist/RCPForAllCamera -DestinationPath $zip
+          "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" "$ZIP" --title "$GITHUB_REF_NAME" --generate-notes $pre

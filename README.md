@@ -1,5 +1,6 @@
 # RCP For All Camera
 
+[![CI](https://github.com/ValentinDoche/rcp-for-all-camera/actions/workflows/ci.yml/badge.svg)](https://github.com/ValentinDoche/rcp-for-all-camera/actions/workflows/ci.yml)
 ![Go](https://img.shields.io/badge/Go-1.27-00ADD8?logo=go&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-Fyne-4B8BBE)
