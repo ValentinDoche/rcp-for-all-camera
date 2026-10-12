@@ -94,6 +94,11 @@ pauses rendering for 1 h, and `POST /api/resume` gives rendering back.
 `/api/test/{displays|matrix|leds}` runs the test patterns; `leds` toggles the LED
 explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
 
+CI/CD (.github/workflows): `ci.yml` runs gofmt, vet and tests on a Windows runner for every
+push to main and every PR. Pushing a `v*` tag runs `release.yml`: tests, builds `rcp.exe`,
+zips it with the README and publishes a GitHub release (a tag with a suffix such as
+`v0.1.0-ALPHA` is a pre-release). The first run of a job compiles Fyne (~7 min).
+
 ## 5. Protocol cheat-sheet (details in docs/atem-micro-camera-panel-protocol.md)
 
 - USB VID `0x1EDB`, PID `0xBF01`. HID interface **MI_02**, usage page `0xFF00`. MI_00 is a "Media" interface and is not used.
