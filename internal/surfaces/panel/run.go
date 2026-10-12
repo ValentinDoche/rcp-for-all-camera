@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/micropanel"
 )
 
 // Run drives the panel until ctx ends (app.Surface). It opens the panel when
@@ -135,6 +136,7 @@ func (c *Controller) drive(ctx context.Context, dev Device) error {
 				return end(fmt.Errorf("panel write: %w", err))
 			}
 			last = &f
+			c.recenterKnobs(dev)
 		}
 	}
 }
@@ -164,4 +166,25 @@ func blank(dev Device) {
 	_ = dev.SetDigitsRaw([14]byte{})
 	_ = dev.SetMatrixRaw([32]byte{})
 	_ = dev.ClearLEDs(-1)
+}
+
+// recenterKnobs writes the color knobs' counters back to the middle when the
+// controller asks for it, then reads the positions back: they become the
+// knobs' references, so nothing jumps even if the panel ignored the write.
+func (c *Controller) recenterKnobs(dev Device) {
+	rep, ok := c.takeRecenter()
+	if !ok {
+		return
+	}
+	if err := dev.SetFeature(rep); err != nil {
+		c.log.Debug("panel: knob recenter not written", "err", err)
+	}
+	b, err := dev.GetFeature(rep[0], len(rep))
+	if err != nil {
+		c.log.Debug("panel: knob positions not read back", "err", err)
+		return
+	}
+	if pos, ok := micropanel.ParseAnalog(b); ok {
+		c.knobsRead(pos)
+	}
 }

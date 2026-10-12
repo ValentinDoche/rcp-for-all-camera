@@ -170,7 +170,7 @@ explorer (SHUTTER ▲▼ = LED index, ND ▲▼ = layer).
 1. Confirm the names of key codes 0x59–0x5E in the `paneltest` log, and check whether the
    square BLACK/FLARE button sends anything (no code and no LED found so far).
 2. Run the full 42/42 checklist in `paneltest` with the owner.
-3. Test **writing** feature 0x0E (knob positions), so knobs can resync to a camera's real value when switching cameras.
+3. Confirm on hardware that **writing** feature 0x0E (knob positions) works: the panel controller now recenters the color knob counters to 512 at connect and near an end (`recenterKnobs`, read back afterwards). If it works, knobs could also resync to a camera's real value when switching cameras.
 4. Meaning of LED layers 1–5 and of LED bits above 74.
 5. Untested, from static analysis only:
    - feature 0x06 (battery)

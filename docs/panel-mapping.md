@@ -75,6 +75,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | Master black ring | `masterBlack`, linear, soft takeover. The travel is limited to what the MB display shows as a number: −0.99..+0.99 for ranges shown ×100 (Blackmagic −2..2), −99..+99 for integer ranges, intersected with the range. A value set beyond that elsewhere (shown 99 / -99) cannot be reached, so the ring takes over at once on its next movement instead of staying stuck. |
 | WHITE R/G/B knobs | `gainR/G/B`, relative. |
 | BLACK R/G/B knobs | `liftR/G/B`, relative. |
+| Color knob counters | The panel counts each knob turn and clamps the count at 0 and 1024, so a knob left near an end could not turn further that way (a whole direction ignored). The controller writes the six color counters back to 512 (feature 0x0E, SENS/COARSE/top-right kept) at connect and whenever one comes within 128 counts of an end, then reads the positions back as the new references, so nothing jumps even if the panel ignores the write. TODO(verify) that the panel accepts the write. |
 | COARSE, SENS | Set the iris lever window (below). They never write to the camera. |
 | Other keys (CC ▲▼, ON, BLACK/FLARE, IRIS/MB ACTIVE, CALL, PREVIEW), top-right knob | Not mapped; key presses are logged at debug. |
 

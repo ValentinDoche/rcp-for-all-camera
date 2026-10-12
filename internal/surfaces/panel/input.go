@@ -96,6 +96,17 @@ func knobValue(s core.ControlSpec, cur float64, delta int) float64 {
 	return min(max(v, s.Min), s.Max)
 }
 
+// The panel counts each knob turn itself and clamps the count at 0 and
+// micropanel.AnalogMax: a color knob left near an end could not move further
+// that way. The controller recenters their counters to knobCentre when one
+// comes within knobMargin of an end (and at connect).
+const (
+	knobCentre = micropanel.AnalogMax / 2
+	knobMargin = 128
+)
+
+func nearKnobEnd(pos int) bool { return pos < knobMargin || pos > micropanel.AnalogMax-knobMargin }
+
 // knobDeadband is the knob movement (in counts) ignored as noise: some
 // knobs jitter by one count at rest.
 const knobDeadband = 1

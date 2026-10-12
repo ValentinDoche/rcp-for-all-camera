@@ -99,6 +99,8 @@ Bottom-area buttons. The codes are certain, but **the names are inferred from th
 `0E v0 … v8`: 9 × u16 LE, **absolute** position 0..1024. The panel integrates the
 encoder itself and clamps at 0 and 1024. Because the report is also a *feature*,
 the host can read the current positions at any time, and very likely write them
+(the app writes the color knobs back to 512 so they never stay stuck at a clamp; read
+back after the write, TODO(verify) on hardware)
 to sync the knobs with a camera's real value (writing is not tested yet).
 
 | Index | Control |

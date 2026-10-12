@@ -102,3 +102,27 @@ func (s *State) parseReport(p []byte) bool {
 	}
 	return true
 }
+
+// AnalogReport builds the 0x0E feature report that sets the 9 knob
+// counters (19 bytes, the exact size the panel expects).
+// TODO(verify): writing 0x0E is untested on hardware; the controller reads
+// the positions back, so a panel that ignores it does no harm.
+func AnalogReport(pos [9]uint16) []byte {
+	b := make([]byte, 19)
+	b[0] = repAnalog
+	for i, v := range pos {
+		binary.LittleEndian.PutUint16(b[1+2*i:], v)
+	}
+	return b
+}
+
+// ParseAnalog reads the 9 knob positions of a 0x0E report.
+func ParseAnalog(b []byte) (pos [9]uint16, ok bool) {
+	if len(b) < 19 || b[0] != repAnalog {
+		return pos, false
+	}
+	for i := range pos {
+		pos[i] = binary.LittleEndian.Uint16(b[1+2*i:])
+	}
+	return pos, true
+}

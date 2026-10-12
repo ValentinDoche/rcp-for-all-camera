@@ -152,6 +152,10 @@ type fakeDevice struct {
 	clears  int
 	closed  atomic.Bool
 	running atomic.Bool
+
+	features    [][]byte
+	knobs       [9]uint16
+	ignoreKnobs bool
 }
 
 func newFakeDevice() *fakeDevice {
@@ -203,6 +207,28 @@ func (d *fakeDevice) ClearLEDs(int) error {
 	return nil
 }
 func (d *fakeDevice) Close() error { d.closed.Store(true); return nil }
+
+// SetFeature and GetFeature emulate the 0x0E knob counters; with
+// ignoreKnobs the panel accepts the write but keeps its positions.
+func (d *fakeDevice) SetFeature(b []byte) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.features = append(d.features, append([]byte(nil), b...))
+	if pos, ok := micropanel.ParseAnalog(b); ok && !d.ignoreKnobs {
+		d.knobs = pos
+	}
+	return nil
+}
+func (d *fakeDevice) GetFeature(id byte, size int) ([]byte, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return micropanel.AnalogReport(d.knobs)[:size], nil
+}
+func (d *fakeDevice) featureWrites() [][]byte {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([][]byte(nil), d.features...)
+}
 
 func (d *fakeDevice) snapshot() ([14]byte, [32]byte, micropanel.LEDBits) {
 	d.mu.Lock()
@@ -1021,6 +1047,63 @@ func TestControllerWBLongPressWithoutAWB(t *testing.T) {
 	for _, c := range h.api.callsCopy() {
 		if c.id == "autoWhiteBalance" {
 			t.Error("no AWB call expected")
+		}
+	}
+}
+
+// A color knob whose counter sits at the panel's 0 clamp could not be turned
+// negative. The controller recenters the counters (feature 0x0E, the other
+// knobs kept), so turning down works again.
+func TestColorKnobsAreRecenteredSoNegativeTurnsWork(t *testing.T) {
+	h := start(t, sonyAPI(), Options{}) // liftR 0
+	<-h.status
+	h.loaded(t)
+	st := micropanel.State{AnalogRead: true}
+	st.Analog[knobSens], st.Analog[knobCoarse] = 700, 300 // absolute: must be kept
+	h.input(t, st)                                        // connect: every color knob at 0
+	waitFor(t, "recenter written", func() bool { return len(h.dev.featureWrites()) > 0 })
+	w := h.dev.featureWrites()[0]
+	pos, ok := micropanel.ParseAnalog(w)
+	if !ok || len(w) != 19 {
+		t.Fatalf("feature %x is not a 19-byte 0x0E report", w)
+	}
+	for i := range knobControls {
+		if pos[i] != knobCentre {
+			t.Errorf("knob %d set to %d, want %d", i, pos[i], knobCentre)
+		}
+	}
+	if pos[knobSens] != 700 || pos[knobCoarse] != 300 {
+		t.Errorf("SENS/COARSE must be kept: %d/%d", pos[knobSens], pos[knobCoarse])
+	}
+	time.Sleep(50 * time.Millisecond) // the read-back is taken as reference
+	st.Analog[1] = knobCentre - 100   // BLACK R turned down
+	h.input(t, st)
+	h.waitCall(t, "liftR", func(v core.Value) bool { return v.Number < 0 })
+}
+
+// A panel that ignores the write keeps its counters: the read-back makes
+// them the references, so nothing jumps.
+func TestKnobRecenterIgnoredDoesNotJump(t *testing.T) {
+	h := start(t, sonyAPI(), Options{})
+	h.dev.mu.Lock()
+	h.dev.ignoreKnobs = true
+	h.dev.mu.Unlock()
+	<-h.status
+	h.loaded(t)
+	st := micropanel.State{AnalogRead: true}
+	st.Analog[1] = 40
+	h.dev.mu.Lock()
+	h.dev.knobs = st.Analog
+	h.dev.mu.Unlock()
+	h.input(t, st)
+	waitFor(t, "recenter tried", func() bool { return len(h.dev.featureWrites()) > 0 })
+	time.Sleep(50 * time.Millisecond)
+	st.Analog[1] = 50 // +10 counts from where the counter really is
+	h.input(t, st)
+	h.waitCall(t, "liftR", func(v core.Value) bool { return v.Number > 0 })
+	for _, c := range h.api.callsCopy() {
+		if c.id == "liftR" && c.v.Number > 0.1 {
+			t.Errorf("liftR jumped to %v", c.v.Number)
 		}
 	}
 }

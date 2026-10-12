@@ -23,6 +23,10 @@ type Device interface {
 	SetMatrixRaw(px [32]byte) error
 	WriteReport(b []byte) error
 	ClearLEDs(keep int) error
+	// SetFeature and GetFeature write and read a feature report (b[0] and
+	// id = report ID; the size must be exact, trap 1).
+	SetFeature(b []byte) error
+	GetFeature(id byte, size int) ([]byte, error)
 	Close() error
 }
 
@@ -91,6 +95,10 @@ type Controller struct {
 	// auto white balance once (wbFired).
 	wbDownAt time.Time
 	wbFired  bool
+
+	// recenter asks the render loop to bring the color knobs' counters
+	// back to the middle (see recenterKnobs).
+	recenter bool
 
 	// alarmUntil is when the ALARM blink after a failed command stops.
 	alarmUntil time.Time
@@ -324,6 +332,7 @@ func (c *Controller) onInput(s micropanel.State) {
 		for i := range c.knobRef {
 			c.knobRef[i] = int(s.Analog[i])
 		}
+		c.recenter = c.recenter || s.AnalogRead
 		c.iris.seed(leverPos(s.Lever))
 		c.mb.seed(leverPos(s.Ring))
 		// COARSE/SENS as found at connect, without preview.
@@ -370,6 +379,9 @@ func (c *Controller) onInput(s micropanel.State) {
 	slot := c.cam.slot
 	if slot != 0 && slot == c.rig.Active {
 		for i, id := range knobControls {
+			if s.AnalogRead && nearKnobEnd(int(s.Analog[i])) {
+				c.recenter = true
+			}
 			var d int
 			d, c.knobRef[i] = knobStep(c.knobRef[i], int(s.Analog[i]))
 			if d == 0 {
@@ -454,6 +466,35 @@ func (c *Controller) fitIrisLocked() {
 		c.written[core.Iris] = nv
 		c.w.set(slot, core.Iris, core.Number(nv))
 	}
+}
+
+// takeRecenter returns the feature report that puts the color knobs back in
+// the middle of their counter, keeping the other knobs where they are, when
+// a recenter is due.
+func (c *Controller) takeRecenter() ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.recenter || !c.havePrev || !c.prev.AnalogRead {
+		return nil, false
+	}
+	c.recenter = false
+	pos := c.prev.Analog
+	for i := range knobControls {
+		pos[i] = knobCentre
+	}
+	return micropanel.AnalogReport(pos), true
+}
+
+// knobsRead takes the knob positions read back after a recenter as the new
+// references, so the next movement is measured from where the counters
+// really are (whether or not the panel accepted the write).
+func (c *Controller) knobsRead(pos [9]uint16) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for i := range knobControls {
+		c.knobRef[i] = int(pos[i])
+	}
+	c.prev.Analog = pos
 }
 
 // irisWindowLocked is the iris lever window for the active camera's iris.
