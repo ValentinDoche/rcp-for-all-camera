@@ -253,7 +253,7 @@ func mbWindow(s core.ControlSpec) window {
 // (mbWindow).
 // mbDeadzone is the share of the ring travel, on each side of its centre,
 // that stays exactly at 0: without it the ring can hardly rest on 0.
-const mbDeadzone = 0.03
+const mbDeadzone = 0.01
 
 // mbAt maps the ring (0..1) onto the master black. When the travel spans 0,
 // the centre ± mbDeadzone gives exactly 0, the left part covers lo..0 and

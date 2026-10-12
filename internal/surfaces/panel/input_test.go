@@ -206,7 +206,7 @@ func TestKnobDeadbandIgnoresJitterButKeepsSlowTurns(t *testing.T) {
 func TestMasterBlackRingDeadZone(t *testing.T) {
 	s := rng(core.MasterBlack, -2, 2, 0.01, "")
 	w := mbWindow(s) // -0.99..0.99
-	for _, pos := range []float64{0.5, 0.5 + mbDeadzone, 0.5 - mbDeadzone, 0.51, 0.49} {
+	for _, pos := range []float64{0.5, 0.5 + mbDeadzone, 0.5 - mbDeadzone, 0.505, 0.495} {
 		if got := mbAt(s, w, pos); got != 0 {
 			t.Errorf("ring at %v = %v, want exactly 0 in the dead zone", pos, got)
 		}
