@@ -59,9 +59,9 @@ func TestDisplayTexts(t *testing.T) {
 		{"mb fractional +12", mbText, rng(core.MasterBlack, -2, 2, 0.01, ""), core.Number(0.12), "12"},
 		{"mb +99", mbText, rng(core.MasterBlack, -2, 2, 0.01, ""), core.Number(0.99), "99"},
 		{"mb -99", mbText, rng(core.MasterBlack, -2, 2, 0.01, ""), core.Number(-0.99), "-99"},
-		{"mb above 99", mbText, rng(core.MasterBlack, -2, 2, 0.01, ""), core.Number(1.5), "Hi"},
-		{"mb below -99", mbText, rng(core.MasterBlack, -2, 2, 0.01, ""), core.Number(-2), "-Lo"},
-		{"mb integer above 99", mbText, rng(core.MasterBlack, -200, 200, 1, ""), core.Number(150), "Hi"},
+		{"mb above 99", mbText, rng(core.MasterBlack, -2, 2, 0.01, ""), core.Number(1.5), "99"},
+		{"mb below -99", mbText, rng(core.MasterBlack, -2, 2, 0.01, ""), core.Number(-2), "-99"},
+		{"mb integer above 99", mbText, rng(core.MasterBlack, -200, 200, 1, ""), core.Number(150), "99"},
 	} {
 		if got := tc.f(tc.s, tc.v); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)

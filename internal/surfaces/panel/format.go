@@ -146,18 +146,12 @@ func mbScale(s core.ControlSpec) float64 {
 // mbShown is the largest magnitude the MB display shows as a number.
 const mbShown = 99
 
-// mbText: three digits; negatives carry a minus ("12", "-5", "0"; the
-// seven-segment '+' reads badly). Values beyond ±99 (set elsewhere than the
-// ring) show "Hi" / "-Lo".
+// mbText: three digits, -99..99; negatives carry a minus ("12", "-5", "0";
+// the seven-segment '+' reads badly). The master black never shows beyond
+// ±99: a value set further elsewhere (GUI, camera) shows 99 / -99.
 func mbText(s core.ControlSpec, v core.Value) string {
 	n := int(math.Round(v.Number * mbScale(s)))
-	switch {
-	case n > mbShown:
-		return "Hi"
-	case n < -mbShown:
-		return "-Lo"
-	}
-	return strconv.Itoa(n)
+	return strconv.Itoa(min(max(n, -mbShown), mbShown))
 }
 
 // rangePos is the position of v in the spec range, 0..1.

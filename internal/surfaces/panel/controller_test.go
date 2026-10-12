@@ -947,8 +947,8 @@ func TestControllerRingLimitedTo99(t *testing.T) {
 	if got := len(api.callsCopy()); got != before {
 		t.Fatalf("ring picked up a value beyond its travel: %+v", api.callsCopy()[before:])
 	}
-	want := digitsOf(map[micropanel.Display]string{micropanel.DispMasterBlack: "Hi"})
-	waitFor(t, "Hi shown", func() bool { d, _, _ := h.dev.snapshot(); return [3]byte(d[11:14]) == [3]byte(want[11:14]) })
+	want := digitsOf(map[micropanel.Display]string{micropanel.DispMasterBlack: "99"})
+	waitFor(t, "99 shown", func() bool { d, _, _ := h.dev.snapshot(); return [3]byte(d[11:14]) == [3]byte(want[11:14]) })
 }
 
 // Held for a second, W/B runs the auto white balance once: its LED blinks
