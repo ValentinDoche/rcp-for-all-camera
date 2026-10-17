@@ -20,7 +20,7 @@ var info = rcpmod.Info{
 	ID: "panasonic-aw-ue100", Brand: "Panasonic", Name: "AW-UE100",
 	Transports:  []string{rcpmod.TransportEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthOptional, Support: rcpmod.SupportPlanned,
-	Notes: "Commandes HTTP/CGI Panasonic AW ; la présence d'un filtre ND et les plages sont à vérifier.",
+	Notes: "Panasonic AW HTTP/CGI commands. Whether it has an ND filter, and the ranges, are still to check.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

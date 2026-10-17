@@ -127,6 +127,9 @@ func (h *Host) publishPanel() {
 
 // panelStatusOf merges USB detection and the surface state. A driven panel
 // is plugged in whatever the probe says.
+// DetailNoUSBProbe is the panel detail when USB detection itself failed.
+const DetailNoUSBProbe = "USB detection unavailable"
+
 func panelStatusOf(present, probeErr bool, s SurfaceStatus) PanelStatus {
 	st := PanelStatus{Connected: present || s.Active, Active: s.Active}
 	if st.Connected {
@@ -135,7 +138,7 @@ func panelStatusOf(present, probeErr bool, s SurfaceStatus) PanelStatus {
 			st.Detail = s.Detail
 		}
 	} else if probeErr {
-		st.Detail = "détection USB indisponible"
+		st.Detail = DetailNoUSBProbe
 	}
 	return st
 }

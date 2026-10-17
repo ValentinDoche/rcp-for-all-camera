@@ -137,9 +137,9 @@ func TestHostMergesSurfaceStatus(t *testing.T) {
 	report := <-s.report
 
 	waitFor(t, func() bool { return f.svc.PanelStatus() == PanelStatus{Connected: true} })
-	report(SurfaceStatus{Detail: "utilisé par un autre logiciel"})
+	report(SurfaceStatus{Detail: "used by another program"})
 	waitFor(t, func() bool {
-		return f.svc.PanelStatus() == PanelStatus{Connected: true, Detail: "utilisé par un autre logiciel"}
+		return f.svc.PanelStatus() == PanelStatus{Connected: true, Detail: "used by another program"}
 	})
 	report(SurfaceStatus{Active: true, Serial: "ABC"})
 	waitFor(t, func() bool { return f.svc.PanelStatus() == PanelStatus{Connected: true, Active: true, Serial: "ABC"} })
@@ -153,7 +153,7 @@ func TestPanelStatusOf(t *testing.T) {
 	}{
 		{false, false, SurfaceStatus{}, PanelStatus{}},
 		{true, false, SurfaceStatus{}, PanelStatus{Connected: true}},
-		{false, true, SurfaceStatus{}, PanelStatus{Detail: "détection USB indisponible"}},
+		{false, true, SurfaceStatus{}, PanelStatus{Detail: DetailNoUSBProbe}},
 		// a stale busy detail is hidden once the panel is unplugged
 		{false, false, SurfaceStatus{Detail: "busy"}, PanelStatus{}},
 		{true, false, SurfaceStatus{Detail: "busy"}, PanelStatus{Connected: true, Detail: "busy"}},

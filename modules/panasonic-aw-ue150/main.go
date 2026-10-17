@@ -20,7 +20,7 @@ var info = rcpmod.Info{
 	ID: "panasonic-aw-ue150", Brand: "Panasonic", Name: "AW-UE150",
 	Transports:  []string{rcpmod.TransportEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthOptional, Support: rcpmod.SupportPlanned,
-	Notes: "La liste des paramètres vient de la référence SKAARHOJ core-panasonic-ptz ; le protocole (Panasonic AW HTTP/CGI) reste à écrire.",
+	Notes: "Parameter list from the SKAARHOJ core-panasonic-ptz reference; the protocol (Panasonic AW HTTP/CGI) is not written yet.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

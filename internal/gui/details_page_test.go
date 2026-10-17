@@ -194,7 +194,7 @@ func TestDemoCameraNeedsNoAddressAndDrivesEverything(t *testing.T) {
 	sized(a)
 	a.ShowConfig(4)
 	f := a.config.form
-	f.brand.SetSelected("Démo")
+	f.brand.SetSelected("Demo")
 	if f.current == nil || !f.current.NoAddress {
 		t.Fatal("the demo model must be picked")
 	}
@@ -225,7 +225,7 @@ func TestDemoCameraNeedsNoAddressAndDrivesEverything(t *testing.T) {
 
 func TestCustomBlocksComeLastWithTheirWidgets(t *testing.T) {
 	svc, _, _ := newLiveService(t)
-	if err := svc.AssignSlot(1, app.SlotInput{Model: "demo", Name: "Démo"}); err != nil {
+	if err := svc.AssignSlot(1, app.SlotInput{Model: "demo", Name: "Demo"}); err != nil {
 		t.Fatal(err)
 	}
 	a := New(test.NewTempApp(t), svc, syncOptions())

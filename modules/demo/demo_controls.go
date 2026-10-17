@@ -85,7 +85,7 @@ func initial() map[string]rcpmod.Value {
 		rcpmod.Contrast: rcpmod.Number(1), rcpmod.Saturation: rcpmod.Number(1), rcpmod.Hue: rcpmod.Number(0),
 		contrastPivot: rcpmod.Number(0.5), lumaContribution: rcpmod.Number(1),
 		rcpmod.Record: rcpmod.Bool(false), rcpmod.MasterBlack: rcpmod.Number(0),
-		tallyLamp: rcpmod.Bool(false), firmware: rcpmod.Text("demo 0.3.0"), cameraID: rcpmod.Text("Caméra démo"),
+		tallyLamp: rcpmod.Bool(false), firmware: rcpmod.Text("demo 0.3.0"), cameraID: rcpmod.Text("Demo camera"),
 	}
 	for _, id := range []string{rcpmod.LiftR, rcpmod.LiftG, rcpmod.LiftB, rcpmod.LiftY,
 		rcpmod.GammaR, rcpmod.GammaG, rcpmod.GammaB, rcpmod.GammaY, offsetR, offsetG, offsetB, offsetY} {

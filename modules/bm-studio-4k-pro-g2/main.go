@@ -21,7 +21,7 @@ var info = rcpmod.Info{
 	Transports:  []string{rcpmod.TransportEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthNone, Support: rcpmod.SupportPlanned,
 	InterchangeableLens: true,
-	Notes:               "API REST Blackmagic Camera Control sur le port Ethernet, WebSocket pour les événements ; plages à vérifier sur la caméra réelle.",
+	Notes:               "Blackmagic Camera Control REST API over the Ethernet port, WebSocket for events. Ranges still to check on a real camera.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

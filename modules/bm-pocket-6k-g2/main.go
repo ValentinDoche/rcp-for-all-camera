@@ -21,7 +21,7 @@ var info = rcpmod.Info{
 	Transports:  []string{rcpmod.TransportUSBEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthNone, Support: rcpmod.SupportPlanned,
 	InterchangeableLens: true,
-	Notes:               "API REST Blackmagic Camera Control via adaptateur USB-C Ethernet ; le Bluetooth n'est pas encore pris en charge et la version de firmware minimale reste à vérifier.",
+	Notes:               "Blackmagic Camera Control REST API through a USB-C to Ethernet adapter. Bluetooth is not supported; the minimum firmware version is still to check.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

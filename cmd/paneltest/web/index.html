@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Test panneau ATEM Micro Camera Panel</title>
+<title>ATEM Micro Camera Panel test bench</title>
 <style>
 :root{--bg:#0e1013;--pn:#1a1d22;--pn2:#23272e;--ln:#343a44;--tx:#d7dbe2;--dim:#7d8592;--grn:#2ecc71;--red:#ff3b30;--amb:#ffb02e;--blu:#3aa0ff;--hi:#fff4c2}
 *{box-sizing:border-box}
@@ -112,24 +112,24 @@ button.a.dm{border-color:#6a5314;color:#ffd45a}
     <div id="chk"></div>
   </div>
   <div class="card">
-    <h3>Connexion <span id="mode" style="float:right;color:var(--amb)"></span></h3>
-    <div class="chips"><span class="chip" id="c-con">Connecté</span><span class="chip" id="c-aut">Authentifié</span><span class="chip" id="c-sse">Flux</span></div>
-    <div class="kv"><span>N° série</span><span id="serial">—</span><span>Firmware</span><span id="fw">—</span></div>
+    <h3>Connection <span id="mode" style="float:right;color:var(--amb)"></span></h3>
+    <div class="chips"><span class="chip" id="c-con">Connected</span><span class="chip" id="c-aut">Authenticated</span><span class="chip" id="c-sse">Stream</span></div>
+    <div class="kv"><span>Serial</span><span id="serial">—</span><span>Firmware</span><span id="fw">—</span></div>
   </div>
   <div class="card">
-    <h3>Données simulées</h3>
+    <h3>Simulated data</h3>
     <div class="kv" id="sim"></div>
   </div>
   <div class="card">
     <div class="btns">
-      <button class="a" id="b-reset">Réinitialiser checklist</button>
-      <button class="a dm" id="b-demo">Démo</button>
-      <button class="a" id="b-disp">Test afficheurs</button>
-      <button class="a" id="b-mat">Test matrice</button>
+      <button class="a" id="b-reset">Reset checklist</button>
+      <button class="a dm" id="b-demo">Demo</button>
+      <button class="a" id="b-disp">Test displays</button>
+      <button class="a" id="b-mat">Test matrix</button>
       <button class="a" id="b-led">Test LEDs</button>
     </div>
   </div>
-  <div class="card"><h3>Journal</h3><div id="log"></div></div>
+  <div class="card"><h3>Log</h3><div id="log"></div></div>
 </div>
 
 <script>
@@ -192,7 +192,7 @@ function drawCam(ch){
   dots.forEach((d,i)=>d.classList.toggle("on",!!g&&g[(i/5)|0][i%5]==="1"));
 }
 
-/* ---------- état ---------- */
+/* ---------- state ---------- */
 let ST={},ctrlSig="",ctrlList=[],logSig="";
 const KNOWN=new Set($$("[data-id]").map(e=>e.dataset.id));
 function fallbackControls(){return $$("[data-id]").map(e=>({id:e.dataset.id,label:e.dataset.id,kind:e.dataset.knob?"knob":e.dataset.ring?"ring":e.dataset.id==="LEVER"?"lever":"button"}));}
@@ -236,8 +236,8 @@ function update(st){
   drawCam(D.CAMERA!=null?D.CAMERA:(ST.cam&&ST.cam.selected));
   // connexion
   const cc=(el,ok,t)=>{el.className="chip "+(ok?"ok":"ko");el.textContent=t};
-  cc($("#c-con"),ST.connected,ST.connected?"Connecté":"Déconnecté");
-  cc($("#c-aut"),ST.authenticated,ST.authenticated?"Authentifié":"Non authentifié");
+  cc($("#c-con"),ST.connected,ST.connected?"Connected":"Disconnected");
+  cc($("#c-aut"),ST.authenticated,ST.authenticated?"Authenticated":"Not authenticated");
   set($("#serial"),ST.serial||"—");set($("#fw"),ST.firmware||"—");
   // checklist
   const sig=ctl.map(c=>c.id).join(",");
@@ -249,7 +249,7 @@ function update(st){
   $("#prog i").style.width=(ctrlList.length?100*n/ctrlList.length:0)+"%";
   // donnees simulees
   const m=ST.cam||{}, w=m.white||[], bk=m.black||[];
-  const rows=[["Caméra sélectionnée",m.selected],["Preview",m.preview],["ND",m.nd],["CC",m.cc],["Gain",m.gainDb!=null?m.gainDb+" dB":null],["Shutter",m.shutter],["Iris",m.iris],["Master black",m.masterBlack],["Balance blancs",m.wbK!=null?m.wbK+" K":null],["Blanc R/G/B",w.length?w.join(" / "):null],["Noir R/G/B",bk.length?bk.join(" / "):null],["Auto iris",m.autoIris==null?null:m.autoIris?"oui":"non"],["Barres",m.bars==null?null:m.bars?"oui":"non"]];
+  const rows=[["Selected camera",m.selected],["Preview",m.preview],["ND",m.nd],["CC",m.cc],["Gain",m.gainDb!=null?m.gainDb+" dB":null],["Shutter",m.shutter],["Iris",m.iris],["Master black",m.masterBlack],["White balance",m.wbK!=null?m.wbK+" K":null],["White R/G/B",w.length?w.join(" / "):null],["Black R/G/B",bk.length?bk.join(" / "):null],["Auto iris",m.autoIris==null?null:m.autoIris?"yes":"no"],["Bars",m.bars==null?null:m.bars?"yes":"no"]];
   const h=rows.map(r=>`<span>${r[0]}</span><span>${r[1]==null?"—":esc(r[1])}</span>`).join("");
   if($("#sim").dataset.h!==h){$("#sim").dataset.h=h;$("#sim").innerHTML=h;}
   // journal
@@ -273,24 +273,24 @@ let es=null,fails=0,demo=false,gotMsg=false;
 function connect(){
   if(location.protocol==="file:"){startDemo();return}
   es=new EventSource("/events");
-  es.onopen=()=>{fails=0;set($("#c-sse"),"Flux OK");$("#c-sse").className="chip ok"};
+  es.onopen=()=>{fails=0;set($("#c-sse"),"Stream OK");$("#c-sse").className="chip ok"};
   es.onmessage=ev=>{gotMsg=true;fails=0;if(demo)return;try{update(JSON.parse(ev.data))}catch(e){console.error(e)}};
-  es.onerror=()=>{$("#c-sse").className="chip ko";set($("#c-sse"),"Flux perdu");if(++fails>=3&&!gotMsg)startDemo();};
+  es.onerror=()=>{$("#c-sse").className="chip ko";set($("#c-sse"),"Stream lost");if(++fails>=3&&!gotMsg)startDemo();};
 }
 
-/* ---------- mode démo ---------- */
+/* ---------- demo mode ---------- */
 let dt=null,DS=null,t0=0;
 const LEDS=["REL","ABS","BARS_IND","NETWORK","ALARM","CABLE","DEXT","EXT"];
 function dlog(m){const d=new Date(),p=(n,l)=>String(n).padStart(l||2,"0");DS.log.unshift({t:p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())+"."+p(d.getMilliseconds(),3),msg:m});DS.log.length=Math.min(DS.log.length,100);}
 function demoAction(u){
-  if(u.endsWith("reset")){DS.seen={};dlog("Checklist réinitialisée");}
+  if(u.endsWith("reset")){DS.seen={};dlog("Checklist reset");}
   else dlog("Test "+u.split("/").pop());
 }
 function startDemo(){
   if(demo)return;demo=true;if(es)es.close();
-  set($("#mode"),"MODE DÉMO");set($("#b-demo"),"Quitter la démo");$("#c-sse").className="chip ko";set($("#c-sse"),"Démo locale");
-  const ctl=fallbackControls().map(c=>({...c,label:c.id.replace(/^CAM(\d)$/,"Caméra $1").replace(/_/g," ")}));
-  DS={connected:true,authenticated:true,serial:"51FA-DEMO-0001",firmware:"1.4.2 (démo)",held:[],seen:{},controls:ctl,
+  set($("#mode"),"DEMO MODE");set($("#b-demo"),"Leave demo");$("#c-sse").className="chip ko";set($("#c-sse"),"Local demo");
+  const ctl=fallbackControls().map(c=>({...c,label:c.id.replace(/^CAM(\d)$/,"Camera $1").replace(/_/g," ")}));
+  DS={connected:true,authenticated:true,serial:"51FA-DEMO-0001",firmware:"1.4.2 (demo)",held:[],seen:{},controls:ctl,
     analog:{WHITE_R:512,BLACK_R:512,WHITE_G:512,BLACK_G:512,WHITE_B:512,BLACK_B:512,KNOB7:512,SENS:0,COARSE:0},lever:0,ring:0,
     displays:{ND:"2",CC:"A",GAIN:"6",SHUTTER:"1/50",IRIS:"F2.8",MB:"+05",CAMERA:"1"},leds:{CAM1:"red",CAM5:"green"},
     cam:{selected:1,preview:5,nd:"1/4",cc:"A",gainDb:6,shutter:"1/50",iris:"F2.8",masterBlack:5,wbK:5600,white:[0,0,0],black:[0,0,0],autoIris:false,bars:false},log:[]};
@@ -315,12 +315,12 @@ function startDemo(){
     const A=DS.analog,c=DS.cam;
     c.white=[A.WHITE_R,A.WHITE_G,A.WHITE_B].map(v=>Math.round((v-512)/512*100));c.black=[A.BLACK_R,A.BLACK_G,A.BLACK_B].map(v=>Math.round((v-512)/512*100));
     c.masterBlack=Math.round(lv/4096*20);DS.displays.MB=(c.masterBlack<0?"-":"+")+String(Math.abs(c.masterBlack)).padStart(2,"0");
-    c.nd=["Clair","1/4","1/16","1/64"][+DS.displays.ND-1]||"";c.gainDb=+c.gainDb;
+    c.nd=["Clear","1/4","1/16","1/64"][+DS.displays.ND-1]||"";c.gainDb=+c.gainDb;
     update(DS);
   },100);
 }
 function stopDemo(){
-  demo=false;clearInterval(dt);set($("#mode"),"");set($("#b-demo"),"Démo");
+  demo=false;clearInterval(dt);set($("#mode"),"");set($("#b-demo"),"Demo");
   if(location.protocol==="file:"){update({});return}
   fails=0;gotMsg=false;connect();
 }

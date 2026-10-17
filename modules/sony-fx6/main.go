@@ -20,7 +20,7 @@ var info = rcpmod.Info{
 	ID: "sony-fx6", Brand: "Sony", Name: "FX6",
 	Transports:  []string{rcpmod.TransportWiFi, rcpmod.TransportUSBEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthRequired, Support: rcpmod.SupportPlanned,
-	Notes: "Interface web distante Sony en Wi-Fi ou via adaptateur USB Ethernet ; les commandes disponibles sont à vérifier.",
+	Notes: "Sony web remote over Wi-Fi or a USB Ethernet adapter. The available commands are still to check.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

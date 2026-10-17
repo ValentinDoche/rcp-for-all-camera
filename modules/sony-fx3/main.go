@@ -20,7 +20,7 @@ var info = rcpmod.Info{
 	ID: "sony-fx3", Brand: "Sony", Name: "FX3",
 	Transports:  []string{rcpmod.TransportWiFi},
 	DefaultPort: 80, Auth: rcpmod.AuthOptional, Support: rcpmod.SupportPlanned,
-	Notes: "Camera Remote via Wi-Fi ; un appairage est probablement nécessaire et l'authentification reste à vérifier.",
+	Notes: "Camera Remote over Wi-Fi. Pairing is probably needed; authentication is still to check.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

@@ -33,10 +33,10 @@ type Device interface {
 // ErrNoDevice is returned by an opener when no panel is plugged in.
 var ErrNoDevice = errors.New("panel: no device")
 
-// Detail texts reported to the GUI (French, shown as is).
+// Detail texts reported to the GUI, shown as they are.
 const (
-	DetailBusy     = "utilisé par un autre logiciel (fermez ATEM Software Control)"
-	DetailOpenFail = "panneau détecté mais inaccessible, nouvel essai…"
+	DetailBusy     = "used by another program (close ATEM Software Control)"
+	DetailOpenFail = "panel found but not accessible, retrying…"
 )
 
 // Options configure a Controller. Zero values get defaults.

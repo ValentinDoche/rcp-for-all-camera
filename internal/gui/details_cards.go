@@ -401,7 +401,7 @@ func zoomHold(ctl *Controller, slot int, sp core.ControlSpec, d float64) {
 }
 
 // zoomRows: a spring-loaded lever, like the zoom rocker of a lens: push it
-// towards Télé or Large to zoom, faster the further it goes; released, it
+// towards Tele or Wide to zoom, faster the further it goes; released, it
 // springs back to the centre and the zoom stops. The focal length in mm
 // when the camera reports it.
 func (p *detailsPage) zoomRows() []fyne.CanvasObject {

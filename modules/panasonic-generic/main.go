@@ -1,4 +1,4 @@
-// Command panasonic-generic declares the Panasonic Autre modèle Panasonic for RCP For All Camera.
+// Command panasonic-generic declares a generic Panasonic camera for RCP For All Camera.
 // Its control protocol is not written yet: the camera page shows every
 // control below, and connecting or writing answers "not implemented".
 //
@@ -17,10 +17,10 @@ func init() { rcpmod.Register(module) }
 var module = rcpmod.Planned{Model: info, Specs: specs}
 
 var info = rcpmod.Info{
-	ID: "panasonic-generic", Brand: "Panasonic", Name: "Autre modèle Panasonic",
+	ID: "panasonic-generic", Brand: "Panasonic", Name: "Other Panasonic model",
 	Transports:  []string{rcpmod.TransportEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthOptional, Support: rcpmod.SupportPlanned,
-	Notes: "Commandes HTTP/CGI Panasonic AW ; le modèle exact et les commandes prises en charge sont à vérifier.",
+	Notes: "Panasonic AW HTTP/CGI commands. The exact model and its supported commands are still to check.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

@@ -29,10 +29,10 @@ type module struct{}
 
 func (module) Info() rcpmod.Info {
 	return rcpmod.Info{
-		ID: "demo", Brand: "Démo", Name: "Caméra de démonstration",
+		ID: "demo", Brand: "Demo", Name: "Demo camera",
 		Transports: []string{rcpmod.TransportEthernet}, Auth: rcpmod.AuthNone,
 		Support: rcpmod.SupportSupported, NoAddress: true, InterchangeableLens: true,
-		Notes: "Caméra simulée sans adresse, avec les réglages d'une caméra de studio : tout répond, pour essayer l'interface et le panneau sans caméra.",
+		Notes: "Simulated studio camera with no network address: every control answers, to try the application and the control panel without a camera.",
 	}
 }
 

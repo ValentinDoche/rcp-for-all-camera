@@ -174,8 +174,8 @@ func TestPanelIndicator(t *testing.T) {
 	if got := a.panelTxt.Text(); got != "Micro Camera Panel actif" {
 		t.Errorf("active = %q", got)
 	}
-	a.Emit(app.EventPanelStatus, app.PanelStatus{Detail: "détection USB indisponible"})
-	if got := a.panelTxt.Text(); !strings.Contains(got, "détection USB indisponible") {
+	a.Emit(app.EventPanelStatus, app.PanelStatus{Detail: app.DetailNoUSBProbe})
+	if got := a.panelTxt.Text(); !strings.Contains(got, app.DetailNoUSBProbe) {
 		t.Errorf("error = %q", got)
 	}
 }

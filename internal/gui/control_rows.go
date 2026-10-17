@@ -15,7 +15,7 @@ import (
 
 // controlRow is the generic widget of one control: the renderer picks the
 // widget from the spec (widgets.ChooseKind) so every control a camera
-// declares can be driven from the Détails page.
+// declares can be driven from the Details page.
 type controlRow struct {
 	spec  core.ControlSpec
 	kind  widgets.WidgetKind

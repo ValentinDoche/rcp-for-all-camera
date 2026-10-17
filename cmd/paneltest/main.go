@@ -40,7 +40,7 @@ type control struct {
 var controls = func() []control {
 	var c []control
 	for i := 1; i <= 8; i++ {
-		c = append(c, control{fmt.Sprintf("CAM%d", i), fmt.Sprintf("Caméra %d", i), "button"})
+		c = append(c, control{fmt.Sprintf("CAM%d", i), fmt.Sprintf("Camera %d", i), "button"})
 	}
 	for i := 1; i <= 5; i++ {
 		c = append(c, control{fmt.Sprintf("SCENE%d", i), fmt.Sprintf("Scene file %d", i), "button"})
@@ -48,7 +48,7 @@ var controls = func() []control {
 	for _, b := range [][2]string{
 		{"STORE", "STORE"}, {"ND_UP", "ND ▲"}, {"ND_DOWN", "ND ▼"}, {"CC_UP", "CC ▲"}, {"CC_DOWN", "CC ▼"},
 		{"GAIN_UP", "Master gain ▲"}, {"GAIN_DOWN", "Master gain ▼"}, {"SHUTTER_UP", "Shutter ▲"}, {"SHUTTER_DOWN", "Shutter ▼"},
-		{"ON", "ON"}, {"WB", "W/B"}, {"BARS", "BARS"}, {"BLACKFLARE", "Bouton Black/Flare"},
+		{"ON", "ON"}, {"WB", "W/B"}, {"BARS", "BARS"}, {"BLACKFLARE", "Black/Flare button"},
 		{"IRISMB_ACTIVE", "IRIS/MB ACTIVE"}, {"AUTO_IRIS", "AUTO IRIS"}, {"CALL", "CALL"},
 		{"PANEL_ACTIVE", "PANEL ACTIVE"}, {"PREVIEW", "PREVIEW"},
 	} {
@@ -57,11 +57,11 @@ var controls = func() []control {
 	for _, k := range [][2]string{
 		{"WHITE_R", "White R"}, {"WHITE_G", "White G"}, {"WHITE_B", "White B"},
 		{"BLACK_R", "Black R"}, {"BLACK_G", "Black G"}, {"BLACK_B", "Black B"},
-		{"KNOB7", "Molette haut-droite"}, {"SENS", "SENS"}, {"COARSE", "COARSE"},
+		{"KNOB7", "Top-right knob"}, {"SENS", "SENS"}, {"COARSE", "COARSE"},
 	} {
 		c = append(c, control{k[0], k[1], "knob"})
 	}
-	return append(c, control{"LEVER", "Levier iris", "lever"}, control{"RING", "Bague master black", "ring"})
+	return append(c, control{"LEVER", "Iris lever", "lever"}, control{"RING", "Master black ring", "ring"})
 }()
 
 type logEntry struct {
@@ -235,11 +235,11 @@ func (a *app) press(id string) {
 	case strings.HasPrefix(id, "SCENE"):
 		n := id[5:]
 		if a.storeArm {
-			a.logf("Scene %s mémorisée (simulé)", n)
+			a.logf("Scene %s stored (simulated)", n)
 			a.scenes[a.selected] |= 1 << (n[0] - '1')
 			a.storeArm = false
 		} else {
-			a.logf("Scene %s rappelée (simulé)", n)
+			a.logf("Scene %s recalled (simulated)", n)
 		}
 	case id == "STORE":
 		a.storeArm = !a.storeArm
@@ -463,7 +463,7 @@ func (a *app) panelLoop() {
 		a.mu.Lock()
 		a.panel, a.connected, a.serial, a.firmware = p, true, p.Serial(), p.Firmware
 		a.haveLast = false
-		a.logf("Panneau connecté (serial %s, session %s)", p.Serial(), p.AuthTTL())
+		a.logf("Panel connected (serial %s, session %s)", p.Serial(), p.AuthTTL())
 		a.mu.Unlock()
 		a.changed()
 		log.Printf("panel connected, serial %s", p.Serial())
@@ -472,7 +472,7 @@ func (a *app) panelLoop() {
 
 		a.mu.Lock()
 		a.panel, a.connected = nil, false
-		a.logf("Panneau déconnecté: %v", err)
+		a.logf("Panel disconnected: %v", err)
 		a.mu.Unlock()
 		a.changed()
 		log.Printf("panel lost: %v", err)
@@ -486,9 +486,9 @@ func (a *app) runTest(kind string) error {
 		a.mu.Lock()
 		a.ledExplore = !a.ledExplore
 		a.clearLayers = true
-		state := "désactivé"
+		state := "off"
 		if a.ledExplore {
-			state = "activé (SHUTTER ▲▼ = LED suivante/précédente, ND ▲▼ = couche)"
+			state = "on (SHUTTER ▲▼ = next/previous LED, ND ▲▼ = layer)"
 		}
 		a.logf("Explorateur LED %s", state)
 		a.mu.Unlock()
@@ -501,7 +501,7 @@ func (a *app) runTest(kind string) error {
 	a.logf("Test %s", kind)
 	a.mu.Unlock()
 	if p == nil {
-		return fmt.Errorf("panneau non connecté")
+		return fmt.Errorf("panel not connected")
 	}
 	go func() {
 		switch kind {
@@ -596,7 +596,7 @@ func main() {
 	mux.HandleFunc("POST /api/reset", func(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
 		a.seen = map[string]bool{}
-		a.logf("Checklist réinitialisée")
+		a.logf("Checklist reset")
 		a.mu.Unlock()
 		a.changed()
 	})
@@ -613,7 +613,7 @@ func main() {
 		a.testUntil = time.Now().Add(time.Hour)
 		a.mu.Unlock()
 		if p == nil {
-			http.Error(w, "panneau non connecté", http.StatusServiceUnavailable)
+			http.Error(w, "panel not connected", http.StatusServiceUnavailable)
 			return
 		}
 		id, payload, _ := strings.Cut(r.URL.Query().Get("out"), ":")

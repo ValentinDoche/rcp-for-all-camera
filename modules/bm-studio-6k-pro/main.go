@@ -23,7 +23,7 @@ func (module) Info() rcpmod.Info {
 		ID: "bm-studio-6k-pro", Brand: "Blackmagic Design", Name: "Studio Camera 6K Pro",
 		Transports: []string{rcpmod.TransportEthernet}, DefaultPort: 80,
 		Auth: rcpmod.AuthNone, Support: rcpmod.SupportExperimental, InterchangeableLens: true,
-		Notes: "API REST Blackmagic Camera Control et WebSocket d'événements sur le port Ethernet ; protocole testé sur une vraie caméra, plages de gain, ISO et obturateur à confirmer.",
+		Notes: "Blackmagic Camera Control REST API and event WebSocket over the Ethernet port. Protocol tested on a real camera; gain, ISO and shutter ranges still to confirm.",
 	}
 }
 

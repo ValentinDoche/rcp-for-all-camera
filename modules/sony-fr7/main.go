@@ -20,7 +20,7 @@ var info = rcpmod.Info{
 	ID: "sony-fr7", Brand: "Sony", Name: "FR7",
 	Transports:  []string{rcpmod.TransportEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthRequired, Support: rcpmod.SupportPlanned,
-	Notes: "Contrôle réseau Sony avec commandes PTZ sur le port Ethernet ; le protocole PTZ exact est à vérifier.",
+	Notes: "Sony network control with PTZ commands over the Ethernet port. The exact PTZ protocol is still to check.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

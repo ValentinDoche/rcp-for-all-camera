@@ -21,7 +21,7 @@ const stripWidth = 300
 
 // stripActions is what a strip can ask the app to do.
 type stripActions struct {
-	Details func(slot int) // nil hides the Détails button
+	Details func(slot int) // nil hides the Details button
 	Assign  func(slot int)
 }
 

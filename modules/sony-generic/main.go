@@ -1,4 +1,4 @@
-// Command sony-generic declares the Sony Autre modèle Sony for RCP For All Camera.
+// Command sony-generic declares a generic Sony camera for RCP For All Camera.
 // Its control protocol is not written yet: the camera page shows every
 // control below, and connecting or writing answers "not implemented".
 //
@@ -17,10 +17,10 @@ func init() { rcpmod.Register(module) }
 var module = rcpmod.Planned{Model: info, Specs: specs}
 
 var info = rcpmod.Info{
-	ID: "sony-generic", Brand: "Sony", Name: "Autre modèle Sony",
+	ID: "sony-generic", Brand: "Sony", Name: "Other Sony model",
 	Transports:  []string{rcpmod.TransportEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthRequired, Support: rcpmod.SupportPlanned,
-	Notes: "Interface web distante Sony (utilisateur et mot de passe) ; modèle exact et jeu de commandes à vérifier.",
+	Notes: "Sony web remote (username and password). The exact model and command set are still to check.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the

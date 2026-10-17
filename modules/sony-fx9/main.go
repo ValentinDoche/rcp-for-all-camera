@@ -20,7 +20,7 @@ var info = rcpmod.Info{
 	ID: "sony-fx9", Brand: "Sony", Name: "FX9",
 	Transports:  []string{rcpmod.TransportEthernet},
 	DefaultPort: 80, Auth: rcpmod.AuthRequired, Support: rcpmod.SupportPlanned,
-	Notes: "Interface web distante Sony sur le port Ethernet ; les commandes disponibles sont à vérifier.",
+	Notes: "Sony web remote over the Ethernet port. The available commands are still to check.",
 }
 
 // specs are the camera's controls. Values marked TODO(verify) in the
