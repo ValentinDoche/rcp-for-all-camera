@@ -105,6 +105,9 @@ func New(fa fyne.App, api AppAPI, o Options) *App {
 	fa.Settings().SetTheme(style.NewTheme(a.mode))
 	fa.SetIcon(brand.Logo)
 	a.win = fa.NewWindow(WindowTitle)
+	// Closing the main window quits the app, even with other windows open
+	// or hidden (the panel simulator).
+	a.win.SetMaster()
 	a.build()
 	a.ctl.Load()
 	a.syncChrome()
