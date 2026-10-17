@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -103,9 +104,9 @@ func Open(ctx context.Context, o Options) (*Host, error) {
 // Close stops every instance and the runtime.
 func (h *Host) Close(ctx context.Context) error { return h.rt.Close(ctx) }
 
-// Load compiles every <id>.wasm of dir, in name order. A file that cannot
-// be used (unreadable, malformed, declaring another id...) is skipped and
-// reported; the others still load. A missing folder loads nothing.
+// Load compiles every <id>.wasm of dir, a few at a time, and returns them
+// in name order. A file that cannot be used (unreadable, malformed,
+// declaring another id...) is skipped and reported; the others still load.
 func (h *Host) Load(ctx context.Context, dir string) ([]core.Module, []error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
@@ -114,21 +115,37 @@ func (h *Host) Load(ctx context.Context, dir string) ([]core.Module, []error) {
 	if err != nil {
 		return nil, []error{fmt.Errorf("read modules folder: %w", err)}
 	}
-	var mods []core.Module
-	var problems []error
+	var names []string
 	for _, e := range entries {
-		if e.IsDir() || !strings.EqualFold(filepath.Ext(e.Name()), ".wasm") {
-			continue
+		if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".wasm") {
+			names = append(names, e.Name())
 		}
-		m, err := h.LoadFile(ctx, filepath.Join(dir, e.Name()))
-		if err != nil {
-			problems = append(problems, fmt.Errorf("%s: %w", e.Name(), err))
-			h.log.Warn("camera module skipped", "file", e.Name(), "err", err)
-			continue
-		}
-		mods = append(mods, m)
 	}
-	return mods, problems
+	mods := make([]core.Module, len(names))
+	errs := make([]error, len(names))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, max(runtime.NumCPU(), 1))
+	for i, name := range names {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			mods[i], errs[i] = h.LoadFile(ctx, filepath.Join(dir, name))
+		}()
+	}
+	wg.Wait()
+	var loaded []core.Module
+	var problems []error
+	for i, name := range names {
+		if errs[i] != nil {
+			problems = append(problems, fmt.Errorf("%s: %w", name, errs[i]))
+			h.log.Warn("camera module skipped", "file", name, "err", errs[i])
+			continue
+		}
+		loaded = append(loaded, mods[i])
+	}
+	return loaded, problems
 }
 
 // LoadFile compiles one module and reads its declaration. The file must be

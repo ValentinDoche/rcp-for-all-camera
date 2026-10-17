@@ -17,10 +17,10 @@ import (
 	"fyne.io/fyne/v2/app"
 
 	appsvc "github.com/valentindoche/rcp-for-all-camera/internal/app"
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras"
 	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
+	"github.com/valentindoche/rcp-for-all-camera/internal/plugins"
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel"
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsim"
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsource"
@@ -39,6 +39,7 @@ func main() {
 
 func run() error {
 	sim := flag.Bool("sim", false, "start on the simulated Micro Camera Panel (this run only)")
+	modulesDir := flag.String("modules", "", "folder of the camera modules (default: modules next to rcp.exe)")
 	flag.Parse()
 
 	cfgPath, err := config.DefaultPath()
@@ -57,10 +58,11 @@ func run() error {
 	level := new(slog.LevelVar) // Info until the saved setting is applied
 	log := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: level}))
 
-	reg := core.NewRegistry()
-	if err := cameras.Register(reg, log); err != nil {
+	reg, closeModules, err := loadModules(*modulesDir, log)
+	if err != nil {
 		return err
 	}
+	defer closeModules()
 	secrets, err := config.NewOSSecrets(dir)
 	if err != nil {
 		// Passwords then only live until the app closes.
@@ -130,4 +132,34 @@ func run() error {
 	defer host.Stop()
 	win.Run(ctx) // blocks until the window closes
 	return nil
+}
+
+// loadModules loads the camera modules of dir (default: the modules folder
+// next to the executable) into a new registry. A module that cannot be
+// loaded is logged and skipped.
+func loadModules(dir string, log *slog.Logger) (*core.Registry, func(), error) {
+	if dir == "" {
+		exe, err := os.Executable()
+		if err != nil {
+			return nil, nil, fmt.Errorf("find the modules folder: %w", err)
+		}
+		dir = filepath.Join(filepath.Dir(exe), "modules")
+	}
+	cache := ""
+	if d, err := os.UserCacheDir(); err == nil {
+		cache = filepath.Join(d, "RCPForAllCamera", "modules")
+	}
+	ctx := context.Background()
+	host, err := plugins.Open(ctx, plugins.Options{Logger: log, CacheDir: cache})
+	if err != nil {
+		return nil, nil, err
+	}
+	mods, problems := host.Load(ctx, dir)
+	log.Info("camera modules loaded", "folder", dir, "modules", len(mods), "skipped", len(problems))
+	reg := core.NewRegistry()
+	if err := reg.Register(mods...); err != nil {
+		_ = host.Close(ctx)
+		return nil, nil, err
+	}
+	return reg, func() { _ = host.Close(ctx) }, nil
 }

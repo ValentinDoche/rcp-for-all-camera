@@ -5,16 +5,15 @@ import (
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/speckit"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
 func sampleSpecs() camerakit.Specs {
 	return camerakit.NewSpecs([]core.ControlSpec{
-		speckit.Range(core.Iris, 1, 22, 0.1, "f"),
-		speckit.Enum(core.ISO, speckit.Opts("400", "800")),
-		speckit.ReadOnly(speckit.Toggle(core.Tally)),
-		speckit.Range(core.Zoom, 0, 1, 0.001, ""),
+		{ID: core.Iris, Kind: core.KindRange, Min: 1, Max: 22, Step: 0.1, Unit: "f"},
+		{ID: core.ISO, Kind: core.KindEnum, Options: []core.Option{{Value: "400", Label: "400"}, {Value: "800", Label: "800"}}},
+		{ID: core.Tally, Kind: core.KindToggle, ReadOnly: true},
+		{ID: core.Zoom, Kind: core.KindRange, Max: 1, Step: 0.001},
 	})
 }
 

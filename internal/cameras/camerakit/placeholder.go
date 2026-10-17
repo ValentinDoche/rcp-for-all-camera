@@ -1,7 +1,6 @@
-// Package camerakit holds the helpers every camera module shares: the
-// control set (Specs), the subscriber list (Subscribers), and the module
-// and camera used by models whose control protocol is not written yet
-// (Planned, Placeholder).
+// Package camerakit holds helpers for core.Camera implementations: the
+// control set (Specs), the subscriber list (Subscribers) and Placeholder,
+// a camera that declares controls without any protocol (tests).
 package camerakit
 
 import (
@@ -10,26 +9,6 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
-
-// Planned is the module of a camera model whose protocol is not written
-// yet: it declares the model and its controls, and builds Placeholders.
-// When the protocol lands, the model gets its own module with the same id.
-type Planned struct {
-	Model core.ModelInfo
-	// Specs returns the controls the camera has for a config (a power zoom
-	// adds a zoom, for example).
-	Specs func(cfg core.CameraConfig) []core.ControlSpec
-}
-
-var _ core.Module = Planned{}
-
-// Info is the model declaration.
-func (p Planned) Info() core.ModelInfo { return p.Model }
-
-// New builds a Placeholder; it does no I/O.
-func (p Planned) New(cfg core.CameraConfig) (core.Camera, error) {
-	return NewPlaceholder(p.Specs(cfg)), nil
-}
 
 // Placeholder is a camera that declares its controls but has no protocol
 // yet. The GUI can show and validate every control; any I/O returns

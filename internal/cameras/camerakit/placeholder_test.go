@@ -60,17 +60,3 @@ func TestPlaceholderGetIsNotConnected(t *testing.T) {
 		t.Fatalf("Get = %v, want ErrNotConnected", err)
 	}
 }
-
-func TestPlannedBuildsPlaceholders(t *testing.T) {
-	m := camerakit.Planned{
-		Model: core.ModelInfo{ID: "acme-cam"},
-		Specs: func(cfg core.CameraConfig) []core.ControlSpec { return []core.ControlSpec{irisSpec()} },
-	}
-	cam, err := m.New(core.CameraConfig{Model: "acme-cam"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := cam.Set(context.Background(), core.Iris, core.Number(4)); !errors.Is(err, core.ErrNotImplemented) {
-		t.Errorf("Set on a planned model = %v, want ErrNotImplemented", err)
-	}
-}

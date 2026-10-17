@@ -16,10 +16,9 @@ import (
 	"fyne.io/fyne/v2/test"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras"
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/demo"
 	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/plugins/pluginstest"
 )
 
 // syncOptions makes the controller deterministic: worker calls run inline.
@@ -293,8 +292,8 @@ func newLiveService(t testing.TB) (*app.Service, *memStore, *[]*liveCam) {
 	testAuto = &fakeAuto{}
 	testIfaces = &ifaceList{nic: []app.NetInterface{{Name: "Ethernet", IP: "192.168.1.110"}, {Name: "Wi-Fi", IP: "10.0.0.5"}}}
 	reg := core.NewRegistry()
-	for _, m := range cameras.All(nil) {
-		if m.Info().ID != demo.ID { // the demo camera stays the real one
+	for _, m := range pluginstest.Modules(t) {
+		if m.Info().ID != "demo" { // the demo camera stays the real one
 			m = liveDriver{Module: m, cams: cams}
 		}
 		if err := reg.Register(m); err != nil {

@@ -32,8 +32,9 @@ type Event struct {
 	Lens    *Lens     `json:"lens,omitempty"`
 }
 
-// Camera is one configured camera. Implementations live in
-// internal/cameras/<driver> and must be safe for concurrent use.
+// Camera is one configured camera. The application gets them from the
+// camera modules (internal/plugins); implementations must be safe for
+// concurrent use.
 //
 // Contract:
 //   - Controls is static for a given model and config; it never needs a
@@ -58,8 +59,8 @@ type Camera interface {
 }
 
 // Module is a camera module: the code that controls one camera model.
-// Modules live in internal/cameras and are listed explicitly in
-// cameras.All; a module never imports another module.
+// internal/plugins turns each WebAssembly file of the modules folder into
+// a Module.
 type Module interface {
 	// Info describes the model. It is static: the registry reads it once.
 	Info() ModelInfo
