@@ -38,6 +38,9 @@ func TestPanelSourceIsSavedAndRestored(t *testing.T) {
 	if p.sel != "usb:ABC" || store.rig.Panel != "usb:ABC" {
 		t.Fatalf("selected %q, saved %q", p.sel, store.rig.Panel)
 	}
+	if svc.SelectedPanelSource() != "usb:ABC" {
+		t.Fatal("SelectedPanelSource not updated")
+	}
 	if list, sel := svc.PanelSources(); len(list) != 2 || sel != "usb:ABC" {
 		t.Fatalf("PanelSources = %v, %q", list, sel)
 	}

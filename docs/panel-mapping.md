@@ -9,6 +9,10 @@ How the app drives the panel and what each physical control does. Code:
 `panel.Controller` implements `app.Surface`; `cmd/rcp` registers it with
 `app.Host.SetSurface`, and the Host runs it next to USB detection.
 
+- **Panel source**: the panel status in the GUI's top bar is a menu: first USB panel
+  (default), one USB panel by serial when several are plugged in, or the simulator
+  ([panelsim.md](panelsim.md)). Switching blanks the current panel and opens the new one
+  at once; the choice is saved in `rig.json`.
 - Every second (1 s, backoff up to 10 s on errors) the controller tries to open and
   authenticate the panel. Re-authentication every 400 s is done by the driver.
 - **ATEM Software Control running** (process `ATEM Software Control.exe`): the controller

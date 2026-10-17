@@ -56,6 +56,15 @@ func (s *Service) PanelSources() ([]PanelSource, string) {
 	return s.panels.List(), s.panels.Selected()
 }
 
+// SelectedPanelSource returns the selected panel source id without listing
+// the USB panels ("" without a selector).
+func (s *Service) SelectedPanelSource() string {
+	if s.panels == nil {
+		return ""
+	}
+	return s.panels.Selected()
+}
+
 // SelectPanelSource switches the panel to source id and remembers the choice
 // in the rig file, so the app starts on it next time.
 func (s *Service) SelectPanelSource(id string) error {

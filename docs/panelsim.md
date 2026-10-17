@@ -3,14 +3,22 @@
 A software ATEM Micro Camera Panel, to work on the app without the hardware.
 Code: [internal/surfaces/panelsim](../internal/surfaces/panelsim).
 
-```bash
-go build -ldflags "-H windowsgui" -o rcp.exe ./cmd/rcp
-./rcp.exe -sim
-```
+## Choosing the panel
 
-With `-sim` the app opens a second window, "Simulateur ATEM Micro Camera Panel", and
-the panel controller ([internal/surfaces/panel](../internal/surfaces/panel)) drives it
-instead of the USB panel. The USB panel is ignored while `-sim` is on.
+Click the panel status at the top right of the main window. The menu offers:
+
+- **USB : premier panneau trouvé** (default; shows the serial when one panel is plugged in);
+- **USB : <serial>** for each panel when several are plugged in (or when one was chosen
+  and is unplugged: "(non branché)");
+- **Simulateur**: opens the window "Simulateur ATEM Micro Camera Panel".
+
+The switch is immediate: the panel being driven is blanked and the new one is opened
+(`panel.Controller.Reconnect`). The choice is saved in `rig.json` (`"panel"`) and used
+at the next start. `rcp.exe -sim` selects the simulator for that run only, without
+saving it. Code: [internal/surfaces/panelsource](../internal/surfaces/panelsource)
+(`app.PanelSources`), menu in [internal/gui/panelmenu.go](../internal/gui/panelmenu.go).
+
+While the simulator is selected the USB panels are left alone.
 
 ## How it works
 
@@ -43,7 +51,8 @@ panel, and the unknown parts of the protocol (LED layers 1–5 meaning, features
 | Master black ring | Drag the lever area left/right, or the mouse wheel over it |
 | "Panneau branché" | Unplugs and replugs the panel (the session ends like a USB unplug) |
 
-Closing the simulator window unplugs the panel; the main window keeps running. The
+Closing the simulator window hides it and unplugs the panel; the main window keeps
+running. Choose "Simulateur" again in the menu to bring it back. The
 lever and ring positions, as the panel would report them (±4096), are shown under the
 lever.
 

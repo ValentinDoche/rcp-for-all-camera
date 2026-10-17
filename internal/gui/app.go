@@ -140,7 +140,8 @@ func (a *App) build() {
 	name := widgets.NewText(WindowTitle, style.Text, 15).Bold()
 	a.panelDot = widgets.NewDot(style.TextFaint)
 	a.panelTxt = widgets.NewText("", style.TextMuted, 12)
-	status := container.NewHBox(a.panelDot, a.panelTxt)
+	// Clicking the panel status chooses the panel: USB or simulator.
+	status := newTapArea(container.NewHBox(a.panelDot, a.panelTxt), a.showPanelMenu)
 	top := widgets.NewPanel(style.Surface, "", 0, container.New(layout.NewCustomPaddedLayout(10, 10, 16, 16),
 		container.NewBorder(nil, nil, name, status))).Flat()
 
@@ -404,7 +405,11 @@ func (a *App) syncChrome() {
 	case p.Connected && p.Active:
 		a.panelDot.SetToken(style.OK)
 		a.panelTxt.SetToken(style.Text)
-		a.panelTxt.SetText(tx.T("app.panel.active"))
+		if a.simSelected() {
+			a.panelTxt.SetText(tx.T("app.panel.simActive"))
+		} else {
+			a.panelTxt.SetText(tx.T("app.panel.active"))
+		}
 	case p.Connected:
 		a.panelDot.SetToken(style.Warn)
 		a.panelTxt.SetToken(style.Text)
@@ -420,7 +425,11 @@ func (a *App) syncChrome() {
 	default:
 		a.panelDot.SetToken(style.TextFaint)
 		a.panelTxt.SetToken(style.TextMuted)
-		a.panelTxt.SetText(tx.T("app.panel.absent"))
+		if a.simSelected() {
+			a.panelTxt.SetText(tx.T("app.panel.simAbsent"))
+		} else {
+			a.panelTxt.SetText(tx.T("app.panel.absent"))
+		}
 	}
 
 	items := make([]widgets.TabItem, app.SlotCount)
