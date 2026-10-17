@@ -66,9 +66,13 @@ func (c *Controller) Run(ctx context.Context, api app.SurfaceAPI, report func(ap
 			if ctx.Err() != nil {
 				return
 			}
-			if errors.Is(err, errBusy) {
+			switch {
+			case errors.Is(err, errBusy):
 				set(app.SurfaceStatus{Detail: DetailBusy})
-			} else {
+			case errors.Is(err, errReopen):
+				set(app.SurfaceStatus{})
+				continue
+			default:
 				c.log.Info("panel: lost", "err", err)
 				set(app.SurfaceStatus{})
 			}
@@ -76,12 +80,16 @@ func (c *Controller) Run(ctx context.Context, api app.SurfaceAPI, report func(ap
 		select {
 		case <-ctx.Done():
 			return
+		case <-c.reopen:
 		case <-time.After(wait):
 		}
 	}
 }
 
-var errBusy = errors.New("panel: held by another program")
+var (
+	errBusy   = errors.New("panel: held by another program")
+	errReopen = errors.New("panel: reconnect requested")
+)
 
 func (c *Controller) open() (Device, error) {
 	if c.opt.Busy() {
@@ -120,6 +128,9 @@ func (c *Controller) drive(ctx context.Context, dev Device) error {
 		case <-ctx.Done():
 			blank(dev)
 			return end(ctx.Err())
+		case <-c.reopen:
+			blank(dev)
+			return end(errReopen)
 		case err := <-errc:
 			dev.Close()
 			return fmt.Errorf("panel read: %w", err)

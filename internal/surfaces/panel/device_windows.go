@@ -11,9 +11,13 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/micropanel"
 )
 
-// OpenUSB opens and authenticates the ATEM Micro Camera Panel.
-func OpenUSB() (Device, error) {
-	p, err := micropanel.Open()
+// OpenUSB opens and authenticates the first ATEM Micro Camera Panel.
+func OpenUSB() (Device, error) { return OpenUSBSerial("") }
+
+// OpenUSBSerial opens and authenticates the panel with this USB serial
+// number ("" = the first one found).
+func OpenUSBSerial(serial string) (Device, error) {
+	p, err := micropanel.OpenSerial(serial)
 	if errors.Is(err, micropanel.ErrNotFound) {
 		return nil, ErrNoDevice
 	}
@@ -21,6 +25,19 @@ func OpenUSB() (Device, error) {
 		return nil, err
 	}
 	return p, nil
+}
+
+// USBPanels returns the USB serial numbers of the plugged-in panels.
+func USBPanels() ([]string, error) {
+	list, err := micropanel.List()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(list))
+	for _, in := range list {
+		out = append(out, in.Serial)
+	}
+	return out, nil
 }
 
 // otherOwners are programs that authenticate the panel and overwrite its

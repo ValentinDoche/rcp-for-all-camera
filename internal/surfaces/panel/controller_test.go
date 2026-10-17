@@ -805,6 +805,26 @@ func TestControllerReconnectsAfterUnplug(t *testing.T) {
 	waitFor(t, "second session renders", func() bool { _, m, _ := d2.snapshot(); return m != [32]byte{} })
 }
 
+func TestControllerReconnectSwitchesDevice(t *testing.T) {
+	api := sonyAPI()
+	devs := make(chan *fakeDevice, 4)
+	h := start(t, api, Options{Open: func() (Device, error) {
+		d := newFakeDevice()
+		devs <- d
+		return d, nil
+	}})
+	d1 := <-devs
+	<-h.status
+	waitFor(t, "first session renders", func() bool { _, m, _ := d1.snapshot(); return m != [32]byte{} })
+	h.ctl.Reconnect()
+	d2 := <-devs
+	waitFor(t, "first panel closed", d1.closed.Load)
+	if dg, m, _ := d1.snapshot(); dg != ([14]byte{}) || m != ([32]byte{}) {
+		t.Fatal("first panel not blanked before switching")
+	}
+	waitFor(t, "second session renders", func() bool { _, m, _ := d2.snapshot(); return m != [32]byte{} })
+}
+
 func TestControllerNoDeviceAndOpenErrors(t *testing.T) {
 	var fail atomic.Int32
 	h := start(t, sonyAPI(), Options{Open: func() (Device, error) {

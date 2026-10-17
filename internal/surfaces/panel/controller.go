@@ -59,7 +59,8 @@ type Controller struct {
 	opt Options
 	log *slog.Logger
 
-	wake chan struct{} // asks the writer goroutine to refresh the cache
+	wake   chan struct{} // asks the writer goroutine to refresh the cache
+	reopen chan struct{} // ends the session and opens the panel again (Reconnect)
 
 	mu        sync.Mutex
 	api       app.SurfaceAPI
@@ -142,8 +143,18 @@ func New(o Options) *Controller {
 	def(&o.RetryMin, time.Second)
 	def(&o.RetryMax, 10*time.Second)
 	def(&o.BusyEvery, 2*time.Second)
-	return &Controller{opt: o, log: o.Logger, wake: make(chan struct{}, 1),
+	return &Controller{opt: o, log: o.Logger, wake: make(chan struct{}, 1), reopen: make(chan struct{}, 1),
 		held: map[string]bool{}, written: map[core.ControlID]float64{}, now: time.Now}
+}
+
+// Reconnect blanks and closes the panel being driven, then opens one again
+// at once through Options.Open. Call it after changing what Open returns
+// (another USB panel, the simulator). It never blocks.
+func (c *Controller) Reconnect() {
+	select {
+	case c.reopen <- struct{}{}:
+	default:
+	}
 }
 
 // --- events from the app ---------------------------------------------------
