@@ -1,6 +1,7 @@
-package i18n
+package i18n_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/i18n"
 	"os"
 	"regexp"
 	"sort"
@@ -18,15 +19,15 @@ func placeholders(s string) string {
 }
 
 func TestEveryKeyIsInEveryLocale(t *testing.T) {
-	b := Default()
+	b := i18n.Default()
 	langs := b.Languages()
 	if len(langs) < 2 {
 		t.Fatalf("expected fr and en, got %v", langs)
 	}
 	for _, a := range langs {
 		for _, o := range langs {
-			for k := range b.msgs[a.Code] {
-				if _, ok := b.msgs[o.Code][k]; !ok {
+			for k := range b.Messages()[a.Code] {
+				if _, ok := b.Messages()[o.Code][k]; !ok {
 					t.Errorf("key %q is in %s but not in %s", k, a.Code, o.Code)
 				}
 			}
@@ -35,10 +36,10 @@ func TestEveryKeyIsInEveryLocale(t *testing.T) {
 }
 
 func TestValuesNotEmptyAndSamePlaceholders(t *testing.T) {
-	b := Default()
-	for k, ref := range b.msgs["en"] {
+	b := i18n.Default()
+	for k, ref := range b.Messages()["en"] {
 		for _, l := range b.Languages() {
-			v := b.msgs[l.Code][k]
+			v := b.Messages()[l.Code][k]
 			if strings.TrimSpace(v) == "" {
 				t.Errorf("%s: empty value for %q", l.Code, k)
 			}
@@ -50,7 +51,7 @@ func TestValuesNotEmptyAndSamePlaceholders(t *testing.T) {
 }
 
 func TestNoDashesInAnyValue(t *testing.T) {
-	for code, m := range Default().msgs {
+	for code, m := range i18n.Default().Messages() {
 		for k, v := range m {
 			if strings.ContainsAny(v, "—–") {
 				t.Errorf("%s: dash in %q: %q", code, k, v)
@@ -60,12 +61,12 @@ func TestNoDashesInAnyValue(t *testing.T) {
 }
 
 func TestEveryLocaleHasName(t *testing.T) {
-	for _, l := range Default().Languages() {
+	for _, l := range i18n.Default().Languages() {
 		if l.Name == "" || l.Code == "" {
 			t.Errorf("language %+v incomplete", l)
 		}
 	}
-	if Default().Translator("fr").Name() != "Français" {
+	if i18n.Default().Translator("fr").Name() != "Français" {
 		t.Error("fr name")
 	}
 }
@@ -75,7 +76,7 @@ func TestFallbackChain(t *testing.T) {
 		"locales/en.json": {Data: []byte(`{"_meta.name":"English","_meta.decimal":".","a":"A en","b":"B en {x}"}`)},
 		"locales/de.json": {Data: []byte(`{"_meta.name":"Deutsch","_meta.decimal":",","a":"A de"}`)},
 	}
-	b, err := Load(fsys, "locales")
+	b, err := i18n.Load(fsys, "locales")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,16 +99,16 @@ func TestFallbackChain(t *testing.T) {
 }
 
 func TestLoadRejectsBadInput(t *testing.T) {
-	if _, err := Load(fstest.MapFS{"l/en.json": {Data: []byte(`{`)}}, "l"); err == nil {
+	if _, err := i18n.Load(fstest.MapFS{"l/en.json": {Data: []byte(`{`)}}, "l"); err == nil {
 		t.Error("bad JSON accepted")
 	}
-	if _, err := Load(fstest.MapFS{"l/fr.json": {Data: []byte(`{"_meta.name":"F"}`)}}, "l"); err == nil {
+	if _, err := i18n.Load(fstest.MapFS{"l/fr.json": {Data: []byte(`{"_meta.name":"F"}`)}}, "l"); err == nil {
 		t.Error("missing en accepted")
 	}
 }
 
 func TestPlaceholders(t *testing.T) {
-	tr := Default().Translator("en")
+	tr := i18n.Default().Translator("en")
 	if got := tr.T("config.saved", "slot", 3); got != "Cam3 saved" {
 		t.Errorf("T = %q", got)
 	}
@@ -115,13 +116,13 @@ func TestPlaceholders(t *testing.T) {
 	if got := tr.T("config.saved", "oops"); got != "Cam{slot} saved" {
 		t.Errorf("T = %q", got)
 	}
-	if got := Default().Translator("fr").T("details.title", "slot", 2); got != "Cam2 : détails" {
+	if got := i18n.Default().Translator("fr").T("details.title", "slot", 2); got != "Cam2 : détails" {
 		t.Errorf("fr T = %q", got)
 	}
 }
 
 func TestFormatPerLanguage(t *testing.T) {
-	fr, en := Default().Translator("fr"), Default().Translator("en")
+	fr, en := i18n.Default().Translator("fr"), i18n.Default().Translator("en")
 	if fr.Number(0.5, 2) != "0,50" || en.Number(0.5, 2) != "0.50" {
 		t.Error("Number")
 	}

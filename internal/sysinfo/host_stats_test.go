@@ -1,14 +1,15 @@
-package sysinfo
+package sysinfo_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 	"net"
 	"testing"
 	"time"
 )
 
-type fakeReader struct{ raws []raw }
+type fakeReader struct{ raws []sysinfo.Counters }
 
-func (f *fakeReader) read() (raw, error) {
+func (f *fakeReader) Read() (sysinfo.Counters, error) {
 	r := f.raws[0]
 	if len(f.raws) > 1 {
 		f.raws = f.raws[1:]
@@ -17,7 +18,7 @@ func (f *fakeReader) read() (raw, error) {
 }
 
 func TestFirstSampleHasMemoryButNoRates(t *testing.T) {
-	s := newSampler(&fakeReader{raws: []raw{{memUsed: 4 << 30, memTotal: 16 << 30, rx: 100, tx: 50, at: time.Unix(0, 0)}}})
+	s := sysinfo.NewSampler(&fakeReader{raws: []sysinfo.Counters{{MemUsed: 4 << 30, MemTotal: 16 << 30, Rx: 100, Tx: 50, At: time.Unix(0, 0)}}})
 	st, err := s.Sample()
 	if err != nil {
 		t.Fatal(err)
@@ -32,9 +33,9 @@ func TestFirstSampleHasMemoryButNoRates(t *testing.T) {
 
 func TestCPUPercentFromSystemTimes(t *testing.T) {
 	t0 := time.Unix(0, 0)
-	s := newSampler(&fakeReader{raws: []raw{
-		{idle: 1000, total: 4000, at: t0},
-		{idle: 1250, total: 5000, at: t0.Add(time.Second)}, // 1000 ticks, 250 idle
+	s := sysinfo.NewSampler(&fakeReader{raws: []sysinfo.Counters{
+		{Idle: 1000, Total: 4000, At: t0},
+		{Idle: 1250, Total: 5000, At: t0.Add(time.Second)}, // 1000 ticks, 250 idle
 	}})
 	_, _ = s.Sample()
 	st, _ := s.Sample()
@@ -45,9 +46,9 @@ func TestCPUPercentFromSystemTimes(t *testing.T) {
 
 func TestNetworkRatesPerSecond(t *testing.T) {
 	t0 := time.Unix(0, 0)
-	s := newSampler(&fakeReader{raws: []raw{
-		{rx: 1000, tx: 500, at: t0},
-		{rx: 3000, tx: 1500, at: t0.Add(2 * time.Second)},
+	s := sysinfo.NewSampler(&fakeReader{raws: []sysinfo.Counters{
+		{Rx: 1000, Tx: 500, At: t0},
+		{Rx: 3000, Tx: 1500, At: t0.Add(2 * time.Second)},
 	}})
 	_, _ = s.Sample()
 	st, _ := s.Sample()
@@ -58,9 +59,9 @@ func TestNetworkRatesPerSecond(t *testing.T) {
 
 func TestCounterResetGivesZeroNotNegative(t *testing.T) {
 	t0 := time.Unix(0, 0)
-	s := newSampler(&fakeReader{raws: []raw{
-		{rx: 9000, tx: 9000, idle: 10, total: 10, at: t0},
-		{rx: 100, tx: 100, idle: 5, total: 5, at: t0.Add(time.Second)}, // adapter reset
+	s := sysinfo.NewSampler(&fakeReader{raws: []sysinfo.Counters{
+		{Rx: 9000, Tx: 9000, Idle: 10, Total: 10, At: t0},
+		{Rx: 100, Tx: 100, Idle: 5, Total: 5, At: t0.Add(time.Second)}, // adapter reset
 	}})
 	_, _ = s.Sample()
 	st, _ := s.Sample()
@@ -77,17 +78,17 @@ func TestPickIPPrefersPrivateIPv4OverOthers(t *testing.T) {
 		net.ParseIP("100.101.1.2"),
 		net.ParseIP("192.168.1.42"),
 	}
-	if got := pickIP(addrs); got != "192.168.1.42" {
+	if got := sysinfo.PickIP(addrs); got != "192.168.1.42" {
 		t.Fatalf("pickIP = %q, want 192.168.1.42", got)
 	}
 }
 
 func TestPickIPFallsBackToAnyGlobalIPv4(t *testing.T) {
 	addrs := []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("100.101.1.2")}
-	if got := pickIP(addrs); got != "100.101.1.2" {
+	if got := sysinfo.PickIP(addrs); got != "100.101.1.2" {
 		t.Fatalf("pickIP = %q", got)
 	}
-	if got := pickIP([]net.IP{net.ParseIP("127.0.0.1")}); got != "" {
-		t.Fatalf("pickIP(loopback only) = %q, want empty", got)
+	if got := sysinfo.PickIP([]net.IP{net.ParseIP("127.0.0.1")}); got != "" {
+		t.Fatalf("sysinfo.PickIP(loopback only) = %q, want empty", got)
 	}
 }

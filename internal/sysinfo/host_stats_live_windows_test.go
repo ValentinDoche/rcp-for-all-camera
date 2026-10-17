@@ -1,12 +1,13 @@
-package sysinfo
+package sysinfo_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 	"testing"
 	"time"
 )
 
 func TestLiveSampleOnThisMachine(t *testing.T) {
-	s := New()
+	s := sysinfo.New()
 	if _, err := s.Sample(); err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +23,7 @@ func TestLiveSampleOnThisMachine(t *testing.T) {
 }
 
 func TestLocalIPv4sOnThisMachine(t *testing.T) {
-	for _, n := range LocalIPv4s() {
+	for _, n := range sysinfo.LocalIPv4s() {
 		if n.IP == "" || n.Name == "" {
 			t.Fatalf("bad interface %+v", n)
 		}

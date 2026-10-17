@@ -14,14 +14,26 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsim"
 )
 
+// USB is how the selector reaches the USB panels. SystemUSB is the real
+// one; tests pass fakes.
+type USB struct {
+	// List returns the serial numbers of the plugged-in panels.
+	List func() ([]string, error)
+	// Open opens one panel by serial ("" = the first one).
+	Open func(serial string) (panel.Device, error)
+	// Busy reports whether another program drives the panel.
+	Busy func() bool
+}
+
+// SystemUSB is the USB panel access of this computer.
+func SystemUSB() USB {
+	return USB{List: panel.USBPanels, Open: panel.OpenUSBSerial, Busy: panel.OtherOwnerRunning}
+}
+
 // Selector holds the selected panel source.
 type Selector struct {
 	sim *panelsim.Sim
-
-	// USB access; tests replace them.
-	listUSB func() ([]string, error)
-	openUSB func(serial string) (panel.Device, error)
-	busyUSB func() bool
+	usb USB
 
 	mu       sync.Mutex
 	sel      string
@@ -31,10 +43,9 @@ type Selector struct {
 var _ app.PanelSources = (*Selector)(nil)
 
 // New returns a selector on the first USB panel. sim is the simulator
-// offered next to the USB panels.
-func New(sim *panelsim.Sim) *Selector {
-	return &Selector{sim: sim, sel: app.PanelSourceUSB,
-		listUSB: panel.USBPanels, openUSB: panel.OpenUSBSerial, busyUSB: panel.OtherOwnerRunning}
+// offered next to the USB panels; usb reaches the USB panels (SystemUSB).
+func New(sim *panelsim.Sim, usb USB) *Selector {
+	return &Selector{sim: sim, usb: usb, sel: app.PanelSourceUSB}
 }
 
 // OnSelect sets a func called after the source changed (outside the lock):
@@ -55,7 +66,7 @@ func (s *Selector) Selected() string {
 // List returns automatic USB, every plugged-in USB panel and the simulator.
 func (s *Selector) List() []app.PanelSource {
 	out := []app.PanelSource{{ID: app.PanelSourceUSB, Kind: app.PanelKindUSB}}
-	serials, _ := s.listUSB() // detection failures already show in the status
+	serials, _ := s.usb.List() // detection failures already show in the status
 	for _, sn := range serials {
 		if sn != "" {
 			out = append(out, app.PanelSource{ID: app.PanelSourceSerialPrefix + sn, Kind: app.PanelKindUSB, Serial: sn})
@@ -101,7 +112,7 @@ func (s *Selector) Open() (panel.Device, error) {
 	if sim {
 		return s.sim.Open()
 	}
-	return s.openUSB(sn)
+	return s.usb.Open(sn)
 }
 
 // Busy is the controller's panel.Options.Busy: ATEM Software Control only
@@ -110,7 +121,7 @@ func (s *Selector) Busy() bool {
 	if _, sim := s.serial(); sim {
 		return false
 	}
-	return s.busyUSB()
+	return s.usb.Busy()
 }
 
 // Present is the app.PanelProbe of the selected source.
@@ -119,7 +130,7 @@ func (s *Selector) Present() (bool, error) {
 	if sim {
 		return s.sim.Plugged(), nil
 	}
-	serials, err := s.listUSB()
+	serials, err := s.usb.List()
 	if err != nil {
 		return false, err
 	}

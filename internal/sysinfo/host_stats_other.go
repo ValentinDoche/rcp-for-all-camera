@@ -4,4 +4,4 @@ package sysinfo
 
 type platformReader struct{}
 
-func (platformReader) read() (raw, error) { return raw{}, ErrUnsupported }
+func (platformReader) Read() (Counters, error) { return Counters{}, ErrUnsupported }

@@ -1,6 +1,7 @@
-package autostart
+package autostart_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/autostart"
 	"testing"
 
 	"golang.org/x/sys/windows/registry"
@@ -9,13 +10,13 @@ import (
 // The tests use a private key, never the real Run key.
 const testKey = `Software\RCPForAllCameraTest\Run`
 
-func testEntry(t *testing.T) *Entry {
+func testEntry(t *testing.T) *autostart.Entry {
 	t.Helper()
 	t.Cleanup(func() {
 		_ = registry.DeleteKey(registry.CURRENT_USER, testKey)
 		_ = registry.DeleteKey(registry.CURRENT_USER, `Software\RCPForAllCameraTest`)
 	})
-	return &Entry{KeyPath: testKey, Name: "RCPForAllCamera", Exe: `C:\Program Files\RCP\rcp.exe`}
+	return &autostart.Entry{KeyPath: testKey, Name: "RCPForAllCamera", Exe: `C:\Program Files\RCP\rcp.exe`}
 }
 
 func TestDisabledByDefault(t *testing.T) {

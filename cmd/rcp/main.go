@@ -72,7 +72,7 @@ func run() error {
 	// The panel comes from USB (first or chosen panel) or the simulator,
 	// selected in the GUI and saved in rig.json.
 	simPanel := panelsim.New()
-	sources := panelsource.New(simPanel)
+	sources := panelsource.New(simPanel, panelsource.SystemUSB())
 	svc, err := appsvc.NewService(appsvc.Options{
 		Registry: reg,
 		Store:    config.FileStore{Path: cfgPath},

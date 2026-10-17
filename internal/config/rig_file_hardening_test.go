@@ -1,6 +1,7 @@
-package config
+package config_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +17,7 @@ func TestLoadMovesUnreadableFileAside(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			p := filepath.Join(t.TempDir(), "rig.json")
 			_ = os.WriteFile(p, []byte(content), 0o600)
-			if _, err := (FileStore{Path: p}).Load(); err == nil {
+			if _, err := (config.FileStore{Path: p}).Load(); err == nil {
 				t.Fatal("Load = nil, want error")
 			}
 			b, err := os.ReadFile(p + ".bad")

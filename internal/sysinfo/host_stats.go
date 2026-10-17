@@ -23,45 +23,47 @@ type Stats struct {
 	HasRates bool
 }
 
-// raw is what a platform reader returns: cumulative counters.
-type raw struct {
-	idle, total       uint64 // CPU time ticks
-	memUsed, memTotal uint64
-	rx, tx            uint64 // cumulative bytes
-	ip                string
-	at                time.Time
+// Counters are what a Reader returns: cumulative counters at one instant.
+type Counters struct {
+	Idle, Total       uint64 // CPU time ticks
+	MemUsed, MemTotal uint64 // bytes
+	Rx, Tx            uint64 // cumulative bytes received and sent
+	IP                string // main LAN IPv4 address
+	At                time.Time
 }
 
-type reader interface {
-	read() (raw, error)
+// Reader reads the counters of a machine (the platform's in production).
+type Reader interface {
+	Read() (Counters, error)
 }
 
 // Sampler turns cumulative counters into rates. Not safe for concurrent use.
 type Sampler struct {
-	r    reader
-	prev *raw
+	r    Reader
+	prev *Counters
 }
 
 // New returns a sampler for this machine.
-func New() *Sampler { return newSampler(platformReader{}) }
+func New() *Sampler { return NewSampler(platformReader{}) }
 
-func newSampler(r reader) *Sampler { return &Sampler{r: r} }
+// NewSampler returns a sampler on another Reader.
+func NewSampler(r Reader) *Sampler { return &Sampler{r: r} }
 
 // Sample reads the counters and computes rates since the previous call.
 func (s *Sampler) Sample() (Stats, error) {
-	cur, err := s.r.read()
+	cur, err := s.r.Read()
 	if err != nil {
 		return Stats{}, err
 	}
-	st := Stats{MemUsed: cur.memUsed, MemTotal: cur.memTotal, IP: cur.ip}
+	st := Stats{MemUsed: cur.MemUsed, MemTotal: cur.MemTotal, IP: cur.IP}
 	if p := s.prev; p != nil {
 		st.HasRates = true
-		if dt := cur.total - p.total; cur.total > p.total && cur.idle >= p.idle {
-			st.CPU = 100 * float64(dt-(cur.idle-p.idle)) / float64(dt)
+		if dt := cur.Total - p.Total; cur.Total > p.Total && cur.Idle >= p.Idle {
+			st.CPU = 100 * float64(dt-(cur.Idle-p.Idle)) / float64(dt)
 		}
-		if sec := cur.at.Sub(p.at).Seconds(); sec > 0 {
-			st.DownBps = rate(p.rx, cur.rx, sec)
-			st.UpBps = rate(p.tx, cur.tx, sec)
+		if sec := cur.At.Sub(p.At).Seconds(); sec > 0 {
+			st.DownBps = rate(p.Rx, cur.Rx, sec)
+			st.UpBps = rate(p.Tx, cur.Tx, sec)
 		}
 	}
 	s.prev = &cur
@@ -76,9 +78,9 @@ func rate(prev, cur uint64, sec float64) float64 {
 	return float64(cur-prev) / sec
 }
 
-// pickIP returns the address to show: a private IPv4 first, else any global
+// PickIP returns the address to show: a private IPv4 first, else any global
 // unicast IPv4. Loopback and link-local addresses are skipped.
-func pickIP(addrs []net.IP) string {
+func PickIP(addrs []net.IP) string {
 	var fallback string
 	for _, ip := range addrs {
 		v4 := ip.To4()

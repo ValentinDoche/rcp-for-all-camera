@@ -31,27 +31,27 @@ type memoryStatusEx struct {
 
 type platformReader struct{}
 
-func (platformReader) read() (raw, error) {
-	r := raw{at: time.Now()}
+func (platformReader) Read() (Counters, error) {
+	r := Counters{At: time.Now()}
 
 	var idle, kernel, user windows.Filetime
 	if ok, _, err := procGetSystemTimes.Call(
 		uintptr(unsafe.Pointer(&idle)), uintptr(unsafe.Pointer(&kernel)), uintptr(unsafe.Pointer(&user))); ok == 0 {
-		return raw{}, fmt.Errorf("GetSystemTimes: %w", err)
+		return Counters{}, fmt.Errorf("GetSystemTimes: %w", err)
 	}
 	// Kernel time already includes idle time.
-	r.idle = ft(idle)
-	r.total = ft(kernel) + ft(user)
+	r.Idle = ft(idle)
+	r.Total = ft(kernel) + ft(user)
 
 	m := memoryStatusEx{Length: uint32(unsafe.Sizeof(memoryStatusEx{}))}
 	if ok, _, err := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&m))); ok == 0 {
-		return raw{}, fmt.Errorf("GlobalMemoryStatusEx: %w", err)
+		return Counters{}, fmt.Errorf("GlobalMemoryStatusEx: %w", err)
 	}
-	r.memTotal = m.TotalPhys
-	r.memUsed = m.TotalPhys - m.AvailPhys
+	r.MemTotal = m.TotalPhys
+	r.MemUsed = m.TotalPhys - m.AvailPhys
 
-	r.rx, r.tx = netCounters()
-	r.ip = pickIP(interfaceIPs())
+	r.Rx, r.Tx = netCounters()
+	r.IP = PickIP(interfaceIPs())
 	return r, nil
 }
 

@@ -1,7 +1,8 @@
-package panelsource
+package panelsource_test
 
 import (
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsource"
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
@@ -9,12 +10,13 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsim"
 )
 
-func newTest(serials ...string) (*Selector, *string) {
+func newTest(serials ...string) (*panelsource.Selector, *string) {
 	opened := new(string)
-	s := New(panelsim.New())
-	s.listUSB = func() ([]string, error) { return serials, nil }
-	s.openUSB = func(sn string) (panel.Device, error) { *opened = "usb[" + sn + "]"; return nil, panel.ErrNoDevice }
-	s.busyUSB = func() bool { return true }
+	s := panelsource.New(panelsim.New(), panelsource.USB{
+		List: func() ([]string, error) { return serials, nil },
+		Open: func(sn string) (panel.Device, error) { *opened = "usb[" + sn + "]"; return nil, panel.ErrNoDevice },
+		Busy: func() bool { return true },
+	})
 	return s, opened
 }
 
@@ -77,8 +79,11 @@ func TestSelectRoutesOpenBusyAndPresence(t *testing.T) {
 }
 
 func TestPresentReportsDetectionErrors(t *testing.T) {
-	s, _ := newTest()
-	s.listUSB = func() ([]string, error) { return nil, errors.New("setupapi") }
+	s := panelsource.New(panelsim.New(), panelsource.USB{
+		List: func() ([]string, error) { return nil, errors.New("setupapi") },
+		Open: func(string) (panel.Device, error) { return nil, panel.ErrNoDevice },
+		Busy: func() bool { return false },
+	})
 	if _, err := s.Present(); err == nil {
 		t.Fatal("detection error hidden")
 	}

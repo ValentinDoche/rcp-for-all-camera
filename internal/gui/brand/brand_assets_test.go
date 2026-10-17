@@ -1,6 +1,7 @@
-package brand
+package brand_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/brand"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestLogosAreValidSVG(t *testing.T) {
-	for _, r := range []fyne.Resource{Logo, Mark(true), Mark(false)} {
+	for _, r := range []fyne.Resource{brand.Logo, brand.Mark(true), brand.Mark(false)} {
 		if len(r.Content()) == 0 {
 			t.Fatalf("%s is empty", r.Name())
 		}
@@ -35,7 +36,7 @@ func TestRender(t *testing.T) {
 		i.FillMode = canvas.ImageFillContain
 		return i
 	}
-	row := container.NewHBox(img(Logo, 256), img(Logo, 64), img(Logo, 32), img(Logo, 16), img(Mark(true), 128))
+	row := container.NewHBox(img(brand.Logo, 256), img(brand.Logo, 64), img(brand.Logo, 32), img(brand.Logo, 16), img(brand.Mark(true), 128))
 	w := test.NewTempWindow(t, row)
 	w.Resize(row.MinSize().AddWidthHeight(16, 16))
 	f, err := os.Create(filepath.Join(dir, "logo.png"))

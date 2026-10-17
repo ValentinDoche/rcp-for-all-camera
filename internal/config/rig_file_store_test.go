@@ -1,8 +1,9 @@
-package config
+package config_test
 
 import (
 	"encoding/json"
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestLoadMissingFileReturnsEmptyRig(t *testing.T) {
-	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
+	s := config.FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
 	rig, err := s.Load()
 	if err != nil {
 		t.Fatalf("Load(missing) = %v, want nil", err)
@@ -24,7 +25,7 @@ func TestLoadMissingFileReturnsEmptyRig(t *testing.T) {
 }
 
 func TestSaveThenLoadRoundTrips(t *testing.T) {
-	s := FileStore{Path: filepath.Join(t.TempDir(), "sub", "rig.json")}
+	s := config.FileStore{Path: filepath.Join(t.TempDir(), "sub", "rig.json")}
 	in := app.SavedRig{Active: 2}
 	in.Slots[1] = &core.CameraConfig{Model: "sony-fx6", Name: "A", Host: "10.0.0.6", Username: "admin"}
 	if err := s.Save(in); err != nil {
@@ -40,7 +41,7 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 }
 
 func TestPresetsRoundTrip(t *testing.T) {
-	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
+	s := config.FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
 	in := app.SavedRig{Presets: []app.SavedPreset{{
 		Slot: 1, Number: 3, Model: "bm-studio-6k-pro",
 		Values: map[core.ControlID]core.Value{
@@ -67,7 +68,7 @@ func TestPresetsRoundTrip(t *testing.T) {
 }
 
 func TestRigWithoutPresetsHasNoPresetsKey(t *testing.T) {
-	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
+	s := config.FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
 	if err := s.Save(app.SavedRig{}); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,7 @@ func TestRigWithoutPresetsHasNoPresetsKey(t *testing.T) {
 }
 
 func TestSaveNeverWritesPasswords(t *testing.T) {
-	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
+	s := config.FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
 	in := app.SavedRig{}
 	in.Slots[0] = &core.CameraConfig{Model: "sony-fx6", Host: "10.0.0.6", Password: "hunter2"}
 	if err := s.Save(in); err != nil {
@@ -94,7 +95,7 @@ func TestLoadRejectsUnknownVersion(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "rig.json")
 	b, _ := json.Marshal(map[string]any{"version": 99})
 	_ = os.WriteFile(p, b, 0o600)
-	if _, err := (FileStore{Path: p}).Load(); !errors.Is(err, ErrUnsupportedVersion) {
+	if _, err := (config.FileStore{Path: p}).Load(); !errors.Is(err, config.ErrUnsupportedVersion) {
 		t.Fatalf("Load(v99) = %v, want ErrUnsupportedVersion", err)
 	}
 }
@@ -102,15 +103,15 @@ func TestLoadRejectsUnknownVersion(t *testing.T) {
 func TestLoadRejectsMalformedJSON(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "rig.json")
 	_ = os.WriteFile(p, []byte("{not json"), 0o600)
-	if _, err := (FileStore{Path: p}).Load(); err == nil {
+	if _, err := (config.FileStore{Path: p}).Load(); err == nil {
 		t.Fatal("Load(malformed) = nil, want error")
 	}
 }
 
 func TestLoadRejectsOversizedFile(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "rig.json")
-	_ = os.WriteFile(p, []byte(`{"version":1,"pad":"`+strings.Repeat("x", MaxFileSize)+`"}`), 0o600)
-	if _, err := (FileStore{Path: p}).Load(); err == nil {
+	_ = os.WriteFile(p, []byte(`{"version":1,"pad":"`+strings.Repeat("x", config.MaxFileSize)+`"}`), 0o600)
+	if _, err := (config.FileStore{Path: p}).Load(); err == nil {
 		t.Fatal("Load(oversized) = nil, want error")
 	}
 }
@@ -118,14 +119,14 @@ func TestLoadRejectsOversizedFile(t *testing.T) {
 func TestLoadClampsActiveSlot(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "rig.json")
 	_ = os.WriteFile(p, []byte(`{"version":1,"active":42}`), 0o600)
-	rig, err := (FileStore{Path: p}).Load()
+	rig, err := (config.FileStore{Path: p}).Load()
 	if err != nil || rig.Active != 0 {
 		t.Fatalf("Load(active 42) = %+v, %v; want active 0", rig, err)
 	}
 }
 
 func TestMemorySecrets(t *testing.T) {
-	m := NewMemorySecrets()
+	m := config.NewMemorySecrets()
 	if _, ok, _ := m.Get("camera/1"); ok {
 		t.Fatal("Get on empty store found a value")
 	}
@@ -143,7 +144,7 @@ func TestMemorySecrets(t *testing.T) {
 // The file format is the contract with the files users already have: it
 // is parsed back as plain JSON and compared field by field.
 func TestFileFormat(t *testing.T) {
-	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
+	s := config.FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
 	on := false
 	in := app.SavedRig{Active: 1, BindIP: "10.0.0.2", OperatorLock: &on, Panel: "sim", LogLevel: "debug",
 		Presets: []app.SavedPreset{{Slot: 1, Number: 2, Model: "demo", Values: map[core.ControlID]core.Value{core.Gain: core.Number(6)}}}}
