@@ -227,6 +227,9 @@ zips it with the README and publishes a GitHub release (a tag with a suffix such
 
 ## 9. Working rules (from SPEC.md boundaries, plus the owner's preferences)
 
+- Follow the engineering rules in [docs/go-engineering-rules.md](docs/go-engineering-rules.md)
+  (architecture, domain, errors, security, concurrency, TDD and tests; its last sections map
+  them to this repo and give a review checklist).
 - Idiomatic Go, `gofmt`, errors wrapped with `%w`, `context.Context` on I/O. **No new runtime dependency without asking.**
 - Keep protocol details inside the driver module. Log device commands at debug level. Survive unplug and reconnect.
 - **Ask first** before sending anything that could change recording or output on live gear.
