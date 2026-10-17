@@ -14,7 +14,7 @@ func main() {}
 
 func init() { rcpmod.Register(module) }
 
-var module = rcpmod.Planned{Model: info, Specs: specs}
+var module = rcpmod.Planned{Model: info, Specs: specs, Page: page}
 
 var info = rcpmod.Info{
 	ID: "bm-studio-4k-plus-g2", Brand: "Blackmagic Design", Name: "Studio Camera 4K Plus G2",

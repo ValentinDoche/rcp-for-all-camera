@@ -24,7 +24,7 @@ const (
 // MaxTextLen bounds a text value.
 const MaxTextLen = 256
 
-// Widget is how a custom block shows a control (ControlSpec.Widget).
+// Widget is how a BlockControls panel shows a control (Item.Widget).
 type Widget string
 
 const (
@@ -104,11 +104,6 @@ type ControlSpec struct {
 	// the GUI does not show it and presets do not store it, as it doubles a
 	// visible control.
 	Hidden bool
-	// Block puts the control in a custom block of that title, shown at the
-	// end of the camera page in declaration order, with Widget (empty: the
-	// default widget of its kind). Empty Block: the standard layout.
-	Block  string
-	Widget Widget
 }
 
 // Value carries a control value. Only the field matching Kind is meaningful:
@@ -175,14 +170,11 @@ func (s ControlSpec) Check() error {
 	if err := CheckControlID(s.ID); err != nil {
 		return fmt.Errorf("control spec %q: %w", s.ID, err)
 	}
-	if len(s.Section) > MaxIDLen || !printable(s.Section) || len(s.Block) > MaxIDLen || !printable(s.Block) {
-		return fmt.Errorf("control %s: section and block must be at most %d printable characters", s.ID, MaxIDLen)
+	if len(s.Section) > MaxIDLen || !printable(s.Section) {
+		return fmt.Errorf("control %s: section must be at most %d printable characters", s.ID, MaxIDLen)
 	}
 	if len(s.Label) > MaxIDLen || !printable(s.Label) || len(s.Unit) > 16 || !printable(s.Unit) {
 		return fmt.Errorf("control %s: label or unit too long or not printable", s.ID)
-	}
-	if s.Widget != "" && (s.Block == "" || !s.Widget.Fits(s.Kind, s.ReadOnly)) {
-		return fmt.Errorf("control %s: widget %q needs a block and must fit a %s control", s.ID, s.Widget, s.Kind)
 	}
 	switch s.Kind {
 	case KindRange:

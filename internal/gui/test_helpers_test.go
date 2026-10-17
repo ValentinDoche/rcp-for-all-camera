@@ -110,6 +110,21 @@ type liveCam struct {
 	refuse bool // Connect fails: the camera stays offline or in error
 	sets   []setCall
 	lens   core.Lens
+	page   *core.Page // nil: the inner camera's page
+}
+
+// Page makes liveCam a core.PageReporter: the page set by the test, or
+// the wrapped module's.
+func (c *liveCam) Page() core.Page {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.page != nil {
+		return *c.page
+	}
+	if pr, ok := c.Camera.(core.PageReporter); ok {
+		return pr.Page()
+	}
+	return core.StandardPage()
 }
 
 // Lens makes liveCam a core.LensReporter, with a 24-70 mm f/2.8 zoom.

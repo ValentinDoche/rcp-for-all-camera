@@ -29,6 +29,7 @@ type API interface {
 	SelectSlot(slot int) error
 	Controls(slot int) ([]app.ControlView, error)
 	Lens(slot int) (core.Lens, error)
+	Page(slot int) (core.Page, error)
 	SetControl(slot int, id string, v core.Value) error
 	ConfirmSetControl(slot int, id string, v core.Value) error
 	PanelStatus() app.PanelStatus
@@ -97,6 +98,7 @@ type slotData struct {
 	byID   map[core.ControlID]int
 	values map[core.ControlID]core.Value
 	lens   core.Lens
+	page   core.Page
 	loaded bool
 	gen    int // bumped on every (re)load to drop stale answers
 }
@@ -301,6 +303,15 @@ func (c *Controller) Lens(slot int) core.Lens {
 	return core.Lens{}
 }
 
+// Page is the layout of the slot's camera page (the standard page until the
+// slot is loaded).
+func (c *Controller) Page(slot int) core.Page {
+	if sd := c.data(slot); sd != nil && sd.loaded {
+		return sd.page
+	}
+	return core.StandardPage()
+}
+
 // Loaded reports whether the controls of the slot have been read.
 func (c *Controller) Loaded(slot int) bool {
 	sd := c.data(slot)
@@ -490,6 +501,10 @@ func (c *Controller) loadControls(slot int) {
 	c.async(func() {
 		views, err := c.api.Controls(slot)
 		lens, _ := c.api.Lens(slot)
+		page, perr := c.api.Page(slot)
+		if perr != nil {
+			page = core.StandardPage()
+		}
 		c.ui(func() {
 			cur := c.data(slot)
 			if cur == nil || cur.gen != g {
@@ -512,6 +527,7 @@ func (c *Controller) loadControls(slot int) {
 				}
 			}
 			cur.lens = lens
+			cur.page = page
 			cur.loaded = true
 			c.notify(Change{Kind: ChSlot, Slot: slot})
 		})

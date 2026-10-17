@@ -12,6 +12,7 @@ const (
 	OpInfo      = "info"
 	OpNew       = "new"
 	OpControls  = "controls"
+	OpPage      = "page"
 	OpConnect   = "connect"
 	OpClose     = "close"
 	OpGet       = "get"
@@ -37,8 +38,8 @@ type Request struct {
 // for a call that returns something; both are empty for a call that only
 // succeeds.
 type Response struct {
-	// Result is the op's result: Info (OpInfo), []ControlSpec (OpControls)
-	// or Value (OpGet).
+	// Result is the op's result: Info (OpInfo), []ControlSpec (OpControls),
+	// Page (OpPage) or Value (OpGet).
 	Result any        `json:"result,omitempty"`
 	Error  *WireError `json:"error,omitempty"`
 }

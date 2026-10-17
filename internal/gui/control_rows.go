@@ -14,8 +14,8 @@ import (
 )
 
 // controlRow is the generic widget of one control: the renderer picks the
-// widget from the spec (widgets.ChooseKind) so every control a camera
-// declares can be driven from the Details page.
+// widget from the page item and the spec (widgets.ChooseKind) so every
+// control a camera declares can be driven from the Details page.
 type controlRow struct {
 	spec  core.ControlSpec
 	kind  widgets.WidgetKind
@@ -26,14 +26,14 @@ type controlRow struct {
 const labelColWidth = 132
 
 func newControlRow(ctl *Controller, slot int, spec core.ControlSpec) *controlRow {
-	return buildControlRow(ctl, slot, spec, false)
+	return buildControlRow(ctl, slot, spec, "", false)
 }
 
 // buildControlRow builds a row; compact is for a narrow column: a range
 // control puts a small name on a first line and − / slider / + / value on a
 // second.
-func buildControlRow(ctl *Controller, slot int, spec core.ControlSpec, compact bool) *controlRow {
-	r := &controlRow{spec: spec, kind: widgets.ChooseKind(spec)}
+func buildControlRow(ctl *Controller, slot int, spec core.ControlSpec, w core.Widget, compact bool) *controlRow {
+	r := &controlRow{spec: spec, kind: widgets.ChooseKind(spec, w)}
 	write := func(v core.Value) { ctl.Write(slot, spec.ID, v) }
 	label := ctl.tx.ControlLabel(spec)
 	quiet := false
@@ -46,7 +46,7 @@ func buildControlRow(ctl *Controller, slot int, spec core.ControlSpec, compact b
 		return widgets.Sized(labelColWidth, 0, container.NewVBox(items...))
 	}
 
-	if r.kind == widgets.KindSegmented && spec.Widget == "" && segmentedWidth(spec) > maxSegmentedWidth {
+	if r.kind == widgets.KindSegmented && w == "" && segmentedWidth(spec) > maxSegmentedWidth {
 		r.kind = widgets.KindSelect // labels too long for one row
 	}
 
@@ -288,24 +288,19 @@ type section struct {
 	rows  []*controlRow
 }
 
-// customBlocks builds the custom blocks a module declared (spec.Block), in
-// the order each block first appears, with the widgets it asked for.
-func customBlocks(ctl *Controller, slot int) []*section {
-	var out []*section
-	byTitle := map[string]*section{}
-	for _, sp := range ctl.Specs(slot) {
-		if sp.Block == "" || sp.Hidden {
+// controlsSection builds a BlockControls panel: its items, in order, each
+// with the widget the module asked for. Items the camera does not declare
+// (or hides) are skipped.
+func controlsSection(ctl *Controller, slot int, b core.Block) *section {
+	s := &section{group: core.GroupMisc, title: b.Title}
+	for _, it := range b.Items {
+		sp, ok := ctl.Spec(slot, it.Control)
+		if !ok || sp.Hidden {
 			continue
 		}
-		s := byTitle[sp.Block]
-		if s == nil {
-			s = &section{group: core.GroupMisc, title: sp.Block}
-			byTitle[sp.Block] = s
-			out = append(out, s)
-		}
-		s.rows = append(s.rows, buildControlRow(ctl, slot, sp, false))
+		s.rows = append(s.rows, buildControlRow(ctl, slot, sp, it.Widget, false))
 	}
-	return out
+	return s
 }
 
 // buildSections groups every declared control that is not in skip by its
@@ -330,7 +325,7 @@ func buildSections(ctl *Controller, slot int, skip map[core.ControlID]bool, comp
 			s = &section{group: g, title: ctl.tx.GroupTitle(g)}
 			byGroup[g] = s
 		}
-		s.rows = append(s.rows, buildControlRow(ctl, slot, sp, compact))
+		s.rows = append(s.rows, buildControlRow(ctl, slot, sp, "", compact))
 	}
 	var out []*section
 	for _, g := range texts.GroupOrder {

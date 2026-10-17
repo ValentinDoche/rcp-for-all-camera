@@ -27,6 +27,13 @@ func Module(t *testing.T, m rcpmod.Module) {
 			t.Fatalf("New(power zoom %t): %v", zoom, err)
 		}
 		offline(t, cam)
+		page := rcpmod.StandardPage()
+		if d, ok := cam.(rcpmod.Designer); ok {
+			page = d.Page()
+		}
+		if err := page.Check(cam.Controls()); err != nil {
+			t.Errorf("power zoom %t: %v", zoom, err)
+		}
 		cam.Close()
 	}
 }
@@ -97,12 +104,6 @@ func offline(t *testing.T, cam rcpmod.Camera) {
 
 func checkSpec(t *testing.T, s rcpmod.ControlSpec) {
 	t.Helper()
-	if s.Widget != "" && !widgetFits(s.Widget, s.Kind, s.ReadOnly) {
-		t.Errorf("control %s: widget %q does not show a %s control", s.ID, s.Widget, s.Kind)
-	}
-	if s.Widget != "" && s.Block == "" {
-		t.Errorf("control %s: a widget needs a custom block (rcpmod.Custom)", s.ID)
-	}
 	if s.ID == "" || len(s.ID) > 64 {
 		t.Errorf("control id %q: 1 to 64 characters", s.ID)
 	}
@@ -162,23 +163,4 @@ func wrongKind(k string) rcpmod.Value {
 		return rcpmod.Number(0)
 	}
 	return rcpmod.Choice("contract-wrong-kind")
-}
-
-// widgetFits reports whether a custom-block widget can show a control.
-func widgetFits(widget, kind string, readOnly bool) bool {
-	switch widget {
-	case rcpmod.WidgetSlider, rcpmod.WidgetStepper:
-		return kind == rcpmod.KindRange
-	case rcpmod.WidgetButtons, rcpmod.WidgetSelect:
-		return kind == rcpmod.KindEnum
-	case rcpmod.WidgetSwitch:
-		return kind == rcpmod.KindToggle
-	case rcpmod.WidgetButton:
-		return kind == rcpmod.KindAction
-	case rcpmod.WidgetReadout:
-		return readOnly && kind != rcpmod.KindAction
-	case rcpmod.WidgetText:
-		return kind == rcpmod.KindText
-	}
-	return false
 }

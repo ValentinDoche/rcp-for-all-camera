@@ -14,7 +14,7 @@ func main() {}
 
 func init() { rcpmod.Register(module) }
 
-var module = rcpmod.Planned{Model: info, Specs: specs}
+var module = rcpmod.Planned{Model: info, Specs: specs, Page: page}
 
 var info = rcpmod.Info{
 	ID: "sony-generic", Brand: "Sony", Name: "Other Sony model",

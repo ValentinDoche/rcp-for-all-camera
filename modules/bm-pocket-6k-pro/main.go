@@ -14,7 +14,7 @@ func main() {}
 
 func init() { rcpmod.Register(module) }
 
-var module = rcpmod.Planned{Model: info, Specs: specs}
+var module = rcpmod.Planned{Model: info, Specs: specs, Page: page}
 
 var info = rcpmod.Info{
 	ID: "bm-pocket-6k-pro", Brand: "Blackmagic Design", Name: "Pocket Cinema Camera 6K Pro",

@@ -19,7 +19,7 @@ func (lamp) Info() rcpmod.Info {
 func (lamp) New(cfg rcpmod.Config, host rcpmod.Host) (rcpmod.Camera, error) {
 	return &lampCam{host: host, specs: rcpmod.NewSpecs([]rcpmod.ControlSpec{
 		rcpmod.Toggle(rcpmod.Tally),
-		rcpmod.Custom(rcpmod.Labeled(rcpmod.ReadOnly(rcpmod.ControlSpec{ID: "acme.firmware", Kind: rcpmod.KindText}), "Firmware", rcpmod.GroupSystem), "About", rcpmod.WidgetReadout),
+		rcpmod.Labeled(rcpmod.ReadOnly(rcpmod.ControlSpec{ID: "acme.firmware", Kind: rcpmod.KindText}), "Firmware", rcpmod.GroupSystem),
 	})}, nil
 }
 
@@ -30,7 +30,12 @@ type lampCam struct {
 }
 
 func (c *lampCam) Controls() []rcpmod.ControlSpec { return c.specs.All() }
-func (c *lampCam) Close()                         {}
+
+// Page lays the lamp out: the standard page plus an "About" block.
+func (c *lampCam) Page() rcpmod.Page {
+	return rcpmod.StandardPage().AddRow(rcpmod.Controls("About", 1, rcpmod.With("acme.firmware", rcpmod.WidgetReadout)))
+}
+func (c *lampCam) Close() {}
 
 func (c *lampCam) Connect() error {
 	_, err := c.host.OpenWebSocket("/events", func([]byte) { c.msgs++ }, func(error) {

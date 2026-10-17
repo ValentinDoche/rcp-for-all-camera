@@ -132,16 +132,13 @@ func TestDemoEventsAndLens(t *testing.T) {
 	})
 }
 
-func TestCustomBlockReachesTheApp(t *testing.T) {
+func TestThePageReachesTheApp(t *testing.T) {
 	cam := connectedDemo(t)
-	var block []core.ControlSpec
-	for _, s := range cam.Controls() {
-		if s.Block == "Demo" {
-			block = append(block, s)
-		}
-	}
-	if len(block) != 4 || block[0].Widget != core.WidgetSwitch || block[2].Kind != core.KindText {
-		t.Fatalf("custom block %+v", block)
+	page := cam.(core.PageReporter).Page()
+	last := page.Rows[len(page.Rows)-1].Blocks[0]
+	if len(page.Rows) != 3 || last.Type != core.BlockControls || last.Title != "Demo" || len(last.Items) != 4 ||
+		last.Items[0].Widget != core.WidgetSwitch || last.Items[2].Widget != core.WidgetReadout {
+		t.Fatalf("page %+v", page)
 	}
 	v, err := cam.Get(context.Background(), "demo.firmware")
 	if err != nil || v.Text != "demo 0.3.0" {

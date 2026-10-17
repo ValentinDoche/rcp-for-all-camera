@@ -157,11 +157,11 @@ const (
 const MaxSegmented = 5
 
 // ChooseKind decides how a control is shown in the details page: the
-// widget the module asked for in a custom block (spec.Widget), else the
-// default widget of its kind.
-func ChooseKind(s core.ControlSpec) WidgetKind {
-	if s.Widget != "" && s.Widget.Fits(s.Kind, s.ReadOnly) {
-		switch s.Widget {
+// widget the module's page asks for (w), else the default widget of its
+// kind.
+func ChooseKind(s core.ControlSpec, w core.Widget) WidgetKind {
+	if w != "" && w.Fits(s.Kind, s.ReadOnly) {
+		switch w {
 		case core.WidgetSlider:
 			return KindSlider
 		case core.WidgetStepper:

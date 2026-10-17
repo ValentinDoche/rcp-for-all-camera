@@ -10,7 +10,7 @@ const (
 	offsetY          = "demo.offsetY"
 	contrastPivot    = "demo.contrastPivot"
 	lumaContribution = "demo.lumaContribution"
-	// A custom block at the end of the page, to show the feature.
+	// Shown in the "Demo" block of the page (ui.go).
 	tallyLamp = "demo.tallyLamp"
 	tallyTest = "demo.tallyTest"
 	firmware  = "demo.firmware"
@@ -18,7 +18,8 @@ const (
 )
 
 // specs are the demo camera's controls: those of a studio camera with an
-// interchangeable lens, plus a custom "Demo" block.
+// interchangeable lens, plus four controls of its own that ui.go shows in a
+// "Demo" block.
 func specs() []rcpmod.ControlSpec {
 	irisNorm := rcpmod.Range(rcpmod.IrisNorm, 0, 1, 0.001, "")
 	irisNorm.Hidden = true // the panel's lever drives it; people see Iris
@@ -65,12 +66,11 @@ func specs() []rcpmod.ControlSpec {
 		rcpmod.Labeled(rcpmod.Range(lumaContribution, 0, 1, 0.01, ""), "Luma mix", rcpmod.GroupColor),
 		rcpmod.Toggle(rcpmod.Record),
 	)
-	// The custom block: a switch, a button, a read-only value and a text.
 	return append(s,
-		rcpmod.Custom(rcpmod.Labeled(rcpmod.Toggle(tallyLamp), "Tally lamp", rcpmod.GroupMisc), "Demo", rcpmod.WidgetSwitch),
-		rcpmod.Custom(rcpmod.Labeled(rcpmod.Action(tallyTest), "Flash the tally", rcpmod.GroupMisc), "Demo", rcpmod.WidgetButton),
-		rcpmod.Custom(rcpmod.Labeled(rcpmod.ReadOnly(rcpmod.ControlSpec{ID: firmware, Kind: rcpmod.KindText}), "Firmware", rcpmod.GroupMisc), "Demo", rcpmod.WidgetReadout),
-		rcpmod.Custom(rcpmod.Labeled(rcpmod.ControlSpec{ID: cameraID, Kind: rcpmod.KindText}, "Camera name", rcpmod.GroupMisc), "Demo", rcpmod.WidgetText),
+		rcpmod.Labeled(rcpmod.Toggle(tallyLamp), "Tally lamp", rcpmod.GroupMisc),
+		rcpmod.Labeled(rcpmod.Action(tallyTest), "Flash the tally", rcpmod.GroupMisc),
+		rcpmod.Labeled(rcpmod.ReadOnly(rcpmod.ControlSpec{ID: firmware, Kind: rcpmod.KindText}), "Firmware", rcpmod.GroupMisc),
+		rcpmod.Labeled(rcpmod.ControlSpec{ID: cameraID, Kind: rcpmod.KindText}, "Camera name", rcpmod.GroupMisc),
 	)
 }
 

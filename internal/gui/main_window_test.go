@@ -294,7 +294,7 @@ func TestDetailsShowsEveryDeclaredControl(t *testing.T) {
 		t.Errorf("%d wheels, want 3", len(p.wheels))
 	}
 	for id, r := range p.rows {
-		want := widgets.ChooseKind(r.spec)
+		want := widgets.ChooseKind(r.spec, "")
 		if r.kind != want && !(want == widgets.KindSegmented && r.kind == widgets.KindSelect) {
 			t.Errorf("%s: row kind %s, want %s", id, r.kind, want)
 		}

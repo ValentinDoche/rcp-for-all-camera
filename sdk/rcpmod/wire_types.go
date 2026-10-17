@@ -80,31 +80,6 @@ type ControlSpec struct {
 	// Hidden: for control surfaces only (IrisNorm); the GUI and presets
 	// ignore it.
 	Hidden bool `json:"hidden,omitempty"`
-	// Block puts the control in a custom block of that title, shown at the
-	// end of the camera page, in declaration order. Use it for what the
-	// standard layout has no place for. Empty: the standard layout.
-	Block string `json:"block,omitempty"`
-	// Widget chooses how a custom block shows the control (WidgetSlider...).
-	// Empty: the default widget of the control's kind.
-	Widget string `json:"widget,omitempty"`
-}
-
-// Widgets of a custom block, and the kinds each one accepts.
-const (
-	WidgetSlider  = "slider"  // range: a slider with its value
-	WidgetStepper = "stepper" // range: − and + buttons around the value
-	WidgetButtons = "buttons" // enum: one button per option
-	WidgetSelect  = "select"  // enum: a drop-down list
-	WidgetSwitch  = "switch"  // toggle: an on/off switch
-	WidgetButton  = "button"  // action: one button
-	WidgetReadout = "readout" // any read-only kind: the value, large
-	WidgetText    = "text"    // text: a text field (read-only: a label)
-)
-
-// Custom places a control in a custom block with a widget.
-func Custom(s ControlSpec, block, widget string) ControlSpec {
-	s.Block, s.Widget = block, widget
-	return s
 }
 
 // Option is one choice of an enum control.

@@ -73,6 +73,7 @@ func (f *fakeAPI) Rig() app.Rig {
 }
 func (f *fakeAPI) Models() []core.ModelInfo            { return nil }
 func (f *fakeAPI) AssignSlot(int, app.SlotInput) error { return nil }
+func (f *fakeAPI) Page(int) (core.Page, error)         { return core.StandardPage(), nil }
 func (f *fakeAPI) ClearSlot(int) error                 { return nil }
 func (f *fakeAPI) SelectSlot(slot int) error {
 	f.mu.Lock()

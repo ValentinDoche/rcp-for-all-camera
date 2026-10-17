@@ -56,7 +56,7 @@ func specToCore(s rcpmod.ControlSpec) (core.ControlSpec, error) {
 		c.Group = core.ControlGroup(s.Group)
 	}
 	c.Kind, c.Unit, c.Min, c.Max, c.Step = core.ControlKind(s.Kind), s.Unit, s.Min, s.Max, s.Step
-	c.ReadOnly, c.Section, c.Hidden, c.Block, c.Widget = s.ReadOnly, s.Section, s.Hidden, s.Block, core.Widget(s.Widget)
+	c.ReadOnly, c.Section, c.Hidden = s.ReadOnly, s.Section, s.Hidden
 	c.Guarded = c.Guarded || s.Guarded
 	for _, o := range s.Options {
 		c.Options = append(c.Options, core.Option{Value: o.Value, Label: o.Label})
@@ -170,4 +170,30 @@ func wireError(e *rcpmod.WireError) error {
 		return fmt.Errorf("%s: %w", msg, target)
 	}
 	return fmt.Errorf("module: %s", msg)
+}
+
+// pageToCore converts a page; the caller checks it against the camera's
+// controls (core.Page.Check).
+func pageToCore(p rcpmod.Page) core.Page {
+	var out core.Page
+	for _, r := range p.Rows {
+		var row core.Row
+		for _, b := range r.Blocks {
+			row.Blocks = append(row.Blocks, blockToCore(b))
+		}
+		out.Rows = append(out.Rows, row)
+	}
+	return out
+}
+
+func blockToCore(b rcpmod.Block) core.Block {
+	c := core.Block{Type: core.BlockType(b.Type), Title: b.Title, Control: core.ControlID(b.Control),
+		Wheel: core.Wheel(b.Wheel), Columns: b.Columns}
+	for _, it := range b.Items {
+		c.Items = append(c.Items, core.Item{Control: core.ControlID(it.Control), Widget: core.Widget(it.Widget)})
+	}
+	for _, sub := range b.Blocks {
+		c.Blocks = append(c.Blocks, blockToCore(sub))
+	}
+	return c
 }

@@ -98,6 +98,8 @@ type Planned struct {
 	Model Info
 	// Specs returns the controls for a config (a power zoom adds a zoom).
 	Specs func(cfg Config) []ControlSpec
+	// Page lays out the camera page (nil = StandardPage).
+	Page func(cfg Config) Page
 }
 
 // Info is the model declaration.
@@ -105,10 +107,19 @@ func (p Planned) Info() Info { return p.Model }
 
 // New builds a camera without protocol.
 func (p Planned) New(cfg Config, _ Host) (Camera, error) {
-	return plannedCamera{specs: NewSpecs(p.Specs(cfg))}, nil
+	page := StandardPage()
+	if p.Page != nil {
+		page = p.Page(cfg)
+	}
+	return plannedCamera{specs: NewSpecs(p.Specs(cfg)), page: page}, nil
 }
 
-type plannedCamera struct{ specs Specs }
+type plannedCamera struct {
+	specs Specs
+	page  Page
+}
+
+func (c plannedCamera) Page() Page { return c.page }
 
 func (c plannedCamera) Controls() []ControlSpec { return c.specs.All() }
 func (c plannedCamera) Connect() error          { return ErrNotImplemented }

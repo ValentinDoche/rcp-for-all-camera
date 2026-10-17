@@ -130,21 +130,3 @@ func TestTextValues(t *testing.T) {
 		}
 	})
 }
-
-func TestCustomBlockWidgets(t *testing.T) {
-	for name, tc := range map[string]struct {
-		spec core.ControlSpec
-		ok   bool
-	}{
-		"stepper on a range":   {core.ControlSpec{ID: "a.b", Kind: core.KindRange, Max: 1, Block: "Extra", Widget: core.WidgetStepper}, true},
-		"readout on read-only": {core.ControlSpec{ID: "a.b", Kind: core.KindText, ReadOnly: true, Block: "About", Widget: core.WidgetReadout}, true},
-		"switch on a range":    {core.ControlSpec{ID: "a.b", Kind: core.KindRange, Max: 1, Block: "Extra", Widget: core.WidgetSwitch}, false},
-		"widget without block": {core.ControlSpec{ID: "a.b", Kind: core.KindToggle, Widget: core.WidgetSwitch}, false},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if err := tc.spec.Check(); (err == nil) != tc.ok {
-				t.Errorf("Check = %v, want ok %t", err, tc.ok)
-			}
-		})
-	}
-}

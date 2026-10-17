@@ -69,6 +69,11 @@ func (d *dispatcher) run(req Request) (any, error) {
 	switch req.Op {
 	case OpControls:
 		return d.cam.Controls(), nil
+	case OpPage:
+		if dz, ok := d.cam.(Designer); ok {
+			return dz.Page(), nil
+		}
+		return StandardPage(), nil
 	case OpConnect:
 		return nil, d.cam.Connect()
 	case OpClose:

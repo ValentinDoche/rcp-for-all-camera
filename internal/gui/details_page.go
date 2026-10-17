@@ -14,10 +14,10 @@ import (
 )
 
 // detailsPage shows one camera in full: its strip on the left; on the right a
-// header with the camera's state, the exposure cards (iris, gain, shutter,
-// ND, white balance), the lens cards (focus, zoom), the presets, the three
-// wheels with the image sliders, a generated section for every other
-// control, and last the custom blocks the camera's module declared.
+// header with the camera's state, then the blocks the camera's module laid
+// out in its ui.go (core.Page): standard cards (iris, gain, shutter, ND,
+// white balance, lens, image, presets), color wheels, panels of controls
+// with their widgets, and generated sections for every other control.
 type detailsPage struct {
 	ctl  *Controller
 	win  fyne.Window
@@ -117,94 +117,199 @@ func (p *detailsPage) rebuild() {
 	p.cards = map[core.ControlID]bool{}
 	p.appliers = nil
 
-	var blocks []fyne.CanvasObject
-
-	// exposure, lens, image and presets cards
+	p.secs = nil
 	p.presets = newPresetsBlock(p.ctl, p.slot)
-	if b := p.exposureBlock(); b != nil {
-		blocks = append(blocks, b)
+	page := p.ctl.Page(p.slot)
+
+	// Every block is built in page order, except the ones that show "the
+	// rest" (color, remaining): they need to know what the others show, so
+	// they are built last and put back in place.
+	var deferred []func()
+	var rows []fyne.CanvasObject
+	for _, r := range page.Rows {
+		cells := make([]fyne.CanvasObject, len(r.Blocks))
+		for i, b := range r.Blocks {
+			i, b := i, b
+			if b.Type == core.BlockColor || b.Type == core.BlockRemaining {
+				holder := container.NewStack()
+				cells[i] = holder
+				deferred = append(deferred, func() {
+					if o := p.block(b); o != nil {
+						holder.Objects = []fyne.CanvasObject{o}
+					}
+				})
+				continue
+			}
+			cells[i] = p.block(b)
+		}
+		rows = append(rows, container.NewGridWithColumns(len(cells), cells...))
 	}
 	// recording is the REC chip of the header
 	if sp, ok := p.ctl.Spec(p.slot, core.Record); ok && !sp.ReadOnly {
 		p.cards[core.Record] = true
 	}
-
-	// three wheels, greyed when the camera has no such correction
-	var cols []fyne.CanvasObject
-	for g := range wheelGroups {
-		wb := newWheelBlock(p.ctl, p.slot, 200)
-		wb.setGroup(g)
-		p.wheels = append(p.wheels, wb)
-		tok := style.Text
-		if !wheelAvailable(p.ctl, p.slot, g) {
-			tok = style.TextFaint
-		}
-		title := widgets.NewText(p.ctl.tx.T(wheelGroups[g].Key), tok, 14).Bold().Align(fyne.TextAlignCenter)
-		cols = append(cols, widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(title, wb.obj)))
+	for _, f := range deferred {
+		f()
 	}
+	if len(p.cards) == 0 && len(p.rows) == 0 && len(p.wheels) == 0 {
+		rows = append(rows, container.NewCenter(widgets.NewText(p.ctl.tx.T("details.noControl"), style.TextMuted, 13)))
+	}
+	p.body.Objects = []fyne.CanvasObject{container.NewVBox(spaced(rows)...)}
+	p.body.Refresh()
+	p.applyCards()
+}
 
-	// the other controls: half-width panels side by side, or one full-width
-	// panel when there is a single section
-	skip := wheelControlIDs()
+// block builds one block of the module's page.
+func (p *detailsPage) block(b core.Block) fyne.CanvasObject {
+	switch b.Type {
+	case core.BlockExposure:
+		return p.exposureBlock()
+	case core.BlockColor:
+		return p.colorBlock()
+	case core.BlockIris:
+		return p.irisCard()
+	case core.BlockLens:
+		return p.lensCard()
+	case core.BlockGain:
+		return p.gainCard()
+	case core.BlockShutter:
+		return p.shutterCard()
+	case core.BlockND:
+		return p.ndCard()
+	case core.BlockWhiteBalance:
+		return p.balanceCard()
+	case core.BlockImage:
+		return p.imageCard(b.Control)
+	case core.BlockPresets:
+		return p.presets.obj
+	case core.BlockWheel:
+		return p.wheelColumn(wheelIndex(b.Wheel))
+	case core.BlockControls:
+		s := controlsSection(p.ctl, p.slot, b)
+		for _, r := range s.rows {
+			p.rows[r.spec.ID] = r
+			p.cards[r.spec.ID] = true // shown: the remaining block skips it
+		}
+		cols := b.Columns
+		if cols < 1 {
+			cols = 1
+		}
+		return sectionObject(s, cols)
+	case core.BlockGrid:
+		cells := make([]fyne.CanvasObject, 0, len(b.Blocks))
+		for _, sub := range b.Blocks {
+			cells = append(cells, p.block(sub))
+		}
+		return container.NewGridWithColumns(max(b.Columns, 1), cells...)
+	case core.BlockRemaining:
+		return p.remainingBlock()
+	}
+	return nil
+}
+
+// wheelColumn is one color wheel in its panel, greyed when the camera has
+// no such correction.
+func (p *detailsPage) wheelColumn(g int) fyne.CanvasObject {
+	wb := newWheelBlock(p.ctl, p.slot, 200)
+	wb.setGroup(g)
+	p.wheels = append(p.wheels, wb)
+	for _, id := range wheelGroups[g].IDs {
+		p.cards[id] = true
+	}
+	tok := style.Text
+	if !wheelAvailable(p.ctl, p.slot, g) {
+		tok = style.TextFaint
+	}
+	title := widgets.NewText(p.ctl.tx.T(wheelGroups[g].Key), tok, 14).Bold().Align(fyne.TextAlignCenter)
+	return widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(title, wb.obj))
+}
+
+func wheelIndex(w core.Wheel) int {
+	switch w {
+	case core.WheelGamma:
+		return 1
+	case core.WheelGain:
+		return 2
+	}
+	return 0
+}
+
+// remainingSkip is every control another block of the page already shows.
+func (p *detailsPage) remainingSkip() map[core.ControlID]bool {
+	skip := map[core.ControlID]bool{}
 	for id := range p.cards {
 		skip[id] = true
 	}
-	for _, sp := range p.ctl.Specs(p.slot) {
-		if sp.Block != "" { // shown in its custom block, at the end
-			skip[sp.ID] = true
-		}
-	}
 	// the master black is the luma of the Lift wheel when there is one
-	if p.ctl.Has(p.slot, core.LiftY) && wheelAvailable(p.ctl, p.slot, 0) {
+	if p.ctl.Has(p.slot, core.LiftY) && skip[core.LiftY] && wheelAvailable(p.ctl, p.slot, 0) {
 		skip[core.MasterBlack] = true
 		p.cards[core.MasterBlack] = true
 	}
-	var lower []fyne.CanvasObject
+	return skip
+}
 
-	// every remaining control. A single section next to the wheels becomes
-	// their fourth column, with compact rows, so the whole page fits the
-	// screen (1920 x 1080) without scrolling.
-	p.secs = buildSections(p.ctl, p.slot, skip, false)
-	besideWheels := len(p.secs) <= 1
-	if besideWheels {
-		p.secs = buildSections(p.ctl, p.slot, skip, true)
+// remainingBlock shows, in sections by group, every visible control no
+// other block of the page shows.
+func (p *detailsPage) remainingBlock() fyne.CanvasObject {
+	secs := buildSections(p.ctl, p.slot, p.remainingSkip(), false)
+	p.secs = append(p.secs, secs...)
+	var objs []fyne.CanvasObject
+	for _, s := range secs {
+		for _, r := range s.rows {
+			p.rows[r.spec.ID] = r
+		}
+		objs = append(objs, sectionObject(s, 1))
 	}
-	for _, s := range p.secs {
+	switch len(secs) {
+	case 0:
+		return nil
+	case 1: // a single section takes the full width, two columns of rows
+		return sectionObject(secs[0], 2)
+	}
+	return container.NewGridWithColumns(2, objs...)
+}
+
+// colorBlock is the second half of the standard page: the three wheels,
+// then the remaining controls. A single remaining section becomes the
+// wheels' fourth column, with compact rows, so the standard page fits a
+// 1920 x 1080 screen without scrolling.
+func (p *detailsPage) colorBlock() fyne.CanvasObject {
+	var cols []fyne.CanvasObject
+	for g := range wheelGroups {
+		cols = append(cols, p.wheelColumn(g))
+	}
+	skip := p.remainingSkip()
+	secs := buildSections(p.ctl, p.slot, skip, false)
+	besideWheels := len(secs) <= 1
+	if besideWheels {
+		secs = buildSections(p.ctl, p.slot, skip, true)
+	}
+	p.secs = append(p.secs, secs...)
+	var lower []fyne.CanvasObject
+	for _, s := range secs {
 		for _, r := range s.rows {
 			p.rows[r.spec.ID] = r
 		}
 		lower = append(lower, sectionObject(s, 1))
 	}
+	var out []fyne.CanvasObject
 	switch {
 	case besideWheels && len(lower) == 0: // keep the fourth column, empty
 		cols = append(cols, widgets.NewPanel(style.Surface, style.Border, 12,
 			widgets.NewText(p.ctl.tx.GroupTitle(core.GroupColor), style.TextFaint, 14).Bold()))
-		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
+		out = append(out, container.NewGridWithColumns(len(cols), cols...))
 	case besideWheels:
 		cols = append(cols, lower[0])
-		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
-	case len(cols) > 0:
-		blocks = append(blocks, container.NewGridWithColumns(len(cols), cols...))
-	}
-	switch {
-	case besideWheels || len(lower) == 0:
-	case len(lower) == 1: // a single section takes the full width, two columns of rows
-		blocks = append(blocks, sectionObject(p.secs[0], 2))
+		out = append(out, container.NewGridWithColumns(len(cols), cols...))
 	default:
-		blocks = append(blocks, container.NewGridWithColumns(2, lower...))
-	}
-	for _, s := range customBlocks(p.ctl, p.slot) {
-		for _, r := range s.rows {
-			p.rows[r.spec.ID] = r
+		out = append(out, container.NewGridWithColumns(len(cols), cols...))
+		if len(lower) == 1 {
+			out = append(out, sectionObject(secs[0], 2))
+		} else {
+			out = append(out, container.NewGridWithColumns(2, lower...))
 		}
-		blocks = append(blocks, sectionObject(s, 2))
 	}
-	if len(p.cards) == 0 && len(p.rows) == 0 && len(p.wheels) == 0 {
-		blocks = append(blocks, container.NewCenter(widgets.NewText(p.ctl.tx.T("details.noControl"), style.TextMuted, 13)))
-	}
-	p.body.Objects = []fyne.CanvasObject{container.NewVBox(spaced(blocks)...)}
-	p.body.Refresh()
-	p.applyCards()
+	return container.NewVBox(spaced(out)...)
 }
 
 // spaced inserts a gap between blocks.

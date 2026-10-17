@@ -325,6 +325,19 @@ func (s *Service) Lens(slot int) (core.Lens, error) {
 	return core.Lens{}, nil
 }
 
+// Page is the layout of the slot's camera page, as its module describes
+// it in ui.go (core.StandardPage for a camera that does not).
+func (s *Service) Page(slot int) (core.Page, error) {
+	cam, err := s.camera(slot)
+	if err != nil {
+		return core.Page{}, err
+	}
+	if pr, ok := cam.(core.PageReporter); ok {
+		return pr.Page(), nil
+	}
+	return core.StandardPage(), nil
+}
+
 // SetControl writes one control of the slot's camera.
 func (s *Service) SetControl(slot int, id string, v core.Value) error {
 	return s.setControl(slot, id, v, false)

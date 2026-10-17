@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -223,7 +224,7 @@ func TestDemoCameraNeedsNoAddressAndDrivesEverything(t *testing.T) {
 	}
 }
 
-func TestCustomBlocksComeLastWithTheirWidgets(t *testing.T) {
+func TestTheModulePageLaysOutTheDetails(t *testing.T) {
 	svc, _, _ := newLiveService(t)
 	if err := svc.AssignSlot(1, app.SlotInput{Model: "demo", Name: "Demo"}); err != nil {
 		t.Fatal(err)
@@ -233,7 +234,7 @@ func TestCustomBlocksComeLastWithTheirWidgets(t *testing.T) {
 	sized(a)
 	a.ShowDetails(1)
 	p := a.details
-	t.Run("the module's widgets are used", func(t *testing.T) {
+	t.Run("the widgets of ui.go are used", func(t *testing.T) {
 		for id, want := range map[core.ControlID]widgets.WidgetKind{
 			"demo.tallyLamp": widgets.KindCheck, "demo.tallyTest": widgets.KindButton,
 			"demo.firmware": widgets.KindReadout, "demo.cameraId": widgets.KindText,
@@ -243,13 +244,52 @@ func TestCustomBlocksComeLastWithTheirWidgets(t *testing.T) {
 			}
 		}
 	})
-	t.Run("custom controls are not in the standard sections", func(t *testing.T) {
+	t.Run("controls of the Demo block are not repeated in the generated sections", func(t *testing.T) {
 		for _, s := range p.secs {
 			for _, r := range s.rows {
-				if r.spec.Block != "" {
-					t.Errorf("%s shown in section %q", r.spec.ID, s.title)
+				if strings.HasPrefix(string(r.spec.ID), "demo.tally") || r.spec.ID == "demo.firmware" || r.spec.ID == "demo.cameraId" {
+					t.Errorf("%s shown again in section %q", r.spec.ID, s.title)
 				}
 			}
+		}
+	})
+}
+
+func TestACustomPageReplacesTheStandardLayout(t *testing.T) {
+	svc, _, cams := newLiveService(t)
+	if err := svc.AssignSlot(1, app.SlotInput{Model: "bm-studio-6k-pro", Host: "192.168.1.41"}); err != nil {
+		t.Fatal(err)
+	}
+	page := core.Page{Rows: []core.Row{
+		{Blocks: []core.Block{{Type: core.BlockGrid, Columns: 2, Blocks: []core.Block{
+			{Type: core.BlockIris}, {Type: core.BlockWheel, Wheel: core.WheelLift},
+		}}}},
+		{Blocks: []core.Block{{Type: core.BlockRemaining}}},
+	}}
+	(*cams)[0].page = &page
+	a := New(test.NewTempApp(t), svc, syncOptions())
+	t.Cleanup(func() { waitWrites(a.ctl) })
+	sized(a)
+	a.ShowDetails(1)
+	p := a.details
+	t.Run("one wheel, the lift", func(t *testing.T) {
+		if len(p.wheels) != 1 || p.wheels[0].group != 0 {
+			t.Errorf("%d wheels", len(p.wheels))
+		}
+	})
+	t.Run("the iris card drives the iris", func(t *testing.T) {
+		if !p.cards[core.Iris] {
+			t.Error("iris not driven by its card")
+		}
+	})
+	t.Run("everything else is in the remaining sections", func(t *testing.T) {
+		for _, id := range []core.ControlID{core.Gain, core.GammaR, core.WhiteBalance} {
+			if p.rows[id] == nil {
+				t.Errorf("%s is not reachable", id)
+			}
+		}
+		if p.rows[core.LiftR] != nil {
+			t.Error("lift R is shown twice")
 		}
 	})
 }

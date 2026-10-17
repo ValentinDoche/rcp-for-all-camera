@@ -165,7 +165,7 @@ func TestChooseKind(t *testing.T) {
 		{mk(core.KindRange, true, 0), KindLabel},
 	}
 	for _, c := range cases {
-		if got := ChooseKind(c.spec); got != c.want {
+		if got := ChooseKind(c.spec, ""); got != c.want {
 			t.Errorf("%s ro=%v n=%d: got %s want %s", c.spec.Kind, c.spec.ReadOnly, len(c.spec.Options), got, c.want)
 		}
 	}

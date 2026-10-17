@@ -20,6 +20,7 @@ type camera struct {
 	in    *instance
 	svc   *services
 	specs camerakit.Specs
+	page  core.Page
 	subs  camerakit.Subscribers
 	log   *slog.Logger
 
@@ -35,6 +36,7 @@ type camera struct {
 var (
 	_ core.Camera       = (*camera)(nil)
 	_ core.LensReporter = (*camera)(nil)
+	_ core.PageReporter = (*camera)(nil)
 )
 
 func newCamera(m *module, cfg core.CameraConfig) (*camera, error) {
@@ -75,8 +77,21 @@ func newCamera(m *module, cfg core.CameraConfig) (*camera, error) {
 		list = append(list, cs)
 	}
 	c.specs = camerakit.NewSpecs(list)
+	var page rcpmod.Page
+	if err := in.callResult(ctx, rcpmod.Request{Op: rcpmod.OpPage}, &page); err != nil {
+		in.close(ctx)
+		return nil, fmt.Errorf("%s: page: %w", m.info.ID, err)
+	}
+	c.page = pageToCore(page)
+	if err := c.page.Check(list); err != nil {
+		in.close(ctx)
+		return nil, fmt.Errorf("%s: %w", m.info.ID, err)
+	}
 	return c, nil
 }
+
+// Page is the camera page the module laid out (ui.go).
+func (c *camera) Page() core.Page { return c.page }
 
 // call runs one request in the instance. A module error is returned as
 // the matching core error; a crash or a hang stops the camera for good.
