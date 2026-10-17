@@ -25,6 +25,17 @@ const ModelID core.ModelID = "demo.camera"
 // fps is the simulated frame rate, for the shutter speed and angle.
 const fps = 50
 
+// irisNormOf and irisStopOf convert between an f-stop and the position over
+// the simulated lens' range (logarithmic, 0 = open), rounded like the
+// camera reports them.
+func irisNormOf(f float64) float64 {
+	return math.Round(math.Log(f/lens.IrisMin)/math.Log(lens.IrisMax/lens.IrisMin)*1000) / 1000
+}
+
+func irisStopOf(n float64) float64 {
+	return math.Round(lens.IrisMin*math.Pow(lens.IrisMax/lens.IrisMin, n)*10) / 10
+}
+
 // The simulated lens: a 24-70 mm f/2.8 zoom focusing from 0.38 m.
 var lens = core.Lens{IrisMin: 2.8, IrisMax: 22, FocalMin: 24, FocalMax: 70, FocusNear: 0.38, FocusFar: core.FocusInfinity}
 
@@ -64,7 +75,8 @@ func specs() []core.ControlSpec { return blackmagic.Studio6kProSpecs() }
 // initial is the state the camera starts in.
 func initial() map[core.ControlID]core.Value {
 	v := map[core.ControlID]core.Value{
-		core.Iris: core.Number(4), core.Focus: core.Number(0.6), core.Zoom: core.Number(0.25),
+		core.Iris: core.Number(4), core.IrisNorm: core.Number(irisNormOf(4)),
+		core.Focus: core.Number(0.6), core.Zoom: core.Number(0.25),
 		core.Gain: core.Number(0), core.ISO: core.Choice("400"),
 		core.ShutterSpeed: core.Choice("1/100"), core.ShutterAngle: core.Number(180),
 		core.ND: core.Choice("2"), core.WhiteBalance: core.Number(5600), core.Tint: core.Number(0),
@@ -214,9 +226,17 @@ func (c *Camera) Set(_ context.Context, id core.ControlID, v core.Value) error {
 	}
 	switch id {
 	case core.Iris:
-		put(id, core.Number(math.Max(lens.IrisMin, math.Min(lens.IrisMax, v.Number))))
+		f := math.Max(lens.IrisMin, math.Min(lens.IrisMax, v.Number))
+		put(id, core.Number(f))
+		put(core.IrisNorm, core.Number(irisNormOf(f)))
+	case core.IrisNorm:
+		// Like a Blackmagic camera: the lens' range, open (0) to closed (1).
+		n := math.Max(0, math.Min(1, v.Number))
+		put(id, core.Number(n))
+		put(core.Iris, core.Number(irisStopOf(n)))
 	case core.AutoIris:
 		put(core.Iris, core.Number(5.6))
+		put(core.IrisNorm, core.Number(irisNormOf(5.6)))
 	case core.AutoFocus:
 		put(core.Focus, core.Number(0.5))
 	case core.AutoWhiteBalance:
