@@ -21,7 +21,6 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 	"github.com/valentindoche/rcp-for-all-camera/internal/i18n"
-	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
 // AppID is the Fyne application id (preferences are stored under it).
@@ -58,7 +57,8 @@ type App struct {
 	bundle    *i18n.Bundle
 	lang      string
 	configTab int
-	lastStats sysinfo.Stats
+	lastStats HostStats
+	statsSrc  StatsSampler
 	openURL   func(*url.URL) error
 	version   string
 	unsub     func()
@@ -102,6 +102,7 @@ func New(fa fyne.App, api AppAPI, o Options) *App {
 	a := &App{fa: fa, api: api, ctl: NewController(api, o), bundle: i18n.Default(), chrome: newWindowChrome()}
 	a.openURL = fa.OpenURL
 	a.version = o.Version
+	a.statsSrc = o.Stats
 	if a.version == "" {
 		a.version = "dev"
 	}
@@ -191,7 +192,7 @@ func (a *App) build() {
 		a.stats = append(a.stats, t)
 		statObjs = append(statObjs, container.New(layout.NewCustomPaddedLayout(0, 0, 10, 10), t))
 	}
-	a.setStats(sysinfo.Stats{})
+	a.setStats(HostStats{})
 	a.noticeTxt = widgets.NewText("", style.TextMuted, 12).Clip().Align(fyne.TextAlignTrailing)
 	// The stats are centred on the whole bar, not on the space the gear
 	// and the notice leave (which pushed them off centre).
@@ -560,7 +561,10 @@ func (a *App) syncChrome() {
 // sampleHost refreshes the status bar every interval until ctx ends. Errors
 // leave the placeholders: the bar is informative only.
 func (a *App) sampleHost(ctx context.Context, interval time.Duration) {
-	s := sysinfo.New()
+	s := a.statsSrc
+	if s == nil {
+		return
+	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
@@ -577,7 +581,7 @@ func (a *App) sampleHost(ctx context.Context, interval time.Duration) {
 	}
 }
 
-func (a *App) setStats(st sysinfo.Stats) {
+func (a *App) setStats(st HostStats) {
 	a.lastStats = st
 	tx := a.ctl.Tx()
 	lab := func(k string) string { return tx.T(k) }

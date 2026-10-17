@@ -124,6 +124,25 @@ type Options struct {
 	NoticeTTL time.Duration
 	// Version is shown in Settings > About (default "dev").
 	Version string
+	// Stats samples the host for the status bar; nil shows placeholders.
+	Stats StatsSampler
+}
+
+// HostStats is what the status bar shows about the computer.
+type HostStats struct {
+	CPU      float64 // percent, 0..100
+	MemUsed  uint64  // bytes
+	MemTotal uint64  // bytes
+	DownBps  float64 // bytes per second received
+	UpBps    float64 // bytes per second sent
+	IP       string  // main LAN IPv4 address, "" if none
+	HasRates bool    // CPU and rates need two samples
+}
+
+// StatsSampler is the port the status bar reads the host through
+// (internal/sysinfo in production, adapted by cmd/rcp).
+type StatsSampler interface {
+	Sample() (HostStats, error)
 }
 
 // Controller is the UI-side model.

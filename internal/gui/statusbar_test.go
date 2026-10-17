@@ -6,8 +6,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
-
-	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
 func TestGearTogglesConfiguration(t *testing.T) {
@@ -35,7 +33,7 @@ func TestSlotTabFromConfigReturnsToCameras(t *testing.T) {
 
 func TestStatusBarShowsHostInfo(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
-	a.setStats(sysinfo.Stats{CPU: 12.4, MemUsed: 23915626496, MemTotal: 67939266560,
+	a.setStats(HostStats{CPU: 12.4, MemUsed: 23915626496, MemTotal: 67939266560,
 		DownBps: 5329.3, UpBps: 1608.8, IP: "192.168.1.110", HasRates: true})
 	got := a.statsText()
 	for _, want := range []string{"CPU 12 %", "RAM 22,3 / 63,3 Go", "5,2 ko/s", "1,6 ko/s", "IP 192.168.1.110"} {
@@ -47,7 +45,7 @@ func TestStatusBarShowsHostInfo(t *testing.T) {
 
 func TestStatusBarBeforeFirstRates(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
-	a.setStats(sysinfo.Stats{MemUsed: 1 << 30, MemTotal: 2 << 30})
+	a.setStats(HostStats{MemUsed: 1 << 30, MemTotal: 2 << 30})
 	if got := a.statsText(); !strings.Contains(got, "CPU --") || !strings.Contains(got, "IP --") {
 		t.Fatalf("status bar = %q, want placeholders", got)
 	}

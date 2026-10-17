@@ -14,7 +14,6 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
-	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
 func generalOf(t *testing.T, a *App) *generalTab {
@@ -441,8 +440,8 @@ func extraOverlay(a *App) bool {
 
 func allTextsJoined(o fyne.CanvasObject) string { return strings.Join(allTexts(o), " | ") }
 
-func sysinfoStats() sysinfo.Stats {
-	return sysinfo.Stats{CPU: 12.4, MemUsed: 23915626496, MemTotal: 67939266560,
+func sysinfoStats() HostStats {
+	return HostStats{CPU: 12.4, MemUsed: 23915626496, MemTotal: 67939266560,
 		DownBps: 5329.3, UpBps: 1608.8, IP: "192.168.1.110", HasRates: true}
 }
 

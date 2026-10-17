@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -30,7 +31,7 @@ func (c *opsCamera) Connect(context.Context) error {
 }
 
 func (c *opsCamera) Set(ctx context.Context, id core.ControlID, v core.Value) error {
-	if err := c.Placeholder.Set(ctx, id, v); err != nil && !strings.Contains(err.Error(), "not implemented") {
+	if err := c.Placeholder.Set(ctx, id, v); err != nil && !errors.Is(err, core.ErrNotImplemented) {
 		return err
 	}
 	c.mu.Lock()

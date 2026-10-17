@@ -102,7 +102,7 @@ func run() error {
 	host.SetSurface(ctl)
 
 	fa := app.NewWithID(gui.AppID)
-	win := gui.New(fa, svc, gui.Options{Version: version})
+	win := gui.New(fa, svc, gui.Options{Version: version, Stats: hostStats{sysinfo.New()}})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var simWin fyne.Window // created once the Fyne loop runs
@@ -161,4 +161,13 @@ func loadModules(dir string, log *slog.Logger) (*core.Registry, func(), error) {
 		return nil, nil, err
 	}
 	return reg, func() { _ = host.Close(ctx) }, nil
+}
+
+// hostStats adapts sysinfo to the status bar's port.
+type hostStats struct{ s *sysinfo.Sampler }
+
+func (h hostStats) Sample() (gui.HostStats, error) {
+	st, err := h.s.Sample()
+	return gui.HostStats{CPU: st.CPU, MemUsed: st.MemUsed, MemTotal: st.MemTotal, DownBps: st.DownBps,
+		UpBps: st.UpBps, IP: st.IP, HasRates: st.HasRates}, err
 }
