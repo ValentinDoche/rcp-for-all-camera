@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsim"
 	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
@@ -28,6 +30,9 @@ func main() {
 }
 
 func run() error {
+	sim := flag.Bool("sim", false, "drive a simulated Micro Camera Panel window instead of the USB panel")
+	flag.Parse()
+
 	cfgPath, err := config.DefaultPath()
 	if err != nil {
 		return err
@@ -73,16 +78,31 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	host := appsvc.NewHost(svc, panelProbe, time.Second)
-	// The USB panel is a control surface: rendered from and driving the Service.
-	host.SetSurface(panel.New(panel.Options{Logger: log}))
+	// The USB panel is a control surface: rendered from and driving the
+	// Service. With -sim the same controller drives a simulated panel.
+	probe, surf := appsvc.PanelProbe(panelProbe), panel.Options{Logger: log}
+	var simPanel *panelsim.Sim
+	if *sim {
+		simPanel = panelsim.New()
+		probe = simPanel.Present
+		surf.Open, surf.Busy = simPanel.Open, func() bool { return false }
+		log.Info("panel simulator enabled")
+	}
+	host := appsvc.NewHost(svc, probe, time.Second)
+	host.SetSurface(panel.New(surf))
 
 	fa := app.NewWithID(gui.AppID)
 	win := gui.New(fa, svc, gui.Options{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// events may only be delivered once the Fyne loop runs
-	fa.Lifecycle().SetOnStarted(func() { host.Start(ctx, win) })
+	fa.Lifecycle().SetOnStarted(func() {
+		host.Start(ctx, win)
+		if simPanel != nil {
+			// Shown after the main window, which stays the master window.
+			panelsim.NewWindow(fa, simPanel).Show()
+		}
+	})
 	defer host.Stop()
 	win.Run(ctx) // blocks until the window closes
 	return nil

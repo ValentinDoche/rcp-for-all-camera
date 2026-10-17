@@ -29,6 +29,9 @@ Rules:
 - A camera declares all its controls as `core.ControlSpec`. The GUI renders any spec it
   receives, so a new parameter needs no GUI change.
 - The panel driver keeps protocol details inside `internal/surfaces/micropanel`.
+- `internal/surfaces/panelsim` is a simulated panel (`panel.Device` + Fyne window). With
+  `rcp.exe -sim`, `cmd/rcp` gives it to the panel controller instead of the USB panel
+  ([panelsim.md](panelsim.md)).
 - `internal/surfaces/panel` is the panel controller. It imports `app` (SurfaceAPI, events)
   and `micropanel`; `app` never imports it. `cmd/rcp` registers it with `Host.SetSurface`.
 - Passwords live only in the secrets store, never in `rig.json`, logs or the GUI.

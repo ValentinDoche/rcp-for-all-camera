@@ -1,7 +1,7 @@
 # AGENTS.md — context for any agent working on this repo
 
 Read this first. It says what the project is, what has been done, where everything
-is, and the traps already hit. Last updated: 2026-10-11.
+is, and the traps already hit. Last updated: 2026-10-17.
 
 ## 1. Project in one paragraph
 
@@ -22,6 +22,7 @@ Owner: Valentin (writes in French, so answer in French).
 | Module (SPEC id) | State |
 |---|---|
 | `surface-micro-panel` | **Driver done and verified on hardware** (Windows only): [internal/surfaces/micropanel](internal/surfaces/micropanel) |
+| panel simulator | **Done**: `rcp.exe -sim` opens a Fyne window that the real panel controller drives instead of the USB panel ([internal/surfaces/panelsim](internal/surfaces/panelsim), [docs/panelsim.md](docs/panelsim.md)). Use it while the hardware is away |
 | panel controller | **Wired in the app**: [internal/surfaces/panel](internal/surfaces/panel), mapping in [docs/panel-mapping.md](docs/panel-mapping.md). Hardware render check pending owner photo (`go run ./cmd/panelcheck -t 60s`) |
 | `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, settings (bind NIC, autostart, operator lock, logs, export/import), camera event forwarding, local camera presets (snapshots of control values kept in `rig.json`, never on the camera), `app.Service` API incl. `StorePreset`/`RecallPreset`/`DeletePreset` ([docs/app-api.md](docs/app-api.md)) |
 | cameras | **Blackmagic Studio 6K Pro: real protocol** (REST + event WebSocket, [internal/cameras/blackmagic](internal/cameras/blackmagic)), read and write verified on hardware (`BMD_CAMERA=<ip> [BMD_CAMERA_WRITE=1] go test ./internal/cameras/blackmagic -run Live -v`). Other 14 models: specs declared, `camerakit.Placeholder` returns `NOT_IMPLEMENTED`. **Demo camera** ([internal/cameras/demo](internal/cameras/demo)): simulated, no address, same controls as the Studio 6K Pro (zoom with the power zoom setting), every control answers, to try the GUI and the panel without a camera. Panasonic UE150/UE160 complete from SKAARHOJ lists |
@@ -47,6 +48,7 @@ internal/cameras/                 ← Register(); blackmagic/ sony/ panasonic/ d
                                     camerakit (Placeholder), speckit (spec builders), cameratest (contract suite)
 internal/gui/                     ← Fyne GUI (themes clair/sombre)
 docs/architecture.md, docs/app-api.md, docs/adding-a-camera.md, docs/security.md
+internal/surfaces/panelsim/        ← simulated panel (panel.Device) + Fyne window, `rcp.exe -sim`
 internal/surfaces/micropanel/
   hid_windows.go                  ← pure-Go HID: setupapi + hid.dll + kernel32 (no cgo)
   auth.go, auth_test.go           ← challenge/response (feature report 0x05)
@@ -77,6 +79,7 @@ an already-open shell may not see it:
 export PATH="/c/Users/VALENTIN/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe/mingw64/bin:$PATH" CGO_ENABLED=1
 go build -ldflags "-H windowsgui" -o rcp.exe ./cmd/rcp   # the app (first build ~4 min)
 go test -race ./internal/...
+./rcp.exe -sim                                            # simulated panel instead of the USB one
 ```
 
 ```bash
