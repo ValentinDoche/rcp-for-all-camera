@@ -1,7 +1,9 @@
-package panel
+package panel_test
 
 import (
 	"math"
+	"testing/synctest"
+	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -126,3 +128,11 @@ func sensFor(s core.ControlSpec, w float64) int {
 }
 
 func near(a, b, tol float64) bool { return math.Abs(a-b) <= tol }
+
+// settle lets d pass on the bubble's virtual clock, then waits until every
+// goroutine of the bubble is blocked (testing/synctest): what the
+// controller does in that time is done when settle returns.
+func settle(d time.Duration) {
+	time.Sleep(d)
+	synctest.Wait()
+}

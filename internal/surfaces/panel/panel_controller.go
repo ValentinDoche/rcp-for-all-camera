@@ -113,8 +113,8 @@ type Controller struct {
 	now        func() time.Time
 }
 
-// alarmHold is how long ALARM blinks after a failed command.
-const alarmHold = 3 * time.Second
+// AlarmHold is how long ALARM blinks after a failed command.
+const AlarmHold = 3 * time.Second
 
 // raiseAlarm makes ALARM blink for alarmHold. Asking for confirmation
 // (operator lock) is not an error.
@@ -123,7 +123,7 @@ func (c *Controller) raiseAlarm(code string) {
 		return
 	}
 	c.mu.Lock()
-	c.alarmUntil = c.now().Add(alarmHold)
+	c.alarmUntil = c.now().Add(AlarmHold)
 	c.mu.Unlock()
 }
 
@@ -382,7 +382,7 @@ func (c *Controller) onInput(s micropanel.State) {
 	if c.held["WB"] && !now["WB"] && !c.wbDownAt.IsZero() {
 		// W/B released: a short press toggles the mode, a long one did
 		// (or, without auto white balance, did nothing) already.
-		if !c.off && !c.wbFired && c.now().Sub(c.wbDownAt) < wbLongPress {
+		if !c.off && !c.wbFired && c.now().Sub(c.wbDownAt) < WBLongPress {
 			c.wbMode = !c.wbMode && c.wbAvailableLocked()
 		}
 		c.wbDownAt, c.wbFired = time.Time{}, false
@@ -682,8 +682,8 @@ func (c *Controller) onWriteError(o op, err error) {
 
 // --- rendering -------------------------------------------------------------
 
-// wbLongPress is how long W/B must be held to run the auto white balance.
-const wbLongPress = time.Second
+// WBLongPress is how long W/B must be held to run the auto white balance.
+const WBLongPress = time.Second
 
 // wbAWBLocked reports whether the active camera has the auto white balance.
 func (c *Controller) wbAWBLocked() bool {
@@ -694,7 +694,7 @@ func (c *Controller) wbAWBLocked() bool {
 // wbTickLocked fires the auto white balance once W/B has been held long
 // enough, on a camera that has it.
 func (c *Controller) wbTickLocked(now time.Time) {
-	if c.wbDownAt.IsZero() || c.wbFired || c.off || now.Sub(c.wbDownAt) < wbLongPress {
+	if c.wbDownAt.IsZero() || c.wbFired || c.off || now.Sub(c.wbDownAt) < WBLongPress {
 		return
 	}
 	c.wbFired = true
@@ -732,11 +732,11 @@ func (c *Controller) frame(now time.Time) panelmodel.Frame {
 	})
 }
 
-// previewHold is how long the panel previews COARSE or SENS after the
+// PreviewHold is how long the panel previews COARSE or SENS after the
 // knob last moved.
-const previewHold = 5 * time.Second
+const PreviewHold = 5 * time.Second
 
-func previewing(at, now time.Time) bool { return !at.IsZero() && now.Before(at.Add(previewHold)) }
+func previewing(at, now time.Time) bool { return !at.IsZero() && now.Before(at.Add(PreviewHold)) }
 
 func slotCamera(r app.Rig, slot int) *app.CameraView {
 	for _, s := range r.Slots {
