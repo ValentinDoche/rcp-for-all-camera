@@ -38,20 +38,21 @@ func TestSlotTabsDoNotOverlapPageAfterConfig(t *testing.T) {
 	}
 }
 
-// Owner request: no slot tabs in Configuration, and the page moves up.
-func TestConfigurationHasNoSlotTabs(t *testing.T) {
+// Settings is a modal over the page: the page and its slot tabs stay put
+// underneath and are shown again as they were when it closes.
+func TestSettingsIsAModalOverThePage(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
 	sized(a)
-	withTabs := pageTop(a)
+	before := pageTop(a)
 	a.ShowConfig(0)
-	if headerHas(a, a.slotBar) {
-		t.Fatal("slot tabs still in the header on the Configuration page")
+	if a.configPop == nil || !a.configPop.Visible() {
+		t.Fatal("Settings not shown as a modal")
 	}
-	if got := pageTop(a); got >= withTabs {
-		t.Fatalf("page top %v, want above %v once the tabs are gone", got, withTabs)
+	if n := len(a.Window().Canvas().Overlays().List()); n != 1 {
+		t.Fatalf("%d overlays, want only Settings", n)
 	}
-	a.ShowCameras()
-	if !headerHas(a, a.slotBar) || pageTop(a) != withTabs {
-		t.Fatal("slot tabs not restored on the Cameras page")
+	a.CloseConfig()
+	if a.Window().Canvas().Overlays().Top() != nil || pageTop(a) != before || !headerHas(a, a.slotBar) {
+		t.Fatal("page not restored after closing Settings")
 	}
 }

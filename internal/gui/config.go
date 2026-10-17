@@ -18,14 +18,17 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
-// Configuration tabs.
+// Settings categories (the side list), in display order.
 const (
 	tabGeneral = iota
 	tabCameras
+	tabPanel
+	tabAbout
 )
 
-// configPage is Configuration: a General tab (app settings) and a Cameras
-// tab (the 8 slots and the form of one).
+// configPage is the Settings window: a list of categories on the left
+// (General, Cameras, Panel, About) and the selected one on the right. The
+// App shows it as a modal over the current page.
 type configPage struct {
 	ctl *Controller
 	win fyne.Window
@@ -33,11 +36,13 @@ type configPage struct {
 	tx  texts.Texts
 
 	obj     fyne.CanvasObject
-	tabs    *widgets.Tabs
+	tabs    *widgets.SideNav
 	body    *fyne.Container
 	tab     int
 	general *generalTab
 	cameras fyne.CanvasObject
+	panel   *panelTab
+	about   fyne.CanvasObject
 
 	list   *fyne.Container
 	right  *fyne.Container
@@ -58,12 +63,25 @@ func newConfigPage(ctl *Controller, env *configEnv, tab int) *configPage {
 		container.New(layout.NewCustomPaddedLayout(0, 0, 0, 12), widgets.Sized(440, 0, left)), nil,
 		container.New(layout.NewCustomPaddedLayout(0, 0, 0, 8), container.NewVScroll(p.right)))
 	p.general = newGeneralTab(ctl, env)
+	p.panel = newPanelTab(p.tx, env.panels, env.panelChanged, func(err error) { ctl.SetNotice(p.tx.NoticeFor(err)) })
+	p.about = newAboutTab(p.tx, env)
 
-	p.tabs = widgets.NewTabs([]widgets.TabItem{
-		{Text: p.tx.T("config.tab.general")}, {Text: p.tx.T("config.tab.cameras")},
+	p.tabs = widgets.NewSideNav([]string{
+		p.tx.T("config.tab.general"), p.tx.T("config.tab.cameras"),
+		p.tx.T("config.tab.panel"), p.tx.T("config.tab.about"),
 	}, func(i int) { p.SelectTab(i) })
 	p.body = container.NewStack()
-	p.obj = container.NewBorder(p.tabs, nil, nil, nil, container.New(layout.NewCustomPaddedLayout(8, 0, 0, 0), p.body))
+	heading := widgets.NewText(p.tx.T("config.title"), style.Text, 15).Bold()
+	var closeBtn fyne.CanvasObject = layout.NewSpacer()
+	if env.close != nil {
+		closeBtn = widgets.NewIconButton(icons.Close, p.tx.T("config.close"), env.close)
+	}
+	header := widgets.NewPanel(style.Surface, "", 0, container.New(layout.NewCustomPaddedLayout(6, 6, 16, 8),
+		container.NewBorder(nil, nil, nil, closeBtn, container.NewHBox(heading)))).Flat()
+	p.obj = container.NewBorder(
+		container.NewVBox(header, widgets.Sized(0, 1, widgets.NewHairline())), nil,
+		widgets.Sized(220, 0, p.tabs), nil,
+		container.New(layout.NewCustomPaddedLayout(14, 14, 16, 16), p.body))
 
 	p.cancel = ctl.Subscribe(func(ch Change) {
 		if ch.Kind == ChRig {
@@ -76,13 +94,20 @@ func newConfigPage(ctl *Controller, env *configEnv, tab int) *configPage {
 	return p
 }
 
-// SelectTab shows one tab; the General tab re-reads the settings each time.
+// SelectTab shows one category; General and Panel re-read their state each
+// time.
 func (p *configPage) SelectTab(i int) {
 	p.tab = i
 	p.tabs.SetSelected(i)
-	if i == tabCameras {
+	switch i {
+	case tabCameras:
 		p.body.Objects = []fyne.CanvasObject{p.cameras}
-	} else {
+	case tabPanel:
+		p.panel.Refresh()
+		p.body.Objects = []fyne.CanvasObject{p.panel.obj}
+	case tabAbout:
+		p.body.Objects = []fyne.CanvasObject{p.about}
+	default:
 		p.general.Refresh()
 		p.body.Objects = []fyne.CanvasObject{p.general.obj}
 	}

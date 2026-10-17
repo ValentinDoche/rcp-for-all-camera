@@ -84,6 +84,10 @@ type App struct {
 	strips  []*strip
 	details *detailsPage
 	config  *configPage
+	// configPop shows config as a modal over the page; backPage is the page
+	// under it, shown again when Settings closes.
+	configPop *widget.PopUp
+	backPage  pageKind
 }
 
 var _ app.Emitter = (*App)(nil)
@@ -161,7 +165,7 @@ func (a *App) build() {
 	// bottom bar: the gear toggles Configuration, the centre shows host stats
 	a.gear = widget.NewButtonWithIcon("", theme.SettingsIcon(), func() {
 		if a.page == pageConfig {
-			a.ShowCameras()
+			a.CloseConfig()
 		} else {
 			a.ShowConfig(0)
 		}
@@ -228,9 +232,18 @@ func (a *App) closeSubpages() {
 		a.details.Close()
 		a.details = nil
 	}
+	a.closeConfigPop()
+}
+
+// closeConfigPop removes the Settings modal, if any.
+func (a *App) closeConfigPop() {
 	if a.config != nil {
 		a.config.Close()
 		a.config = nil
+	}
+	if a.configPop != nil {
+		a.configPop.Hide()
+		a.configPop = nil
 	}
 }
 
@@ -264,9 +277,13 @@ func (a *App) ShowDetails(slot int) {
 	a.gear.Refresh()
 }
 
-// ShowConfig shows the configuration page; slot > 0 opens its form.
+// ShowConfig opens the Settings window over the current page; slot > 0
+// opens that slot's form in the Cameras category.
 func (a *App) ShowConfig(slot int) {
-	a.closeSubpages()
+	if a.page != pageConfig {
+		a.backPage = a.page
+	}
+	a.closeConfigPop()
 	a.page = pageConfig
 	tab := a.configTab
 	if slot > 0 {
@@ -276,10 +293,37 @@ func (a *App) ShowConfig(slot int) {
 	if slot > 0 {
 		a.config.Edit(slot)
 	}
-	a.setPage(a.config.obj)
-	a.showSlotTabs(false) // owner request: no slot tabs in Configuration
+	frame := widgets.NewPanel(style.Surface, style.BorderStrong, 0, a.config.obj)
+	a.configPop = widget.NewModalPopUp(frame, a.win.Canvas())
+	a.configPop.Resize(configSize(a.win.Canvas().Size()))
+	a.configPop.Show()
 	a.gear.Importance = widget.HighImportance
 	a.gear.Refresh()
+}
+
+// configSize is the Settings window size for a window of size win: most of
+// it, without growing past what the pages use.
+func configSize(win fyne.Size) fyne.Size {
+	w := min(max(win.Width-96, 900), 1280)
+	h := min(max(win.Height-96, 560), 820)
+	return fyne.NewSize(min(w, win.Width), min(h, win.Height))
+}
+
+// CloseConfig closes the Settings window and returns to the page under it.
+func (a *App) CloseConfig() {
+	if a.page != pageConfig {
+		return
+	}
+	a.closeConfigPop()
+	a.page = a.backPage
+	if a.page == pageConfig {
+		a.page = pageCameras
+	}
+	a.gear.Importance = widget.LowImportance
+	a.gear.Refresh()
+	if a.page == pageCameras {
+		a.scrollToActive()
+	}
 }
 
 func (a *App) configEnv() *configEnv {
@@ -287,6 +331,7 @@ func (a *App) configEnv() *configEnv {
 		win: a.win, api: a.api, mode: a.mode, setMode: a.SetMode,
 		lang: a.lang, langs: a.bundle.Languages(), setLang: a.SetLanguage,
 		openURL: func(u *url.URL) error { return a.openURL(u) }, setTab: func(t int) { a.configTab = t },
+		panels: panelAPIOf(a.api), panelChanged: a.syncChrome, close: a.CloseConfig,
 	}
 }
 
@@ -308,7 +353,7 @@ func (a *App) SetLanguage(code string) {
 // rebuild recreates every widget (after a language switch) and returns to
 // the page that was open.
 func (a *App) rebuild() {
-	page, slot, stats := a.page, a.detailSlot, a.lastStats
+	page, slot, stats, back := a.page, a.detailSlot, a.lastStats, a.backPage
 	a.closeSubpages()
 	for _, s := range a.strips {
 		s.Close()
@@ -325,6 +370,11 @@ func (a *App) rebuild() {
 	case pageDetails:
 		a.ShowDetails(slot)
 	case pageConfig:
+		if back == pageDetails {
+			a.ShowDetails(slot)
+		} else {
+			a.page = pageCameras
+		}
 		a.ShowConfig(0)
 	default:
 		a.page = pageCameras

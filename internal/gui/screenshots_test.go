@@ -96,6 +96,13 @@ func TestScreenshots(t *testing.T) {
 	a.Window().Resize(size)
 	save("7-config-cameras-en", style.ModeDark)
 	a.SetLanguage("fr")
+	for i, tab := range []int{tabPanel, tabAbout} {
+		a.ShowConfig(0)
+		a.config.SelectTab(tab)
+		a.Window().Resize(size)
+		save(fmt.Sprintf("8%c-settings-%d", 'a'+i, tab), style.ModeDark)
+	}
+	a.ShowCameras()
 
 	if os.Getenv("RCP_SHOTS_EMPTY") != "" {
 		// empty rig for the first-run look

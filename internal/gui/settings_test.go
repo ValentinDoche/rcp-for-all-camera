@@ -27,6 +27,27 @@ func generalOf(t *testing.T, a *App) *generalTab {
 	return a.config.general
 }
 
+func TestSettingsCategoriesAndAbout(t *testing.T) {
+	a, _, _ := newTestApp(t, true)
+	sized(a)
+	a.ShowConfig(0)
+	a.config.SelectTab(tabAbout)
+	txt := allTextsJoined(a.config.obj)
+	for _, want := range []string{"Valentin Doche", "github.com/ValentinDoche/rcp-for-all-camera", "© 2026"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("About lacks %q", want)
+		}
+	}
+	a.config.SelectTab(tabPanel)
+	if a.config.tabs.Selected() != tabPanel {
+		t.Fatal("side list not on Panel")
+	}
+	a.CloseConfig()
+	if a.page != pageCameras || a.configPop != nil {
+		t.Fatalf("after close: page %v pop %v", a.page, a.configPop)
+	}
+}
+
 func TestConfigurationOpensOnGeneralAndRemembersTheTab(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
 	sized(a)
@@ -201,7 +222,7 @@ func TestImportRejectsAFileOverOneMebibyte(t *testing.T) {
 	if !g.importRow.err.Visible() {
 		t.Fatal("too large file must be reported")
 	}
-	if a.Window().Canvas().Overlays().Top() != nil {
+	if extraOverlay(a) {
 		t.Error("no confirmation for a refused file")
 	}
 }
@@ -411,6 +432,16 @@ func TestLanguageSurvivesRebuildOfStats(t *testing.T) {
 }
 
 // --- helpers ----------------------------------------------------------------------
+
+// extraOverlay reports whether a dialog is shown on top of the Settings
+// window (which is itself an overlay while open).
+func extraOverlay(a *App) bool {
+	n := len(a.Window().Canvas().Overlays().List())
+	if a.configPop != nil {
+		n--
+	}
+	return n > 0
+}
 
 func allTextsJoined(o fyne.CanvasObject) string { return strings.Join(allTexts(o), " | ") }
 

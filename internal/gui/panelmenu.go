@@ -1,11 +1,14 @@
 package gui
 
 import (
+	"strings"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 )
 
 // PanelAPI switches where the panel comes from (*app.Service implements it).
@@ -41,43 +44,64 @@ func (t *tapArea) Tapped(e *fyne.PointEvent) {
 
 func (t *tapArea) Cursor() desktop.Cursor { return desktop.PointerCursor }
 
-// panelMenuItems builds the panel source menu: automatic USB, each USB
-// panel when there are several (or one is chosen), and the simulator. The
-// selected source is checked; choosing one calls pick with its id.
-func (a *App) panelMenuItems(list []app.PanelSource, sel string, pick func(id string)) []*fyne.MenuItem {
-	tx := a.ctl.Tx()
+// panelChoice is one panel source as offered to the user.
+type panelChoice struct {
+	label, id string
+}
+
+// panelChoices lists the panel sources to offer: automatic USB, each USB
+// panel when there are several (or one is chosen, even unplugged), and the
+// simulator last.
+func panelChoices(tx texts.Texts, list []app.PanelSource, sel string) []panelChoice {
 	var serials []string
 	for _, p := range list {
 		if p.Serial != "" {
 			serials = append(serials, p.Serial)
 		}
 	}
-	selSerial := ""
-	if len(sel) > len(app.PanelSourceSerialPrefix) && sel[:len(app.PanelSourceSerialPrefix)] == app.PanelSourceSerialPrefix {
-		selSerial = sel[len(app.PanelSourceSerialPrefix):]
+	selSerial, _ := strings.CutPrefix(sel, app.PanelSourceSerialPrefix)
+	if selSerial == sel {
+		selSerial = ""
 	}
-	item := func(label, id string) *fyne.MenuItem {
-		m := fyne.NewMenuItem(label, func() { pick(id) })
-		m.Checked = id == sel
-		return m
-	}
-
 	auto := tx.T("app.panel.source.usbAuto")
 	if len(serials) == 1 {
 		auto = tx.T("app.panel.source.usbOne", "serial", serials[0])
 	}
-	items := []*fyne.MenuItem{item(auto, app.PanelSourceUSB)}
+	out := []panelChoice{{auto, app.PanelSourceUSB}}
 	if len(serials) > 1 || selSerial != "" {
 		found := false
 		for _, sn := range serials {
 			found = found || sn == selSerial
-			items = append(items, item(tx.T("app.panel.source.usb", "serial", sn), app.PanelSourceSerialPrefix+sn))
+			out = append(out, panelChoice{tx.T("app.panel.source.usb", "serial", sn), app.PanelSourceSerialPrefix + sn})
 		}
 		if selSerial != "" && !found {
-			items = append(items, item(tx.T("app.panel.source.usbAbsent", "serial", selSerial), sel))
+			out = append(out, panelChoice{tx.T("app.panel.source.usbAbsent", "serial", selSerial), sel})
 		}
 	}
-	return append(items, fyne.NewMenuItemSeparator(), item(tx.T("app.panel.source.sim"), app.PanelSourceSim))
+	return append(out, panelChoice{tx.T("app.panel.source.sim"), app.PanelSourceSim})
+}
+
+// panelMenuItems builds the panel source menu; the selected source is
+// checked and choosing one calls pick with its id.
+func (a *App) panelMenuItems(list []app.PanelSource, sel string, pick func(id string)) []*fyne.MenuItem {
+	var items []*fyne.MenuItem
+	for _, c := range panelChoices(a.ctl.Tx(), list, sel) {
+		if c.id == app.PanelSourceSim {
+			items = append(items, fyne.NewMenuItemSeparator())
+		}
+		m := fyne.NewMenuItem(c.label, func() { pick(c.id) })
+		m.Checked = c.id == sel
+		items = append(items, m)
+	}
+	return items
+}
+
+// panelAPIOf returns api's panel selection, or nil when it has none.
+func panelAPIOf(api any) PanelAPI {
+	if p, ok := api.(PanelAPI); ok {
+		return p
+	}
+	return nil
 }
 
 // simSelected reports whether the simulator is the selected panel.

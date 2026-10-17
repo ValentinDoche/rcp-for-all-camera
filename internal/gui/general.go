@@ -36,6 +36,11 @@ type configEnv struct {
 	setLang func(code string)
 	openURL func(*url.URL) error
 	setTab  func(tab int)
+	// panels switches the panel source (nil: not available);
+	// panelChanged runs after a switch.
+	panels       PanelAPI
+	panelChanged func()
+	close        func() // closes the Settings window (nil: no close button)
 }
 
 // settingRow is one setting: label above the control, help text below, and
