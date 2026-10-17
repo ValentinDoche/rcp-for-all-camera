@@ -13,3 +13,5 @@ rig.json
 Thumbs.db
 .DS_Store
 .claude/
+# Built modules and app
+/dist/
