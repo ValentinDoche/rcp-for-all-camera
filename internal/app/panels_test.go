@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -26,9 +25,9 @@ func (f *fakePanels) Select(id string) error {
 }
 
 func TestPanelSourceIsSavedAndRestored(t *testing.T) {
-	store := &memStore{rig: config.Rig{Version: config.Version}}
+	store := &memStore{rig: SavedRig{}}
 	p := &fakePanels{sel: PanelSourceUSB}
-	svc, err := NewService(Options{Registry: core.NewRegistry(), Store: store, Secrets: config.NewMemorySecrets(), Panels: p})
+	svc, err := NewService(Options{Registry: core.NewRegistry(), Store: store, Secrets: newMemSecrets(), Panels: p})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +45,7 @@ func TestPanelSourceIsSavedAndRestored(t *testing.T) {
 	}
 
 	p2 := &fakePanels{sel: PanelSourceUSB}
-	if _, err := NewService(Options{Registry: core.NewRegistry(), Store: store, Secrets: config.NewMemorySecrets(), Panels: p2}); err != nil {
+	if _, err := NewService(Options{Registry: core.NewRegistry(), Store: store, Secrets: newMemSecrets(), Panels: p2}); err != nil {
 		t.Fatal(err)
 	}
 	if p2.sel != "usb:ABC" {
@@ -56,8 +55,8 @@ func TestPanelSourceIsSavedAndRestored(t *testing.T) {
 
 func TestSelectPanelSourceRejectsBadIDs(t *testing.T) {
 	p := &fakePanels{sel: PanelSourceUSB}
-	svc, _ := NewService(Options{Registry: core.NewRegistry(), Store: &memStore{rig: config.Rig{Version: config.Version}},
-		Secrets: config.NewMemorySecrets(), Panels: p})
+	svc, _ := NewService(Options{Registry: core.NewRegistry(), Store: &memStore{rig: SavedRig{}},
+		Secrets: newMemSecrets(), Panels: p})
 	for _, id := range []string{"", "usb:", "hdmi"} {
 		if err := svc.SelectPanelSource(id); err == nil {
 			t.Errorf("SelectPanelSource(%q) = nil", id)
@@ -67,8 +66,8 @@ func TestSelectPanelSourceRejectsBadIDs(t *testing.T) {
 	if err := svc.SelectPanelSource(PanelSourceSim); err == nil {
 		t.Error("a failing selector must report an error")
 	}
-	noSel, _ := NewService(Options{Registry: core.NewRegistry(), Store: &memStore{rig: config.Rig{Version: config.Version}},
-		Secrets: config.NewMemorySecrets()})
+	noSel, _ := NewService(Options{Registry: core.NewRegistry(), Store: &memStore{rig: SavedRig{}},
+		Secrets: newMemSecrets()})
 	if list, sel := noSel.PanelSources(); list != nil || sel != "" {
 		t.Errorf("without selector: %v, %q", list, sel)
 	}

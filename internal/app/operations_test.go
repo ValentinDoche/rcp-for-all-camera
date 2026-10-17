@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -70,7 +69,7 @@ func (d *opsDriver) last() *opsCamera {
 	return d.cams[len(d.cams)-1]
 }
 
-func newOpsService(t *testing.T, saved config.Rig) (*Service, *memStore, *opsDriver, *slog.LevelVar) {
+func newOpsService(t *testing.T, saved SavedRig) (*Service, *memStore, *opsDriver, *slog.LevelVar) {
 	t.Helper()
 	reg := core.NewRegistry()
 	drv := &opsDriver{}
@@ -80,7 +79,7 @@ func newOpsService(t *testing.T, saved config.Rig) (*Service, *memStore, *opsDri
 	st := &memStore{rig: saved}
 	lv := new(slog.LevelVar)
 	svc, err := NewService(Options{
-		Registry: reg, Store: st, Secrets: config.NewMemorySecrets(),
+		Registry: reg, Store: st, Secrets: newMemSecrets(),
 		LogLevel: lv, LogDir: `C:\logs\rcp`,
 		Go: func(f func()) { f() }, // run background work inline in tests
 	})
@@ -93,7 +92,7 @@ func newOpsService(t *testing.T, saved config.Rig) (*Service, *memStore, *opsDri
 // --- auto-connect -------------------------------------------------------------
 
 func TestAssignedCameraConnectsAutomatically(t *testing.T) {
-	svc, _, drv, _ := newOpsService(t, config.Rig{Version: config.Version})
+	svc, _, drv, _ := newOpsService(t, SavedRig{})
 	if _, err := svc.AssignSlot(1, validInput()); err != nil {
 		t.Fatal(err)
 	}
@@ -103,8 +102,7 @@ func TestAssignedCameraConnectsAutomatically(t *testing.T) {
 }
 
 func TestConnectAllConnectsEverySavedCamera(t *testing.T) {
-	var saved config.Rig
-	saved.Version = config.Version
+	var saved SavedRig
 	saved.Slots[0] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.1"}
 	saved.Slots[4] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.5"}
 	svc, _, drv, _ := newOpsService(t, saved)
@@ -128,14 +126,14 @@ func TestRecordAndColorBarsAreGuardedByDefault(t *testing.T) {
 }
 
 func TestOperatorLockIsOnByDefault(t *testing.T) {
-	svc, _, _, _ := newOpsService(t, config.Rig{Version: config.Version})
+	svc, _, _, _ := newOpsService(t, SavedRig{})
 	if !svc.Settings().OperatorLock {
 		t.Fatal("operator lock must default to on")
 	}
 }
 
 func TestLockedGuardedControlNeedsConfirmation(t *testing.T) {
-	svc, _, drv, _ := newOpsService(t, config.Rig{Version: config.Version})
+	svc, _, drv, _ := newOpsService(t, SavedRig{})
 	_, _ = svc.AssignSlot(1, validInput())
 	if c := code(t, svc.SetControl(1, "record", core.Bool(true))); c != CodeConfirmRequired {
 		t.Fatalf("code = %s, want CONFIRM_REQUIRED", c)
@@ -152,7 +150,7 @@ func TestLockedGuardedControlNeedsConfirmation(t *testing.T) {
 }
 
 func TestUnguardedControlIgnoresLock(t *testing.T) {
-	svc, _, _, _ := newOpsService(t, config.Rig{Version: config.Version})
+	svc, _, _, _ := newOpsService(t, SavedRig{})
 	_, _ = svc.AssignSlot(1, validInput())
 	if err := svc.SetControl(1, "iris", core.Number(4)); err != nil {
 		t.Fatalf("SetControl(iris) = %v", err)
@@ -160,7 +158,7 @@ func TestUnguardedControlIgnoresLock(t *testing.T) {
 }
 
 func TestLockOffLetsGuardedControlsThroughAndPersists(t *testing.T) {
-	svc, st, _, _ := newOpsService(t, config.Rig{Version: config.Version})
+	svc, st, _, _ := newOpsService(t, SavedRig{})
 	_, _ = svc.AssignSlot(1, validInput())
 	if err := svc.SetOperatorLock(false); err != nil {
 		t.Fatal(err)
@@ -176,7 +174,7 @@ func TestLockOffLetsGuardedControlsThroughAndPersists(t *testing.T) {
 // --- logs ---------------------------------------------------------------------------
 
 func TestLogLevelSettingDrivesTheLevelVar(t *testing.T) {
-	svc, st, _, lv := newOpsService(t, config.Rig{Version: config.Version})
+	svc, st, _, lv := newOpsService(t, SavedRig{})
 	if svc.Settings().LogLevel != LogNormal || lv.Level() != slog.LevelInfo {
 		t.Fatalf("default level = %s / %v", svc.Settings().LogLevel, lv.Level())
 	}
@@ -195,7 +193,7 @@ func TestLogLevelSettingDrivesTheLevelVar(t *testing.T) {
 }
 
 func TestSavedLogLevelIsAppliedAtStartup(t *testing.T) {
-	_, _, _, lv := newOpsService(t, config.Rig{Version: config.Version, LogLevel: "debug"})
+	_, _, _, lv := newOpsService(t, SavedRig{LogLevel: "debug"})
 	if lv.Level() != slog.LevelDebug {
 		t.Fatalf("level = %v, want debug", lv.Level())
 	}
@@ -204,7 +202,7 @@ func TestSavedLogLevelIsAppliedAtStartup(t *testing.T) {
 // --- export / import ------------------------------------------------------------------
 
 func TestExportHasCamerasButNoPasswordsOrMachineSettings(t *testing.T) {
-	svc, _, _, _ := newOpsService(t, config.Rig{Version: config.Version})
+	svc, _, _, _ := newOpsService(t, SavedRig{})
 	in := validInput()
 	in.Password = strPtr("s3cret")
 	_, _ = svc.AssignSlot(2, in)
@@ -223,11 +221,11 @@ func TestExportHasCamerasButNoPasswordsOrMachineSettings(t *testing.T) {
 }
 
 func TestImportReplacesTheRigAndConnects(t *testing.T) {
-	src, _, _, _ := newOpsService(t, config.Rig{Version: config.Version})
+	src, _, _, _ := newOpsService(t, SavedRig{})
 	_, _ = src.AssignSlot(3, validInput())
 	data, _ := src.ExportConfig()
 
-	dst, st, drv, _ := newOpsService(t, config.Rig{Version: config.Version})
+	dst, st, drv, _ := newOpsService(t, SavedRig{})
 	_, _ = dst.AssignSlot(1, validInput())
 	if err := dst.ImportConfig(data); err != nil {
 		t.Fatal(err)
@@ -245,7 +243,7 @@ func TestImportReplacesTheRigAndConnects(t *testing.T) {
 }
 
 func TestImportRejectsInvalidDocumentsAtomically(t *testing.T) {
-	svc, _, _, _ := newOpsService(t, config.Rig{Version: config.Version})
+	svc, _, _, _ := newOpsService(t, SavedRig{})
 	_, _ = svc.AssignSlot(1, validInput())
 	bad := []string{
 		`not json`,
@@ -254,7 +252,7 @@ func TestImportRejectsInvalidDocumentsAtomically(t *testing.T) {
 		`{"format":"` + ExportFormat + `","version":1,"slots":[{"model":"acme-cam","host":"http://x/"}]}`,
 		`{"format":"` + ExportFormat + `","version":1,"slots":[{"model":"nope.x","host":"10.0.0.1"}]}`,
 		`{"format":"` + ExportFormat + `","version":1,"slots":[null,null,null,null,null,null,null,null,{"model":"acme-cam","host":"10.0.0.1"}]}`,
-		strings.Repeat(" ", config.MaxFileSize+1),
+		strings.Repeat(" ", maxImportSize+1),
 	}
 	for _, b := range bad {
 		if c := code(t, svc.ImportConfig([]byte(b))); c != CodeInvalidConfig {
@@ -267,8 +265,7 @@ func TestImportRejectsInvalidDocumentsAtomically(t *testing.T) {
 }
 
 func TestHostStartConnectsSavedCameras(t *testing.T) {
-	var saved config.Rig
-	saved.Version = config.Version
+	var saved SavedRig
 	saved.Slots[2] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.3"}
 	svc, _, drv, _ := newOpsService(t, saved)
 	h := NewHost(svc, func() (bool, error) { return false, nil }, time.Hour)

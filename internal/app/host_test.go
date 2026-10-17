@@ -6,12 +6,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 )
 
 func TestHostPollsPanelUntilStopped(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	var present atomic.Bool
 	present.Store(true)
 	probe := func() (bool, error) { return present.Load(), nil }
@@ -26,7 +24,7 @@ func TestHostPollsPanelUntilStopped(t *testing.T) {
 }
 
 func TestHostReportsProbeErrorAsDisconnected(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	probe := func() (bool, error) { return false, errors.New("setupapi failed") }
 	h := NewHost(f.svc, probe, 5*time.Millisecond)
 	h.Start(context.Background(), f.events)
@@ -38,7 +36,7 @@ func TestHostReportsProbeErrorAsDisconnected(t *testing.T) {
 }
 
 func TestHostStopIsIdempotent(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	h := NewHost(f.svc, func() (bool, error) { return false, nil }, time.Millisecond)
 	h.Start(context.Background(), f.events)
 	h.Stop()
@@ -75,7 +73,7 @@ func (s *fakeSurface) Run(ctx context.Context, api SurfaceAPI, report func(Surfa
 }
 
 func TestHostFansEventsOutToSurfaceAndGUI(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	h := NewHost(f.svc, func() (bool, error) { return false, nil }, time.Hour)
 	s := newFakeSurface()
 	h.SetSurface(s)
@@ -92,7 +90,7 @@ func TestHostFansEventsOutToSurfaceAndGUI(t *testing.T) {
 }
 
 func TestHostSubscribeAndCancel(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	h := NewHost(f.svc, func() (bool, error) { return false, nil }, time.Hour)
 	h.Start(context.Background(), f.events)
 	defer h.Stop()
@@ -112,7 +110,7 @@ func TestHostSubscribeAndCancel(t *testing.T) {
 }
 
 func TestHostStopEndsSurface(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	h := NewHost(f.svc, func() (bool, error) { return false, nil }, time.Hour)
 	s := newFakeSurface()
 	h.SetSurface(s)
@@ -127,7 +125,7 @@ func TestHostStopEndsSurface(t *testing.T) {
 }
 
 func TestHostMergesSurfaceStatus(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	var present atomic.Bool
 	present.Store(true)
 	h := NewHost(f.svc, func() (bool, error) { return present.Load(), nil }, 5*time.Millisecond)

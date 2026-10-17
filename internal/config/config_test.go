@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -17,14 +18,14 @@ func TestLoadMissingFileReturnsEmptyRig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(missing) = %v, want nil", err)
 	}
-	if rig.Version != Version || rig.Active != 0 {
-		t.Fatalf("Load(missing) = %+v, want empty v%d rig", rig, Version)
+	if rig.Active != 0 || rig.Slots != ([app.SlotCount]*core.CameraConfig{}) {
+		t.Fatalf("Load(missing) = %+v, want an empty rig", rig)
 	}
 }
 
 func TestSaveThenLoadRoundTrips(t *testing.T) {
 	s := FileStore{Path: filepath.Join(t.TempDir(), "sub", "rig.json")}
-	in := Rig{Version: Version, Active: 2}
+	in := app.SavedRig{Active: 2}
 	in.Slots[1] = &core.CameraConfig{Model: "sony-fx6", Name: "A", Host: "10.0.0.6", Username: "admin"}
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
@@ -40,7 +41,7 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 
 func TestPresetsRoundTrip(t *testing.T) {
 	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
-	in := Rig{Version: Version, Presets: []Preset{{
+	in := app.SavedRig{Presets: []app.SavedPreset{{
 		Slot: 1, Number: 3, Model: "bm-studio-6k-pro",
 		Values: map[core.ControlID]core.Value{
 			core.Saturation: core.Number(1.34),
@@ -67,7 +68,7 @@ func TestPresetsRoundTrip(t *testing.T) {
 
 func TestRigWithoutPresetsHasNoPresetsKey(t *testing.T) {
 	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
-	if err := s.Save(Rig{Version: Version}); err != nil {
+	if err := s.Save(app.SavedRig{}); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(s.Path)
@@ -78,7 +79,7 @@ func TestRigWithoutPresetsHasNoPresetsKey(t *testing.T) {
 
 func TestSaveNeverWritesPasswords(t *testing.T) {
 	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
-	in := Rig{Version: Version}
+	in := app.SavedRig{}
 	in.Slots[0] = &core.CameraConfig{Model: "sony-fx6", Host: "10.0.0.6", Password: "hunter2"}
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
@@ -136,5 +137,44 @@ func TestMemorySecrets(t *testing.T) {
 	_ = m.Delete("camera/1") // idempotent
 	if _, ok, _ := m.Get("camera/1"); ok {
 		t.Fatal("value survived Delete")
+	}
+}
+
+// The file format is the contract with the files users already have: it
+// is parsed back as plain JSON and compared field by field.
+func TestFileFormat(t *testing.T) {
+	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
+	on := false
+	in := app.SavedRig{Active: 1, BindIP: "10.0.0.2", OperatorLock: &on, Panel: "sim", LogLevel: "debug",
+		Presets: []app.SavedPreset{{Slot: 1, Number: 2, Model: "demo", Values: map[core.ControlID]core.Value{core.Gain: core.Number(6)}}}}
+	in.Slots[0] = &core.CameraConfig{Model: "demo", Name: "A", Host: "10.0.0.6", Port: 81, Username: "u", PowerZoom: true}
+	if err := s.Save(in); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(s.Path)
+	var doc map[string]any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	slot := doc["slots"].([]any)[0].(map[string]any)
+	preset := doc["presets"].([]any)[0].(map[string]any)
+	value := preset["values"].(map[string]any)["gain"].(map[string]any)
+	for name, tc := range map[string]struct{ got, want any }{
+		"version":      {doc["version"], 1.0},
+		"active":       {doc["active"], 1.0},
+		"bindIp":       {doc["bindIp"], "10.0.0.2"},
+		"operatorLock": {doc["operatorLock"], false},
+		"panel":        {doc["panel"], "sim"},
+		"logLevel":     {doc["logLevel"], "debug"},
+		"slot model":   {slot["model"], "demo"},
+		"slot port":    {slot["port"], 81.0},
+		"powerZoom":    {slot["powerZoom"], true},
+		"preset slot":  {preset["slot"], 1.0},
+		"value kind":   {value["kind"], "range"},
+		"value number": {value["number"], 6.0},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("%s = %v, want %v", name, tc.got, tc.want)
+		}
 	}
 }

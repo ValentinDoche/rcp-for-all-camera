@@ -76,50 +76,50 @@ const (
 
 // Option is one choice of an enum control.
 type Option struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
+	Value string
+	Label string
 }
 
 // ControlSpec describes one parameter a camera exposes. Drivers return one
 // spec per supported control; a control that is absent is not supported.
 type ControlSpec struct {
-	ID       ControlID    `json:"id"`
-	Label    string       `json:"label"`
-	Group    ControlGroup `json:"group"`
-	Kind     ControlKind  `json:"kind"`
-	Unit     string       `json:"unit,omitempty"`
-	Min      float64      `json:"min,omitempty"`
-	Max      float64      `json:"max,omitempty"`
-	Step     float64      `json:"step,omitempty"`
-	Options  []Option     `json:"options,omitempty"`
-	ReadOnly bool         `json:"readOnly,omitempty"`
+	ID       ControlID
+	Label    string
+	Group    ControlGroup
+	Kind     ControlKind
+	Unit     string
+	Min      float64
+	Max      float64
+	Step     float64
+	Options  []Option
+	ReadOnly bool
 	// Section optionally sub-groups controls inside a group (e.g. "Knee",
 	// "Matrix - Phase"), for cameras that expose many parameters.
-	Section string `json:"section,omitempty"`
+	Section string
 	// Guarded marks a control that changes recording, power or what goes on
 	// air (record, color bars, output format...). While the operator lock is
 	// on, the app asks for confirmation before writing it.
-	Guarded bool `json:"guarded,omitempty"`
+	Guarded bool
 	// Hidden marks a control meant for control surfaces only (IrisNorm):
 	// the GUI does not show it and presets do not store it, as it doubles a
 	// visible control.
-	Hidden bool `json:"hidden,omitempty"`
+	Hidden bool
 	// Block puts the control in a custom block of that title, shown at the
 	// end of the camera page in declaration order, with Widget (empty: the
 	// default widget of its kind). Empty Block: the standard layout.
-	Block  string `json:"block,omitempty"`
-	Widget Widget `json:"widget,omitempty"`
+	Block  string
+	Widget Widget
 }
 
 // Value carries a control value. Only the field matching Kind is meaningful:
 // Number for range, Choice for enum, On for toggle, Text for text, nothing
 // for action. Build values with Number, Choice, Bool, Text and Trigger.
 type Value struct {
-	Kind   ControlKind `json:"kind"`
-	Number float64     `json:"number,omitempty"`
-	Choice string      `json:"choice,omitempty"`
-	On     bool        `json:"on,omitempty"`
-	Text   string      `json:"text,omitempty"`
+	Kind   ControlKind
+	Number float64
+	Choice string
+	On     bool
+	Text   string
 }
 
 func Number(v float64) Value { return Value{Kind: KindRange, Number: v} }

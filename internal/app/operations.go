@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -20,13 +19,29 @@ const (
 // ExportFormat tags exported rig documents.
 const ExportFormat = "rcp-for-all-camera/rig"
 
+// exportVersion is the version of the export document format.
+const exportVersion = 1
+
+// maxImportSize bounds an imported document.
+const maxImportSize = 1 << 20
+
 // exportDoc is the shareable rig: cameras and selection only. Passwords and
 // machine settings (bind address, log level, lock) never leave the PC.
 type exportDoc struct {
-	Format  string               `json:"format"`
-	Version int                  `json:"version"`
-	Slots   []*core.CameraConfig `json:"slots"`
-	Active  int                  `json:"active"`
+	Format  string          `json:"format"`
+	Version int             `json:"version"`
+	Slots   []*exportCamera `json:"slots"`
+	Active  int             `json:"active"`
+}
+
+// exportCamera is one camera of an export document.
+type exportCamera struct {
+	Model     core.ModelID `json:"model"`
+	Name      string       `json:"name"`
+	Host      string       `json:"host"`
+	Port      int          `json:"port,omitempty"`
+	Username  string       `json:"username,omitempty"`
+	PowerZoom bool         `json:"powerZoom,omitempty"`
 }
 
 // --- auto-connect ------------------------------------------------------------------
@@ -123,12 +138,11 @@ func (s *Service) applyLogLevel() {
 // ExportConfig returns the rig as a JSON document to save or share.
 func (s *Service) ExportConfig() ([]byte, error) {
 	s.mu.Lock()
-	doc := exportDoc{Format: ExportFormat, Version: config.Version, Slots: make([]*core.CameraConfig, SlotCount), Active: s.active}
+	doc := exportDoc{Format: ExportFormat, Version: exportVersion, Slots: make([]*exportCamera, SlotCount), Active: s.active}
 	for i, st := range s.slots {
 		if st != nil {
 			c := st.cfg
-			c.Password, c.BindIP = "", ""
-			doc.Slots[i] = &c
+			doc.Slots[i] = &exportCamera{Model: c.Model, Name: c.Name, Host: c.Host, Port: c.Port, Username: c.Username, PowerZoom: c.PowerZoom}
 		}
 	}
 	s.mu.Unlock()
@@ -144,7 +158,7 @@ func (s *Service) ExportConfig() ([]byte, error) {
 // Passwords are not part of the document and must be entered again.
 func (s *Service) ImportConfig(data []byte) error {
 	invalid := func(msg string) error { return &Error{Code: CodeInvalidConfig, Message: msg} }
-	if len(data) > config.MaxFileSize {
+	if len(data) > maxImportSize {
 		return invalid("file too large")
 	}
 	var doc exportDoc
@@ -154,7 +168,7 @@ func (s *Service) ImportConfig(data []byte) error {
 	if doc.Format != ExportFormat {
 		return invalid("not a configuration file")
 	}
-	if doc.Version != config.Version {
+	if doc.Version != exportVersion {
 		return invalid(fmt.Sprintf("unsupported configuration version %d", doc.Version))
 	}
 	if len(doc.Slots) > SlotCount {
@@ -171,8 +185,7 @@ func (s *Service) ImportConfig(data []byte) error {
 		if c == nil {
 			continue
 		}
-		cfg := *c
-		cfg.Password = ""
+		cfg := core.CameraConfig{Model: c.Model, Name: c.Name, Host: c.Host, Port: c.Port, Username: c.Username, PowerZoom: c.PowerZoom}
 		st, err := s.build(cfg)
 		if err != nil {
 			s.mu.Unlock()

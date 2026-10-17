@@ -1,5 +1,6 @@
-// Package config persists the rig (camera assignments) and the camera
-// passwords. Passwords never go into the rig file: they live in a Secrets
+// Package config persists the rig (camera assignments, settings, presets)
+// and the camera passwords: it implements the app.Store and app.Secrets
+// ports. Passwords never go into the rig file: they live in a secrets
 // store (OS-protected on Windows).
 package config
 
@@ -13,14 +14,12 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
 // Version is the current rig file format version.
 const Version = 1
-
-// Slots is the number of camera slots in a rig file.
-const Slots = 8
 
 // MaxFileSize bounds what Load will read, so a corrupt or hostile file
 // cannot exhaust memory.
@@ -28,35 +27,82 @@ const MaxFileSize = 1 << 20
 
 var ErrUnsupportedVersion = errors.New("unsupported config version")
 
-// Rig is the on-disk rig. Slots[i] is camera button i+1; nil = empty.
-// Entries are not validated here: the app checks them against the model
-// registry and drops the invalid ones.
-type Rig struct {
-	Version int                       `json:"version"`
-	Slots   [Slots]*core.CameraConfig `json:"slots"`
-	Active  int                       `json:"active"`
-	// BindIP is the local address used to reach cameras ("" = OS default).
-	BindIP string `json:"bindIp,omitempty"`
-	// OperatorLock: nil means on (the default).
-	OperatorLock *bool `json:"operatorLock,omitempty"`
-	// Panel is the panel source chosen in the app: "" or "usb" = the first
-	// USB panel, "usb:<serial>" = that panel, "sim" = the simulator.
-	Panel string `json:"panel,omitempty"`
-	// LogLevel is "normal" (default) or "debug".
-	LogLevel string `json:"logLevel,omitempty"`
-	// Presets are the stored camera presets. They live here, never on the
-	// camera.
-	Presets []Preset `json:"presets,omitempty"`
+// rigFile is the on-disk format of the rig (rig.json). It is the
+// persistence model: the mappers below convert it from and to the
+// application's app.SavedRig, so the file format never depends on domain
+// types. Unknown fields are ignored for forward compatibility.
+type rigFile struct {
+	Version      int                        `json:"version"`
+	Slots        [app.SlotCount]*cameraFile `json:"slots"`
+	Active       int                        `json:"active"`
+	BindIP       string                     `json:"bindIp,omitempty"`
+	OperatorLock *bool                      `json:"operatorLock,omitempty"`
+	Panel        string                     `json:"panel,omitempty"`
+	LogLevel     string                     `json:"logLevel,omitempty"`
+	Presets      []presetFile               `json:"presets,omitempty"`
 }
 
-// Preset is a snapshot of one camera's control values, stored by the app and
-// recalled by writing the values back. Model is the camera model it was taken
-// on, so it is never applied to another model.
-type Preset struct {
-	Slot   int                           `json:"slot"`   // 1..Slots
-	Number int                           `json:"number"` // 1..n
-	Model  core.ModelID                  `json:"model"`
-	Values map[core.ControlID]core.Value `json:"values"`
+// cameraFile is one camera. There is no password field: a stray
+// "password" key in a hand-edited file is never read.
+type cameraFile struct {
+	Model     string `json:"model"`
+	Name      string `json:"name"`
+	Host      string `json:"host"`
+	Port      int    `json:"port,omitempty"`
+	Username  string `json:"username,omitempty"`
+	PowerZoom bool   `json:"powerZoom,omitempty"`
+}
+
+type presetFile struct {
+	Slot   int                  `json:"slot"`
+	Number int                  `json:"number"`
+	Model  string               `json:"model"`
+	Values map[string]valueFile `json:"values"`
+}
+
+type valueFile struct {
+	Kind   string  `json:"kind"`
+	Number float64 `json:"number,omitempty"`
+	Choice string  `json:"choice,omitempty"`
+	On     bool    `json:"on,omitempty"`
+	Text   string  `json:"text,omitempty"`
+}
+
+func toFile(r app.SavedRig) rigFile {
+	f := rigFile{Version: Version, Active: r.Active, BindIP: r.BindIP, OperatorLock: r.OperatorLock, Panel: r.Panel, LogLevel: r.LogLevel}
+	for i, c := range r.Slots {
+		if c != nil {
+			f.Slots[i] = &cameraFile{Model: string(c.Model), Name: c.Name, Host: c.Host, Port: c.Port, Username: c.Username, PowerZoom: c.PowerZoom}
+		}
+	}
+	for _, p := range r.Presets {
+		pf := presetFile{Slot: p.Slot, Number: p.Number, Model: string(p.Model), Values: make(map[string]valueFile, len(p.Values))}
+		for id, v := range p.Values {
+			pf.Values[string(id)] = valueFile{Kind: string(v.Kind), Number: v.Number, Choice: v.Choice, On: v.On, Text: v.Text}
+		}
+		f.Presets = append(f.Presets, pf)
+	}
+	return f
+}
+
+// fromFile converts what was read. Entries are not validated here: the
+// application checks them against the model registry and drops the
+// invalid ones.
+func fromFile(f rigFile) app.SavedRig {
+	r := app.SavedRig{Active: f.Active, BindIP: f.BindIP, OperatorLock: f.OperatorLock, Panel: f.Panel, LogLevel: f.LogLevel}
+	for i, c := range f.Slots {
+		if c != nil {
+			r.Slots[i] = &core.CameraConfig{Model: core.ModelID(c.Model), Name: c.Name, Host: c.Host, Port: c.Port, Username: c.Username, PowerZoom: c.PowerZoom}
+		}
+	}
+	for _, p := range f.Presets {
+		sp := app.SavedPreset{Slot: p.Slot, Number: p.Number, Model: core.ModelID(p.Model), Values: make(map[core.ControlID]core.Value, len(p.Values))}
+		for id, v := range p.Values {
+			sp.Values[core.ControlID(id)] = core.Value{Kind: core.ControlKind(v.Kind), Number: v.Number, Choice: v.Choice, On: v.On, Text: v.Text}
+		}
+		r.Presets = append(r.Presets, sp)
+	}
+	return r
 }
 
 // FileStore reads and writes a rig as JSON at Path.
@@ -78,23 +124,22 @@ func DefaultPath() (string, error) {
 // A file that exists but cannot be used (too large, malformed, unsupported
 // version) is renamed to <path>.bad before the error is returned: the app
 // then starts with an empty rig, and its next Save must not destroy the
-// user's file. Unknown JSON fields are ignored for forward compatibility (a
-// stray "password" key is never read: CameraConfig.Password is json:"-").
-func (s FileStore) Load() (Rig, error) {
-	rig, err := s.load()
+// user's file.
+func (s FileStore) Load() (app.SavedRig, error) {
+	f, err := s.load()
 	if errors.Is(err, errUnusable) {
 		if rerr := os.Rename(s.Path, s.Path+".bad"); rerr != nil {
 			err = errors.Join(err, fmt.Errorf("keep unreadable config aside: %w", rerr))
 		}
 	}
-	return rig, err
+	return fromFile(f), err
 }
 
 // errUnusable marks a rig file that was read but cannot be used.
 var errUnusable = errors.New("unusable config file")
 
-func (s FileStore) load() (Rig, error) {
-	empty := Rig{Version: Version}
+func (s FileStore) load() (rigFile, error) {
+	empty := rigFile{Version: Version}
 	f, err := os.Open(s.Path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return empty, nil
@@ -110,14 +155,14 @@ func (s FileStore) load() (Rig, error) {
 	if len(b) > MaxFileSize {
 		return empty, fmt.Errorf("config file larger than %d bytes: %w", MaxFileSize, errUnusable)
 	}
-	var rig Rig
+	var rig rigFile
 	if err := json.Unmarshal(b, &rig); err != nil {
 		return empty, fmt.Errorf("parse config: %w: %w", errUnusable, err)
 	}
 	if rig.Version != Version {
 		return empty, fmt.Errorf("version %d: %w: %w", rig.Version, ErrUnsupportedVersion, errUnusable)
 	}
-	if rig.Active < 0 || rig.Active > Slots {
+	if rig.Active < 0 || rig.Active > app.SlotCount {
 		rig.Active = 0
 	}
 	return rig, nil
@@ -127,9 +172,8 @@ func (s FileStore) load() (Rig, error) {
 // only matter on Unix; on Windows the file inherits the ACL of %APPDATA%,
 // which is private to the user (plus SYSTEM and Administrators). See
 // docs/security.md.
-func (s FileStore) Save(rig Rig) error {
-	rig.Version = Version
-	b, err := json.MarshalIndent(rig, "", "  ")
+func (s FileStore) Save(rig app.SavedRig) error {
+	b, err := json.MarshalIndent(toFile(rig), "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
@@ -166,13 +210,6 @@ func writeFileAtomic(path, pattern string, b []byte) error {
 	return nil
 }
 
-// Secrets stores camera passwords outside the rig file.
-type Secrets interface {
-	Get(key string) (value string, ok bool, err error)
-	Set(key, value string) error
-	Delete(key string) error // idempotent
-}
-
 // MemorySecrets keeps secrets in memory only (tests, and the fallback when
 // no OS store is available: passwords are then asked again after restart).
 type MemorySecrets struct {
@@ -202,3 +239,8 @@ func (s *MemorySecrets) Delete(key string) error {
 	delete(s.m, key)
 	return nil
 }
+
+var (
+	_ app.Store   = FileStore{}
+	_ app.Secrets = (*MemorySecrets)(nil)
+)

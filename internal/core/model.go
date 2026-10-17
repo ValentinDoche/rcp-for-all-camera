@@ -72,21 +72,21 @@ const (
 
 // ModelInfo describes a camera model a driver can control.
 type ModelInfo struct {
-	ID          ModelID      `json:"id"`
-	Brand       string       `json:"brand"`
-	Name        string       `json:"name"`
-	Transports  []Transport  `json:"transports"`
-	DefaultPort int          `json:"defaultPort"`
-	Auth        AuthMode     `json:"auth"`
-	Support     SupportLevel `json:"support"`
-	Notes       string       `json:"notes,omitempty"`
+	ID          ModelID
+	Brand       string
+	Name        string
+	Transports  []Transport
+	DefaultPort int
+	Auth        AuthMode
+	Support     SupportLevel
+	Notes       string
 	// InterchangeableLens: the lens is the user's choice, so whether it has
 	// a power zoom is a per-camera setting (CameraConfig.PowerZoom). Models
 	// with a built-in zoom lens (PTZ) leave it false.
-	InterchangeableLens bool `json:"interchangeableLens,omitempty"`
+	InterchangeableLens bool
 	// NoAddress: the camera is not on the network (the demo camera); the
 	// config needs no host or port.
-	NoAddress bool `json:"noAddress,omitempty"`
+	NoAddress bool
 }
 
 // Check reports whether the model declaration is well formed.
@@ -117,20 +117,20 @@ func (m ModelInfo) Check() error {
 
 // CameraConfig is what the user enters for one camera.
 type CameraConfig struct {
-	Model    ModelID `json:"model"`
-	Name     string  `json:"name"`
-	Host     string  `json:"host"`
-	Port     int     `json:"port,omitempty"` // 0 = model default
-	Username string  `json:"username,omitempty"`
+	Model    ModelID
+	Name     string
+	Host     string
+	Port     int // 0 = model default
+	Username string
 	// PowerZoom: the mounted lens has a motorised zoom. Only read for models
 	// with an InterchangeableLens; without it the camera declares no zoom.
-	PowerZoom bool `json:"powerZoom,omitempty"`
+	PowerZoom bool
 	// Password is never serialized; the config package stores it in the OS
 	// secret store.
-	Password string `json:"-"`
+	Password string
 	// BindIP is the local address drivers must dial from ("" = let the OS
 	// choose). It is an app-wide setting filled in by the app, not per camera.
-	BindIP string `json:"-"`
+	BindIP string
 }
 
 // redacted is CameraConfig without its password, for logs and %v output.

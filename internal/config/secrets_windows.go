@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"io"
 	"io/fs"
 	"os"
@@ -29,7 +30,7 @@ type osSecrets struct {
 // decrypted (corrupt, or from another user or machine) and with
 // ErrNoOSSecrets when DPAPI is missing. The caller decides what to do:
 // typically log, fall back to MemorySecrets, and tell the user.
-func NewOSSecrets(dir string) (Secrets, error) {
+func NewOSSecrets(dir string) (app.Secrets, error) {
 	if dir == "" {
 		return nil, errors.New("secrets: empty directory")
 	}

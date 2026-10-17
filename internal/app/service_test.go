@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -52,16 +51,16 @@ func (testDriver) New(core.CameraConfig) (core.Camera, error) {
 
 type memStore struct {
 	mu    sync.Mutex
-	rig   config.Rig
+	rig   SavedRig
 	saves int
 }
 
-func (m *memStore) Load() (config.Rig, error) {
+func (m *memStore) Load() (SavedRig, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.rig, nil
 }
-func (m *memStore) Save(r config.Rig) error {
+func (m *memStore) Save(r SavedRig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.rig = r
@@ -94,17 +93,17 @@ func (r *recorder) count(name string) int {
 type fixture struct {
 	svc     *Service
 	store   *memStore
-	secrets *config.MemorySecrets
+	secrets *memSecrets
 	events  *recorder
 }
 
-func newFixture(t *testing.T, initial config.Rig) fixture {
+func newFixture(t *testing.T, initial SavedRig) fixture {
 	t.Helper()
 	reg := core.NewRegistry()
 	if err := reg.Register(acme(testDriver{})...); err != nil {
 		t.Fatal(err)
 	}
-	f := fixture{store: &memStore{rig: initial}, secrets: config.NewMemorySecrets(), events: &recorder{}}
+	f := fixture{store: &memStore{rig: initial}, secrets: newMemSecrets(), events: &recorder{}}
 	svc, err := NewService(Options{Registry: reg, Store: f.store, Secrets: f.secrets})
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +135,7 @@ func code(t *testing.T, err error) string {
 // --- tests ---------------------------------------------------------------
 
 func TestFreshRigHasEightEmptySlots(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	rig := f.svc.Rig()
 	if len(rig.Slots) != SlotCount || rig.Active != 0 {
 		t.Fatalf("Rig() = %+v, want 8 slots, active 0", rig)
@@ -149,14 +148,14 @@ func TestFreshRigHasEightEmptySlots(t *testing.T) {
 }
 
 func TestModelsListsRegisteredModels(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	if got := f.svc.Models(); len(got) != 2 || got[0].ID != "acme-cam" {
 		t.Fatalf("Models() = %v", got)
 	}
 }
 
 func TestAssignSlotRejectsOutOfRangeSlot(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	for _, n := range []int{0, 9, -1} {
 		_, err := f.svc.AssignSlot(n, validInput())
 		if code(t, err) != CodeInvalidSlot {
@@ -166,7 +165,7 @@ func TestAssignSlotRejectsOutOfRangeSlot(t *testing.T) {
 }
 
 func TestAssignSlotRejectsUnknownModel(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	in := validInput()
 	in.Model = "acme.nope"
 	_, err := f.svc.AssignSlot(1, in)
@@ -176,7 +175,7 @@ func TestAssignSlotRejectsUnknownModel(t *testing.T) {
 }
 
 func TestAssignSlotRejectsInvalidHost(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	in := validInput()
 	in.Host = "http://evil/x"
 	_, err := f.svc.AssignSlot(1, in)
@@ -189,7 +188,7 @@ func TestAssignSlotRejectsInvalidHost(t *testing.T) {
 }
 
 func TestAssignSlotFillsModelDefaults(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	s, err := f.svc.AssignSlot(3, validInput())
 	if err != nil {
 		t.Fatal(err)
@@ -204,7 +203,7 @@ func TestAssignSlotFillsModelDefaults(t *testing.T) {
 }
 
 func TestAssignSlotPersistsAndEmits(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	if _, err := f.svc.AssignSlot(2, validInput()); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +216,7 @@ func TestAssignSlotPersistsAndEmits(t *testing.T) {
 }
 
 func TestPasswordGoesToSecretsNeverToViewOrStore(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	in := SlotInput{Model: "acme-secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("s3cret")}
 	s, err := f.svc.AssignSlot(1, in)
 	if err != nil {
@@ -239,7 +238,7 @@ func TestPasswordGoesToSecretsNeverToViewOrStore(t *testing.T) {
 }
 
 func TestNilPasswordKeepsStoredOneEmptyClearsIt(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	in := SlotInput{Model: "acme-secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("s3cret")}
 	_, _ = f.svc.AssignSlot(1, in)
 
@@ -257,7 +256,7 @@ func TestNilPasswordKeepsStoredOneEmptyClearsIt(t *testing.T) {
 }
 
 func TestRequiredAuthNeedsUsername(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, err := f.svc.AssignSlot(1, SlotInput{Model: "acme-secure", Host: "10.0.0.2"})
 	if code(t, err) != CodeInvalidConfig {
 		t.Fatalf("code = %s, want INVALID_CONFIG", code(t, err))
@@ -265,7 +264,7 @@ func TestRequiredAuthNeedsUsername(t *testing.T) {
 }
 
 func TestClearSlotIsIdempotentAndDropsSecretAndSelection(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	in := SlotInput{Model: "acme-secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("pw")}
 	_, _ = f.svc.AssignSlot(4, in)
 	_ = f.svc.SelectSlot(4)
@@ -285,7 +284,7 @@ func TestClearSlotIsIdempotentAndDropsSecretAndSelection(t *testing.T) {
 }
 
 func TestSelectSlot(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, _ = f.svc.AssignSlot(5, validInput())
 	if err := f.svc.SelectSlot(5); err != nil {
 		t.Fatal(err)
@@ -302,7 +301,7 @@ func TestSelectSlot(t *testing.T) {
 }
 
 func TestControlsOfEmptySlot(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, err := f.svc.Controls(1)
 	if code(t, err) != CodeEmptySlot {
 		t.Fatalf("code = %s, want EMPTY_SLOT", code(t, err))
@@ -310,7 +309,7 @@ func TestControlsOfEmptySlot(t *testing.T) {
 }
 
 func TestControlsReturnSpecsWithUnknownValues(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, _ = f.svc.AssignSlot(1, validInput())
 	cv, err := f.svc.Controls(1)
 	if err != nil {
@@ -322,7 +321,7 @@ func TestControlsReturnSpecsWithUnknownValues(t *testing.T) {
 }
 
 func TestSetControlValidatesThenReportsNotImplemented(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, _ = f.svc.AssignSlot(1, validInput())
 	if c := code(t, f.svc.SetControl(1, "iris", core.Number(99))); c != CodeInvalidValue {
 		t.Errorf("out of range code = %s, want INVALID_VALUE", c)
@@ -336,7 +335,7 @@ func TestSetControlValidatesThenReportsNotImplemented(t *testing.T) {
 }
 
 func TestConnectSlotReportsNotImplemented(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, _ = f.svc.AssignSlot(1, validInput())
 	if c := code(t, f.svc.ConnectSlot(1)); c != CodeNotImplemented {
 		t.Fatalf("code = %s, want NOT_IMPLEMENTED", c)
@@ -344,8 +343,7 @@ func TestConnectSlotReportsNotImplemented(t *testing.T) {
 }
 
 func TestStartupRestoresSavedRigAndDropsInvalidEntries(t *testing.T) {
-	var saved config.Rig
-	saved.Version = config.Version
+	var saved SavedRig
 	saved.Active = 2
 	saved.Slots[1] = &core.CameraConfig{Model: "acme-cam", Name: "kept", Host: "10.0.0.1"}
 	saved.Slots[2] = &core.CameraConfig{Model: "gone.model", Host: "10.0.0.2"}
@@ -361,12 +359,11 @@ func TestStartupRestoresSavedRigAndDropsInvalidEntries(t *testing.T) {
 }
 
 func TestStartupRestoresPasswordFromSecrets(t *testing.T) {
-	var saved config.Rig
-	saved.Version = config.Version
+	var saved SavedRig
 	saved.Slots[0] = &core.CameraConfig{Model: "acme-secure", Host: "10.0.0.1", Username: "admin"}
 	reg := core.NewRegistry()
 	_ = reg.Register(acme(testDriver{})...)
-	sec := config.NewMemorySecrets()
+	sec := newMemSecrets()
 	_ = sec.Set(secretKey(1), "pw")
 	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: saved}, Secrets: sec})
 	if err != nil {
@@ -378,7 +375,7 @@ func TestStartupRestoresPasswordFromSecrets(t *testing.T) {
 }
 
 func TestPanelStatusEmitsOnlyOnChange(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	f.svc.setPanel(PanelStatus{Connected: true})
 	f.svc.setPanel(PanelStatus{Connected: true})
 	f.svc.setPanel(PanelStatus{Connected: false})
@@ -398,7 +395,7 @@ func TestInternalErrorsDoNotLeakDetails(t *testing.T) {
 }
 
 func TestSelectSlotRefusesEmptySlots(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, _ = f.svc.AssignSlot(2, validInput())
 	_ = f.svc.SelectSlot(2)
 	if c := code(t, f.svc.SelectSlot(3)); c != CodeEmptySlot {
@@ -410,7 +407,7 @@ func TestSelectSlotRefusesEmptySlots(t *testing.T) {
 }
 
 func TestSavedSelectionOfAnEmptySlotIsDropped(t *testing.T) {
-	saved := config.Rig{Version: config.Version, Active: 6}
+	saved := SavedRig{Active: 6}
 	f := newFixture(t, saved)
 	if f.svc.Rig().Active != 0 {
 		t.Fatalf("active = %d, want 0 (slot 6 is empty)", f.svc.Rig().Active)
@@ -418,7 +415,7 @@ func TestSavedSelectionOfAnEmptySlotIsDropped(t *testing.T) {
 }
 
 func TestPowerZoomIsStoredOnlyForInterchangeableLenses(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	in := validInput()
 	in.PowerZoom = true
 	sl, err := f.svc.AssignSlot(1, in)
@@ -439,7 +436,7 @@ func TestPowerZoomIsStoredOnlyForInterchangeableLenses(t *testing.T) {
 }
 
 func TestLensOfACameraWithoutLensInfo(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	if _, err := f.svc.Lens(1); code(t, err) != CodeEmptySlot {
 		t.Errorf("empty slot: %v", err)
 	}
@@ -452,7 +449,7 @@ func TestLensOfACameraWithoutLensInfo(t *testing.T) {
 }
 
 func TestFailedWriteEmitsCommandFailed(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	if _, err := f.svc.AssignSlot(1, validInput()); err != nil {
 		t.Fatal(err)
 	}
@@ -468,4 +465,33 @@ func TestFailedWriteEmitsCommandFailed(t *testing.T) {
 	if f.events.count(EventCommandFailed) != 1 {
 		t.Error("an empty slot must not raise the alarm")
 	}
+}
+
+// memSecrets keeps passwords in memory for the tests.
+type memSecrets struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+func newMemSecrets() *memSecrets { return &memSecrets{m: map[string]string{}} }
+
+func (s *memSecrets) Get(key string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.m[key]
+	return v, ok, nil
+}
+
+func (s *memSecrets) Set(key, value string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[key] = value
+	return nil
+}
+
+func (s *memSecrets) Delete(key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, key)
+	return nil
 }

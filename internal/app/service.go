@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -18,17 +17,11 @@ type Emitter interface {
 	Emit(name string, payload any)
 }
 
-// Store loads and saves the rig (config.FileStore in production).
-type Store interface {
-	Load() (config.Rig, error)
-	Save(config.Rig) error
-}
-
 // Options are Service dependencies. Registry, Store and Secrets are required.
 type Options struct {
 	Registry *core.Registry
 	Store    Store
-	Secrets  config.Secrets
+	Secrets  Secrets
 	Logger   *slog.Logger
 	// Interfaces lists the local IPv4 addresses (sysinfo.LocalIPv4s).
 	Interfaces func() []NetInterface
@@ -54,7 +47,7 @@ var commandTimeout = 3 * time.Second
 type Service struct {
 	reg     *core.Registry
 	store   Store
-	secrets config.Secrets
+	secrets Secrets
 	log     *slog.Logger
 
 	interfaces  func() []NetInterface
@@ -105,7 +98,7 @@ func NewService(o Options) (*Service, error) {
 	rig, err := o.Store.Load()
 	if err != nil {
 		s.log.Warn("config not loaded, starting with an empty rig", "err", err)
-		rig = config.Rig{Version: config.Version}
+		rig = SavedRig{}
 	}
 	s.bindIP = rig.BindIP
 	s.restorePanelSource(rig.Panel)
@@ -469,7 +462,7 @@ func (s *Service) storePassword(slot int, pw string) error {
 
 func (s *Service) saveLocked() error {
 	lock := s.lock
-	rig := config.Rig{Version: config.Version, Active: s.active, BindIP: s.bindIP, OperatorLock: &lock,
+	rig := SavedRig{Active: s.active, BindIP: s.bindIP, OperatorLock: &lock,
 		Panel: s.panelSource}
 	if s.logLevel == LogDebug {
 		rig.LogLevel = LogDebug

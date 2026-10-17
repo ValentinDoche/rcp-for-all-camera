@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -14,9 +13,9 @@ import (
 // stored on the camera, so they work the same for every driver.
 
 // slotPresets holds the presets of one slot; index n-1 is preset n. A
-// stored *config.Preset is never modified in place (it is replaced), so
+// stored *SavedPreset is never modified in place (it is replaced), so
 // copying the array is enough to roll a change back.
-type slotPresets [PresetCount]*config.Preset
+type slotPresets [PresetCount]*SavedPreset
 
 // numbers returns the stored preset numbers, sorted, never nil.
 func (p slotPresets) numbers() []int {
@@ -117,7 +116,7 @@ func (s *Service) StorePreset(slot, n int) error {
 		return &Error{Code: CodeEmptySlot, Message: fmt.Sprintf("slot %d changed while storing the preset", slot)}
 	}
 	prev := s.presets[slot-1][n-1]
-	s.presets[slot-1][n-1] = &config.Preset{Slot: slot, Number: n, Model: st.info.ID, Values: values}
+	s.presets[slot-1][n-1] = &SavedPreset{Slot: slot, Number: n, Model: st.info.ID, Values: values}
 	if err := s.saveLocked(); err != nil {
 		s.presets[slot-1][n-1] = prev
 		s.mu.Unlock()
@@ -215,8 +214,8 @@ func (s *Service) DeletePreset(slot, n int) error {
 
 // savedPresetsLocked returns the presets to persist, in slot then number
 // order, with their own copy of the values.
-func (s *Service) savedPresetsLocked() []config.Preset {
-	var out []config.Preset
+func (s *Service) savedPresetsLocked() []SavedPreset {
+	var out []SavedPreset
 	for _, sp := range s.presets {
 		for _, p := range sp {
 			if p != nil {
@@ -232,7 +231,7 @@ func (s *Service) savedPresetsLocked() []config.Preset {
 // loadPresets keeps the saved presets that still match the loaded slots.
 // Called by NewService after the slots are loaded; the rest is dropped
 // with a warning, like invalid cameras.
-func (s *Service) loadPresets(saved []config.Preset) {
+func (s *Service) loadPresets(saved []SavedPreset) {
 	for _, p := range saved {
 		drop := func(reason string) {
 			s.log.Warn("dropping saved preset", "slot", p.Slot, "preset", p.Number, "reason", reason)
@@ -265,6 +264,6 @@ func (s *Service) loadPresets(saved []config.Preset) {
 			}
 			values[id] = v
 		}
-		s.presets[p.Slot-1][p.Number-1] = &config.Preset{Slot: p.Slot, Number: p.Number, Model: p.Model, Values: values}
+		s.presets[p.Slot-1][p.Number-1] = &SavedPreset{Slot: p.Slot, Number: p.Number, Model: p.Model, Values: values}
 	}
 }

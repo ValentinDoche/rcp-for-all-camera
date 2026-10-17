@@ -7,19 +7,19 @@ import "math"
 // limits. A zero field is unknown.
 type Lens struct {
 	// IrisMin and IrisMax are the widest and the narrowest f-stop.
-	IrisMin float64 `json:"irisMin,omitempty"`
-	IrisMax float64 `json:"irisMax,omitempty"`
+	IrisMin float64
+	IrisMax float64
 	// FocalLength is the current focal length; FocalMin and FocalMax the zoom
 	// range. All in millimetres; a prime lens has FocalMin == FocalMax.
-	FocalLength float64 `json:"focalLength,omitempty"`
-	FocalMin    float64 `json:"focalMin,omitempty"`
-	FocalMax    float64 `json:"focalMax,omitempty"`
+	FocalLength float64
+	FocalMin    float64
+	FocalMax    float64
 	// FocusDistance is the current focus distance; FocusNear and FocusFar the
 	// focus range. All in metres. FocusFar is FocusInfinity when the lens
 	// focuses to infinity.
-	FocusDistance float64 `json:"focusDistance,omitempty"`
-	FocusNear     float64 `json:"focusNear,omitempty"`
-	FocusFar      float64 `json:"focusFar,omitempty"`
+	FocusDistance float64
+	FocusNear     float64
+	FocusFar      float64
 }
 
 // FocusInfinity stands for a focus distance at infinity. JSON has no

@@ -9,7 +9,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -146,7 +145,7 @@ type flakyStore struct {
 	fail bool
 }
 
-func (f *flakyStore) Save(r config.Rig) error {
+func (f *flakyStore) Save(r SavedRig) error {
 	if f.fail {
 		return errors.New("disk full")
 	}
@@ -198,7 +197,7 @@ func (l *rigLog) count() int {
 	return len(l.rigs)
 }
 
-func newPresetFixture(t *testing.T, saved config.Rig) presetFixture {
+func newPresetFixture(t *testing.T, saved SavedRig) presetFixture {
 	t.Helper()
 	reg := core.NewRegistry()
 	if err := reg.Register(acme(presetDriver{})...); err != nil {
@@ -212,7 +211,7 @@ func newPresetFixture(t *testing.T, saved config.Rig) presetFixture {
 // newService builds a Service on the fixture's store (a restart).
 func (f presetFixture) newService(t *testing.T) *Service {
 	t.Helper()
-	svc, err := NewService(Options{Registry: f.reg, Store: f.store, Secrets: config.NewMemorySecrets(),
+	svc, err := NewService(Options{Registry: f.reg, Store: f.store, Secrets: newMemSecrets(),
 		Go: func(func()) {}})
 	if err != nil {
 		t.Fatal(err)
@@ -241,7 +240,7 @@ func assigned(t *testing.T, f presetFixture, slot int) *presetCamera {
 // --- tests ---------------------------------------------------------------------
 
 func TestStoreThenRecallWritesStoredValuesBack(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	cam := assigned(t, f, 1)
 	if err := f.svc.StorePreset(1, 2); err != nil {
 		t.Fatal(err)
@@ -269,7 +268,7 @@ func TestStoreThenRecallWritesStoredValuesBack(t *testing.T) {
 }
 
 func TestStorePresetKeepsOnlyStorableControls(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	if err := f.svc.StorePreset(1, 1); err != nil {
 		t.Fatal(err)
@@ -292,7 +291,7 @@ func TestStorePresetKeepsOnlyStorableControls(t *testing.T) {
 }
 
 func TestStorePresetSkipsControlsThatFailToRead(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	cam := assigned(t, f, 1)
 	cam.failGet[core.Focus] = true
 	if err := f.svc.StorePreset(1, 1); err != nil {
@@ -310,7 +309,7 @@ func TestStorePresetSkipsControlsThatFailToRead(t *testing.T) {
 }
 
 func TestPresetsSurviveARestart(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 3)
 	if err := f.svc.StorePreset(3, 5); err != nil {
 		t.Fatal(err)
@@ -319,7 +318,7 @@ func TestPresetsSurviveARestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var reloaded config.Rig
+	var reloaded SavedRig
 	if err := json.Unmarshal(b, &reloaded); err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +338,7 @@ func TestPresetsSurviveARestart(t *testing.T) {
 }
 
 func TestRigListsStoredPresetNumbers(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	for _, n := range []int{4, 1, 3} {
 		if err := f.svc.StorePreset(1, n); err != nil {
@@ -375,7 +374,7 @@ func TestRigListsStoredPresetNumbers(t *testing.T) {
 }
 
 func TestStoreReplacesAnExistingPreset(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	cam := assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	cam.set(core.Iris, core.Number(16))
@@ -388,7 +387,7 @@ func TestStoreReplacesAnExistingPreset(t *testing.T) {
 }
 
 func TestModelChangeDropsPresetsSameModelEditKeepsThem(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	in := validInput()
@@ -411,7 +410,7 @@ func TestModelChangeDropsPresetsSameModelEditKeepsThem(t *testing.T) {
 }
 
 func TestClearSlotDropsPresets(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 2)
 	_ = f.svc.StorePreset(2, 1)
 	if err := f.svc.ClearSlot(2); err != nil {
@@ -427,7 +426,7 @@ func TestClearSlotDropsPresets(t *testing.T) {
 }
 
 func TestFailedSaveRollsPresetChangesBack(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	f.store.fail = true
@@ -449,7 +448,7 @@ func TestFailedSaveRollsPresetChangesBack(t *testing.T) {
 }
 
 func TestPresetNumberMustBeInRange(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	for _, n := range []int{0, -1, PresetCount + 1} {
 		if c := code(t, f.svc.StorePreset(1, n)); c != CodeInvalidPreset {
@@ -474,7 +473,7 @@ func TestPresetNumberMustBeInRange(t *testing.T) {
 }
 
 func TestRecallOfAMissingPreset(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	if c := code(t, f.svc.RecallPreset(1, 1)); c != CodeEmptyPreset {
 		t.Fatalf("code = %s, want EMPTY_PRESET", c)
@@ -482,7 +481,7 @@ func TestRecallOfAMissingPreset(t *testing.T) {
 }
 
 func TestRecallRefusesAPresetOfAnotherModel(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	cam := assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	f.svc.mu.Lock()
@@ -497,7 +496,7 @@ func TestRecallRefusesAPresetOfAnotherModel(t *testing.T) {
 }
 
 func TestRecallContinuesPastAFailingControl(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	cam := assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	cam.set(core.Iris, core.Number(8))
@@ -512,7 +511,7 @@ func TestRecallContinuesPastAFailingControl(t *testing.T) {
 }
 
 func TestRecallSkipsControlsNoLongerStorable(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	cam := assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	f.svc.mu.Lock()
@@ -534,7 +533,7 @@ func TestRecallSkipsControlsNoLongerStorable(t *testing.T) {
 }
 
 func TestPresetsNeedAConnectedCamera(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	cam := assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	cam.setState(core.StateDisconnected)
@@ -550,14 +549,14 @@ func TestPresetsNeedAConnectedCamera(t *testing.T) {
 }
 
 func TestInvalidSavedPresetsAreDroppedAtLoad(t *testing.T) {
-	saved := config.Rig{Version: config.Version}
+	saved := SavedRig{}
 	saved.Slots[0] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.1"}
 	saved.Slots[1] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.2"}
 	saved.Slots[3] = &core.CameraConfig{Model: "gone.model", Host: "10.0.0.4"}
 	vals := func(iris float64) map[core.ControlID]core.Value {
 		return map[core.ControlID]core.Value{core.Iris: core.Number(iris)}
 	}
-	saved.Presets = []config.Preset{
+	saved.Presets = []SavedPreset{
 		{Slot: 1, Number: 1, Model: "acme-cam", Values: vals(4)},
 		{Slot: 1, Number: 1, Model: "acme-cam", Values: vals(8)}, // duplicate: the last wins
 		{Slot: 1, Number: 2, Model: "acme-cam", Values: map[core.ControlID]core.Value{
@@ -593,7 +592,7 @@ func TestInvalidSavedPresetsAreDroppedAtLoad(t *testing.T) {
 }
 
 func TestSavedPresetValuesAreNotShared(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	f.store.rig.Presets[0].Values[core.Iris] = core.Number(22)
@@ -606,7 +605,7 @@ func TestSavedPresetValuesAreNotShared(t *testing.T) {
 }
 
 func TestPresetsAreSafeForConcurrentUse(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
@@ -624,7 +623,7 @@ func TestPresetsAreSafeForConcurrentUse(t *testing.T) {
 }
 
 func TestImportKeepsPresetsOnlyWhereTheModelStays(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	assigned(t, f, 2)
 	assigned(t, f, 3)
@@ -633,7 +632,7 @@ func TestImportKeepsPresetsOnlyWhereTheModelStays(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	doc := exportDoc{Format: ExportFormat, Version: config.Version, Slots: []*core.CameraConfig{
+	doc := exportDoc{Format: ExportFormat, Version: exportVersion, Slots: []*exportCamera{
 		{Model: "acme-cam", Host: "10.0.0.1"},
 		{Model: "acme-secure", Host: "10.0.0.2", Username: "admin"},
 		nil,
@@ -659,7 +658,7 @@ func (l *rigLog) armedEvents() []bool {
 }
 
 func TestStoreArmingEmitsOnlyOnChange(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	if f.svc.StoreArmed() {
 		t.Fatal("must start disarmed")
 	}
@@ -679,7 +678,7 @@ func TestStoreArmingEmitsOnlyOnChange(t *testing.T) {
 }
 
 func TestStorePresetDisarmsStore(t *testing.T) {
-	f := newPresetFixture(t, config.Rig{Version: config.Version})
+	f := newPresetFixture(t, SavedRig{})
 	assigned(t, f, 1)
 	f.svc.SetStoreArmed(true)
 	if err := f.svc.StorePreset(1, 2); err != nil {

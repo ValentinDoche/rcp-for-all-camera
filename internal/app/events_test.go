@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -68,8 +67,8 @@ func newPushService(t *testing.T) (*Service, *pushDriver, *eventLog) {
 	if err := reg.Register(acme(drv)...); err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: config.Rig{Version: config.Version}},
-		Secrets: config.NewMemorySecrets(), Go: func(f func()) { f() }})
+	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: SavedRig{}},
+		Secrets: newMemSecrets(), Go: func(f func()) { f() }})
 	if err != nil {
 		t.Fatal(err)
 	}

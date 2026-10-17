@@ -87,11 +87,11 @@ func goroutineID() uint64 {
 
 type memStore struct {
 	mu  sync.Mutex
-	rig config.Rig
+	rig app.SavedRig
 }
 
-func (m *memStore) Load() (config.Rig, error) { m.mu.Lock(); defer m.mu.Unlock(); return m.rig, nil }
-func (m *memStore) Save(r config.Rig) error   { m.mu.Lock(); defer m.mu.Unlock(); m.rig = r; return nil }
+func (m *memStore) Load() (app.SavedRig, error) { m.mu.Lock(); defer m.mu.Unlock(); return m.rig, nil }
+func (m *memStore) Save(r app.SavedRig) error   { m.mu.Lock(); defer m.mu.Unlock(); m.rig = r; return nil }
 
 // liveCam wraps a real driver's camera (same declared controls) but behaves
 // as a reachable camera holding values in memory, so the GUI can be exercised

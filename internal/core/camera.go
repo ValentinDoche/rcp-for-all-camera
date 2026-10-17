@@ -14,11 +14,11 @@ const (
 
 // Status is a snapshot of a camera's connection.
 type Status struct {
-	State ConnState `json:"state"`
+	State ConnState
 	// Detail is a short human-readable reason for StateError, or for
 	// StateDisconnected while the driver retries. It must not contain
 	// credentials.
-	Detail string `json:"detail,omitempty"`
+	Detail string
 }
 
 // Event is pushed to subscribers. Exactly one of these is set:
@@ -26,10 +26,10 @@ type Status struct {
 //   - Control and Value, when a control changed (on the camera or by Set);
 //   - Lens, when the lens information changed (LensReporter cameras only).
 type Event struct {
-	Status  *Status   `json:"status,omitempty"`
-	Control ControlID `json:"control,omitempty"`
-	Value   Value     `json:"value"`
-	Lens    *Lens     `json:"lens,omitempty"`
+	Status  *Status
+	Control ControlID
+	Value   Value
+	Lens    *Lens
 }
 
 // Camera is one configured camera. The application gets them from the

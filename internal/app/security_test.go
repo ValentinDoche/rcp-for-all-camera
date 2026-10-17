@@ -10,12 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
 func TestSetControlRejectsHostileIDWithoutEchoingIt(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, _ = f.svc.AssignSlot(1, validInput())
 	long := strings.Repeat("A", 10000)
 	for _, id := range []string{long, "iris\x00", "<img src=x>"} {
@@ -30,7 +29,7 @@ func TestSetControlRejectsHostileIDWithoutEchoingIt(t *testing.T) {
 }
 
 func TestSetControlRejectsHostileChoice(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	_, _ = f.svc.AssignSlot(1, validInput())
 	err := f.svc.SetControl(1, "iris", core.Choice(strings.Repeat("B", 10000)))
 	if c := code(t, err); c != CodeInvalidValue {
@@ -42,7 +41,7 @@ func TestSetControlRejectsHostileChoice(t *testing.T) {
 }
 
 func TestAssignSlotRejectsHugeModelIDWithoutEchoingIt(t *testing.T) {
-	f := newFixture(t, config.Rig{Version: config.Version})
+	f := newFixture(t, SavedRig{})
 	in := validInput()
 	in.Model = core.ModelID(strings.Repeat("m", 10000))
 	_, err := f.svc.AssignSlot(1, in)
@@ -68,15 +67,14 @@ func TestSlotInputNeverPrintsPassword(t *testing.T) {
 
 type failingStore struct{ memStore }
 
-func (f *failingStore) Save(config.Rig) error { return errors.New("disk full") }
+func (f *failingStore) Save(SavedRig) error { return errors.New("disk full") }
 
 func TestAssignSlotRestoresSecretWhenSaveFails(t *testing.T) {
 	reg := core.NewRegistry()
 	_ = reg.Register(acme(testDriver{})...)
-	var saved config.Rig
-	saved.Version = config.Version
+	var saved SavedRig
 	saved.Slots[0] = &core.CameraConfig{Model: "acme-secure", Host: "10.0.0.1", Username: "admin"}
-	sec := config.NewMemorySecrets()
+	sec := newMemSecrets()
 	_ = sec.Set(secretKey(1), "old")
 	svc, err := NewService(Options{Registry: reg, Store: &failingStore{memStore{rig: saved}}, Secrets: sec})
 	if err != nil {
@@ -138,7 +136,7 @@ func TestControlsIsBoundedByOneTimeoutNotOnePerControl(t *testing.T) {
 
 	reg := core.NewRegistry()
 	_ = reg.Register(slowDriver{})
-	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: config.Rig{Version: config.Version}}, Secrets: config.NewMemorySecrets()})
+	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: SavedRig{}}, Secrets: newMemSecrets()})
 	if err != nil {
 		t.Fatal(err)
 	}
