@@ -187,6 +187,7 @@ func (a *App) build() {
 	a.strips = nil
 	a.gear.Importance = widget.LowImportance
 	var statObjs []fyne.CanvasObject
+	a.stats = nil // a rebuild (language switch) makes new ones
 	for i := 0; i < 5; i++ {
 		t := widgets.NewText("", style.TextMuted, 12).Mono()
 		a.stats = append(a.stats, t)
