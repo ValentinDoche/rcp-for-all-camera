@@ -30,6 +30,10 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "build modules:", err)
 		os.Exit(1)
 	}
+	if err := modbuild.Build(context.Background(), "testdata/modules", dir, "hostile-module"); err != nil {
+		fmt.Fprintln(os.Stderr, "build the hostile test module:", err)
+		os.Exit(1)
+	}
 	modulesDir = dir
 	code := m.Run()
 	_ = os.RemoveAll(dir)
@@ -59,8 +63,8 @@ func demoModule(t *testing.T) core.Module { return loadModule(t, "demo") }
 
 func TestLoadScansTheFolder(t *testing.T) {
 	mods, problems := openHost(t).Load(context.Background(), modulesDir)
-	if len(problems) != 0 || len(mods) != 2 || mods[0].Info().ID != "bm-studio-6k-pro" || mods[1].Info().ID != "demo" {
-		t.Fatalf("Load = %d modules, problems %v; want bm-studio-6k-pro and demo", len(mods), problems)
+	if len(problems) != 0 || len(mods) != 3 || mods[0].Info().ID != "bm-studio-6k-pro" || mods[1].Info().ID != "demo" {
+		t.Fatalf("Load = %d modules, problems %v; want bm-studio-6k-pro, demo and the hostile one", len(mods), problems)
 	}
 }
 
