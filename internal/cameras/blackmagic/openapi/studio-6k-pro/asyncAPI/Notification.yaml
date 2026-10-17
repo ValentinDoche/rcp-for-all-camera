@@ -1,0 +1,380 @@
+asyncapi: 2.6.0
+info:
+  title: Notification websocket
+  version: 1.0.0
+  description: Service that notifies subscribers of device state changes.
+servers:
+  public:
+    url: /control/api/v1/event/websocket
+    protocol: ws
+channels:
+  /:
+    subscribe:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/responseMessage'
+          - $ref: '#/components/messages/eventMessage'
+    publish:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/responseMessage'
+components:
+  messages:
+    requestMessage:
+      payload:
+        type: object
+        properties:
+          data:
+            $ref: '#/components/messages/actionRequest'
+          type:
+            type: string
+            enum: [request]
+          id:
+            description: Optional parameter that repeats the id in the output for tracking messages
+            type: number
+        x-response:
+          oneOf:
+            - $ref: '#/components/messages/responseMessage'
+    responseMessage:
+      payload:
+        type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/actionData'
+          type:
+            type: string
+            enum: [response]
+          id:
+            description: Optional parameter that repeats the id in the output for tracking messages
+            type: number
+        x-response:
+          oneOf:
+            - $ref: '#/components/schemas/actionData'
+    eventMessage:
+      payload:
+        type: object
+        properties:
+          data:
+            $ref: '#/components/schemas/eventData'
+          type:
+            type: string
+            enum: [event]
+        x-response:
+          oneOf:
+            - $ref: '#/components/schemas/actionData'
+    actionRequest:
+      payload:
+        type: object
+        properties:
+          action:
+            $ref: '#/components/schemas/action'
+          properties:
+            type: array
+            items:
+              $ref: '#/components/schemas/deviceProperty'
+          values:
+            type: object
+            properties:
+              <schemas/property>:
+                $ref: '#/components/schemas/devicePropertyValue'
+  schemas:
+    actionData:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/action'
+        properties:
+          type: array
+          items:
+            $ref: '#/components/schemas/deviceProperty'
+        values:
+          type: object
+          properties:
+            <schemas/property>:
+              $ref: '#/components/schemas/devicePropertyValue'
+        success:
+          type: boolean
+    eventData:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - propertyValueChanged
+        property:
+          $ref: '#/components/schemas/deviceProperty'
+        value:
+          $ref: '#/components/schemas/devicePropertyValue'
+    action:
+      type: string
+      enum:
+        - subscribe
+        - unsubscribe
+        - listSubscriptions
+        - listProperties
+    deviceProperty:
+      type: string
+      description: Device property the user can subscribe to. The user can either choose a value from the predefined enum or provide a wildcard string.
+      enum:
+        - $ref: '#/components/schemas/ActiveMedia/x-propertyName'
+        - $ref: '#/components/schemas/SystemResponse/x-propertyName'
+        - $ref: '#/components/schemas/CodecFormat/x-propertyName'
+        - $ref: '#/components/schemas/VideoFormat/x-propertyName'
+        - $ref: '#/components/schemas/Format/x-propertyName'
+        - $ref: '#/components/schemas/SupportedFormats/x-propertyName'
+        - $ref: '#/components/schemas/Timeline/x-propertyName'
+        - $ref: '#/components/schemas/TransportResponse/x-propertyName'
+        - $ref: '#/components/schemas/Stop/x-propertyName'
+        - $ref: '#/components/schemas/Play/x-propertyName'
+        - $ref: '#/components/schemas/Playback/x-propertyName'
+        - $ref: '#/components/schemas/Record/x-propertyName'
+        - $ref: '#/components/schemas/Timecode/x-propertyName'
+        - $ref: '#/components/schemas/TimecodeSource/x-propertyName'
+      pattern: '.*'
+    devicePropertyValue:
+      type: object
+      description: Value of the property
+      oneOf:
+          - $ref: '#/components/schemas/ActiveMedia'
+          - $ref: '#/components/schemas/SystemResponse'
+          - $ref: '#/components/schemas/CodecFormat'
+          - $ref: '#/components/schemas/VideoFormat'
+          - $ref: '#/components/schemas/Format'
+          - $ref: '#/components/schemas/SupportedFormats'
+          - $ref: '#/components/schemas/Timeline'
+          - $ref: '#/components/schemas/TransportResponse'
+          - $ref: '#/components/schemas/Stop'
+          - $ref: '#/components/schemas/Play'
+          - $ref: '#/components/schemas/Playback'
+          - $ref: '#/components/schemas/Record'
+          - $ref: '#/components/schemas/Timecode'
+          - $ref: '#/components/schemas/TimecodeSource'
+    ActiveMedia:
+      type: object
+      x-propertyName: /media/active
+      properties:
+        workingsetIndex:
+          type: integer
+          description: Working set index of the active media device
+        deviceName:
+          type: string
+          description: Internal device name of this media device
+    SystemResponse:
+      type: object
+      x-propertyName: /system
+      properties:
+        codecFormat:
+          $ref: "#/components/schemas/CodecFormat"
+        videoFormat:
+          $ref: "#/components/schemas/VideoFormat"
+    CodecFormat:
+      type: object
+      x-propertyName: /system/codecFormat
+      description: Currently selected codec
+      properties:
+        codec:
+          type: string
+          description: Currently selected codec
+          example: ProRes:HQ
+        container:
+          type: string
+          description: Multimedia container format
+          example: MOV
+    FrameRate:
+      type: string
+      enum:
+        - "23.98"
+        - "24.00"
+        - "24"
+        - "25.00"
+        - "25"
+        - "29.97"
+        - "30.00"
+        - "30"
+        - "47.95"
+        - "48.00"
+        - "48"
+        - "50.00"
+        - "50"
+        - "59.94"
+        - "60.00"
+        - "60"
+        - "119.88"
+        - "120.00"
+        - "120"
+    VideoFormat:
+      type: object
+      x-propertyName: /system/videoFormat
+      description: Currently selected video format
+      properties:
+        frameRate:
+          type: string
+          $ref: "#/components/schemas/FrameRate"
+          description: Frame rate
+          example: "30"
+        height:
+          type: number
+          description: Height dimension of video format
+          example: 1920
+        width:
+          type: number
+          description: Width dimension of video format
+          example: 1080
+        interlaced:
+          type: boolean
+          description: Is the display format interlaced?
+          example: false
+        name:
+          description: Video format serialised as a string
+          example: 1920x1080p29.97
+          type: string
+    Format:
+      type: object
+      x-propertyName: /system/format
+      properties:
+        codec:
+          type: string
+          description: Currently selected codec
+          example: BRaw:8_1
+        frameRate:
+          $ref: "#/components/schemas/FrameRate"
+          description: Frame rate
+          example: "24"
+        maxOffSpeedFrameRate:
+          type: number
+          example: 60
+        minOffSpeedFrameRate:
+          type: number
+          example: 5
+        offSpeedEnabled:
+          type: boolean
+          example: false
+        offSpeedFrameRate:
+          type: number
+          example: 60
+        recordResolution:
+          $ref: '#/components/schemas/Resolution'
+        sensorResolution:
+          $ref: '#/components/schemas/Resolution'
+    Resolution:
+      type: object
+      properties:
+        height:
+          type: number
+          description: Height of the resolution
+          example: 2160
+        width:
+          type: number
+          description: Width of the resolution
+          example: 3840
+    SupportedFormats:
+      type: object
+      x-propertyName: /system/supportedFormats
+      properties:
+        supportedFormats:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupportedFormat'
+    SupportedFormat:
+      type: object
+      properties:
+        codecs:
+          type: array
+          items:
+            type: string
+            example: BRaw:Q0
+        frameRates:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrameRate'
+        maxOffSpeedFrameRate:
+          type: number
+          example: 60
+        minOffSpeedFrameRate:
+          type: number
+          example: 5
+        recordResolution:
+          $ref: '#/components/schemas/Resolution'
+        sensorResolution:
+          $ref: '#/components/schemas/Resolution'
+    Timeline:
+      type: object
+      x-propertyName: /timelines/0
+      properties:
+        clips:
+          type: array
+          items:
+            type: object
+            properties:
+              clipUniqueId:
+                type: integer
+                description: Unique ID used to identify this clip
+              frameCount:
+                type: integer
+                description: Number of frames in this clip on the timeline
+    TransportResponse:
+      type: object
+      x-propertyName: /transports/0
+      properties:
+        mode:
+          type: string
+          description: Transport mode
+          enum:
+          - InputPreview
+          - InputRecord
+          - Output
+    Stop:
+      type: boolean
+      x-propertyName: /transports/0/stop
+      description: true when transport mode is InputPreview or when in Output mode and speed is 0
+    Play:
+      type: boolean
+      x-propertyName: /transports/0/play
+      description: True when transport is in Output mode and speed is non-zero
+    Playback:
+      type: object
+      x-propertyName: /transports/0/playback
+      properties:
+        type:
+          type: string
+          enum:
+          - Play
+          - Jog
+          - Shuttle
+          - Var
+        loop:
+          description: When true playback loops from the end of the timeline to the beginning of the timeline
+          type: boolean
+        singleClip:
+          description: When true playback loops from the end of the current clip to the beginning of the current clip
+          type: boolean
+        speed:
+          description: Playback speed, 1.0 for normal forward playback
+          type: number
+        position:
+          type: integer
+          description: Playback position on the timeline in units of video frames
+    Record:
+      type: object
+      x-propertyName: /transports/0/record
+      properties:
+        recording:
+          description: Is transport in Input Record mode
+          type: boolean
+    Timecode:
+      type: object
+      x-propertyName: /transports/0/timecode
+      properties:
+        timecode:
+          type: number
+          description: The time of day timecode in units of binary-coded decimal (BCD).
+        clip:
+          type: number
+          description: The position of the clip timecode in units of binary-coded decimal (BCD).
+    TimecodeSource:
+      type: object
+      x-propertyName: /transports/0/timecode/source
+      properties:
+        timecode:
+          type: string
+          enum: [Timecode, Clip]
