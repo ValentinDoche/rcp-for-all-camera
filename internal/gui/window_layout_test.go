@@ -1,4 +1,4 @@
-package gui
+package gui_test
 
 import (
 	"testing"
@@ -6,55 +6,48 @@ import (
 	"fyne.io/fyne/v2"
 )
 
-// pageTop is the y where the page area starts, absolute.
-func pageTop(a *App) float32 {
-	return fyne.CurrentApp().Driver().AbsolutePositionForObject(a.host).Y
+// edges returns the absolute y of o's top edge and of its bottom edge.
+func edges(o fyne.CanvasObject) (top, bottom float32) {
+	y := fyne.CurrentApp().Driver().AbsolutePositionForObject(o).Y
+	return y, y + o.Size().Height
 }
 
-func headerHas(a *App, o fyne.CanvasObject) bool {
-	for _, x := range a.header.Objects {
-		if x == o {
-			return true
-		}
-	}
-	return false
-}
-
-// Regression: after visiting Configuration, coming back to Cameras drew the
-// slot tabs over the strips because the header was not laid out again.
-func TestSlotTabsDoNotOverlapPageAfterConfig(t *testing.T) {
+// Regression: after visiting Settings, coming back to Cameras drew the slot
+// tabs over the strips because the header was not laid out again.
+func TestSlotTabsDoNotOverlapThePageAfterSettings(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
 	sized(a)
-	a.ShowConfig(0)
-	a.ShowCameras()
+	openSettings(t, a)
+	clickIn(t, a, settings(a), "Fermer")
 
-	d := fyne.CurrentApp().Driver()
-	tabs := d.AbsolutePositionForObject(a.slotBar)
-	if bottom := tabs.Y + a.slotBar.Size().Height; bottom > pageTop(a)+0.5 {
-		t.Fatalf("slot tabs end at y=%v but the page starts at y=%v", bottom, pageTop(a))
+	tabs := slotTabs(t, a)
+	tabsTop, tabsBottom := edges(tabs)
+	stripTop, _ := edges(strip(t, a, "Cam1").roots[0])
+	if tabsBottom-tabsTop < 1 {
+		t.Fatal("slot tabs have no height after closing Settings")
 	}
-	if a.slotBar.Size().Height < 1 {
-		t.Fatal("slot tabs have no height after returning to Cameras")
+	if tabsBottom > stripTop+0.5 {
+		t.Fatalf("slot tabs end at y=%v but the strips start at y=%v", tabsBottom, stripTop)
 	}
 }
 
-// Settings is a modal over the page: the page and its slot tabs stay put
-// underneath and are shown again as they were when it closes.
-func TestSettingsIsAModalOverThePage(t *testing.T) {
+// Settings is a modal over the page: it starts under the title bar, whose
+// window buttons stay usable, and the page is shown again as it was when
+// it closes.
+func TestSettingsIsAModalUnderTheTitleBar(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
 	sized(a)
-	before := pageTop(a)
-	a.ShowConfig(0)
-	if !a.configOpen() {
-		t.Fatal("Settings not shown as a modal")
+	beforeTop, _ := edges(slotTabs(t, a))
+	s := openSettings(t, a)
+	_, titleBottom := edges(win(a).textObject("RCP For All Camera"))
+	if top, _ := edges(s.roots[0]); top < titleBottom {
+		t.Fatalf("Settings starts at y=%v, over the title bar (its name ends at y=%v)", top, titleBottom)
 	}
-	// The modal starts under the title bar, whose buttons stay usable.
-	d := fyne.CurrentApp().Driver()
-	if y := d.AbsolutePositionForObject(a.modal).Y; y < a.titleBar.Size().Height {
-		t.Fatalf("modal starts at y=%v, over the title bar (height %v)", y, a.titleBar.Size().Height)
+	clickIn(t, a, settings(a), "Fermer")
+	if settingsOpen(a) {
+		t.Fatal("Settings still open")
 	}
-	a.CloseConfig()
-	if a.configOpen() || pageTop(a) != before || !headerHas(a, a.slotBar) {
-		t.Fatal("page not restored after closing Settings")
+	if top, _ := edges(slotTabs(t, a)); top != beforeTop {
+		t.Fatalf("slot tabs moved from y=%v to y=%v", beforeTop, top)
 	}
 }

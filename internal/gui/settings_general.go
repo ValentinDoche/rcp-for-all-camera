@@ -35,6 +35,7 @@ type configEnv struct {
 	langs   []i18n.Lang
 	setLang func(code string)
 	openURL func(*url.URL) error
+	files   FilePicker
 	version string // shown in Settings > About
 	setTab  func(tab int)
 	// panels switches the panel source (nil: not available);
@@ -353,15 +354,12 @@ func (g *generalTab) openLogs() {
 
 func (g *generalTab) exportSetting() *settingRow {
 	btn := widget.NewButtonWithIcon(g.tx.T("config.general.export.button"), theme.DocumentSaveIcon(), func() {
-		d := dialog.NewFileSave(func(w fyne.URIWriteCloser, err error) {
+		g.env.files.Save(g.env.win, "rcp-config.json", func(w io.WriteCloser, err error) {
 			if err != nil || w == nil {
 				return
 			}
 			g.exportTo(w)
-		}, g.env.win)
-		d.SetFileName("rcp-config.json")
-		d.SetFilter(storage.NewExtensionFileFilter([]string{".json"}))
-		d.Show()
+		})
 	})
 	g.exportRow = newSettingRow(g.tx.T("config.general.export"), container.NewHBox(btn), g.tx.T("config.general.export.help"))
 	return g.exportRow
@@ -384,15 +382,13 @@ func (g *generalTab) exportTo(w io.WriteCloser) {
 
 func (g *generalTab) importSetting() *settingRow {
 	btn := widget.NewButtonWithIcon(g.tx.T("config.general.import.button"), theme.FolderOpenIcon(), func() {
-		d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
+		g.env.files.Open(g.env.win, func(r io.ReadCloser, err error) {
 			if err != nil || r == nil {
 				return
 			}
 			defer r.Close()
 			g.importFrom(r)
-		}, g.env.win)
-		d.SetFilter(storage.NewExtensionFileFilter([]string{".json"}))
-		d.Show()
+		})
 	})
 	g.importRow = newSettingRow(g.tx.T("config.general.import"), container.NewHBox(btn), g.tx.T("config.general.import.help"))
 	return g.importRow
@@ -440,4 +436,32 @@ func errDetail(err error) string {
 		return ae.Message
 	}
 	return ""
+}
+
+// fyneFiles is the default FilePicker: Fyne's file dialogs, JSON files only.
+type fyneFiles struct{}
+
+func (fyneFiles) Open(win fyne.Window, done func(io.ReadCloser, error)) {
+	d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
+		if r == nil {
+			done(nil, err)
+			return
+		}
+		done(r, err)
+	}, win)
+	d.SetFilter(storage.NewExtensionFileFilter([]string{".json"}))
+	d.Show()
+}
+
+func (fyneFiles) Save(win fyne.Window, name string, done func(io.WriteCloser, error)) {
+	d := dialog.NewFileSave(func(w fyne.URIWriteCloser, err error) {
+		if w == nil {
+			done(nil, err)
+			return
+		}
+		done(w, err)
+	}, win)
+	d.SetFileName(name)
+	d.SetFilter(storage.NewExtensionFileFilter([]string{".json"}))
+	d.Show()
 }

@@ -1,29 +1,40 @@
-package gui
+package gui_test
 
 import (
-	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/icons"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
-// iconButtons returns the details page's icon buttons with that icon, in
-// layout order (iris card first, then gain, shutter...).
-func iconButtons(a *App, icon string) []*widgets.IconButton {
-	var out []*widgets.IconButton
-	for _, o := range all(a.details.body) {
-		if b, ok := o.(*widgets.IconButton); ok && b.Icon() == icon && b.Visible() {
-			out = append(out, b)
+// details is the body of the open details page (its scrolled cards and
+// sections), without the camera strip beside it.
+func details(t *testing.T, a *gui.App) scope {
+	t.Helper()
+	if sc := detailsScroll(a); sc != nil {
+		return scope{[]fyne.CanvasObject{sc}}
+	}
+	t.Fatalf("no details page open: %s", win(a).joined())
+	return scope{}
+}
+
+// detailsScroll is the vertical scroll of the details page, nil when the
+// page is not open.
+func detailsScroll(a *gui.App) *container.Scroll {
+	for _, s := range allOf[*container.Scroll](win(a)) {
+		if s.Direction == container.ScrollVerticalOnly && (scope{[]fyne.CanvasObject{s}}).shows("Presets") {
+			return s
 		}
 	}
-	return out
+	return nil
 }
 
 func lastSet(t *testing.T, cams *[]*liveCam, id core.ControlID) core.Value {
@@ -38,130 +49,120 @@ func lastSet(t *testing.T, cams *[]*liveCam, id core.ControlID) core.Value {
 	return core.Value{}
 }
 
+// card is the card of the details page titled title, with its − / +
+// buttons.
+func card(t *testing.T, a *gui.App, title string) scope {
+	t.Helper()
+	c := details(t, a).around(title, func(s scope) bool { return len(iconButtons(s, icons.Plus)) > 0 })
+	if c.roots == nil {
+		t.Fatalf("no %q card: %s", title, details(t, a).joined())
+	}
+	return c
+}
+
 func TestIrisButtonsMoveByThirdsAndFullStops(t *testing.T) {
 	a, _, cams := newTestApp(t, true)
-	sized(a)
-	a.ShowDetails(1)
-	plus := iconButtons(a, icons.Plus)
-	if len(plus) == 0 {
-		t.Fatal("no + button")
-	}
-	test.Tap(plus[0]) // iris card comes first: f/4 opens a third to f/3.5
-	waitWrites(a.ctl)
+	detailsOf(t, a, "Cam1")
+	iris := card(t, a, "Iris")
+	press(a, iconButtons(iris, icons.Plus)[0]) // f/4 opens a third to f/3.5
+	waitWrites(a.Controller())
 	if v := lastSet(t, cams, core.Iris); v.Number != 3.5 {
 		t.Errorf("+ from f/4 = %v, want 3.5", v.Number)
 	}
-	test.Tap(iconButtons(a, icons.ChevronsRight)[0]) // a full stop more: the lens' f/2.8
-	waitWrites(a.ctl)
+	press(a, iconButtons(iris, icons.ChevronsRight)[0]) // a full stop more: the lens' f/2.8
+	waitWrites(a.Controller())
 	if v := lastSet(t, cams, core.Iris); v.Number != 2.8 {
 		t.Errorf("» from f/3.5 = %v, want 2.8 (the lens limit)", v.Number)
 	}
-	test.Tap(iconButtons(a, icons.ChevronsLeft)[0])
-	waitWrites(a.ctl)
+	press(a, iconButtons(iris, icons.ChevronsLeft)[0])
+	waitWrites(a.Controller())
 	if v := lastSet(t, cams, core.Iris); v.Number != 4 {
 		t.Errorf("« from f/2.8 = %v, want 4", v.Number)
+	}
+	if !card(t, a, "Iris").shows("f/4.0") {
+		t.Error("the iris card must show the new f-stop")
 	}
 }
 
 func TestGainButtonsStepByTheSpecStep(t *testing.T) {
 	a, _, cams := newTestApp(t, true)
-	sized(a)
-	a.ShowDetails(1)
-	test.Tap(iconButtons(a, icons.Plus)[1]) // gain card
-	waitWrites(a.ctl)
+	detailsOf(t, a, "Cam1")
+	press(a, iconButtons(card(t, a, "Gain"), icons.Plus)[0])
+	waitWrites(a.Controller())
 	if v := lastSet(t, cams, core.Gain); v.Number != 14 {
 		t.Errorf("+ from 12 dB = %v, want 14", v.Number)
 	}
-	if got := a.ctl.Value(1, core.Gain); got == nil || got.Number != 14 {
-		t.Errorf("controller gain %v", got)
+	if !card(t, a, "Gain").shows("+14 dB") {
+		t.Errorf("gain card: %s", card(t, a, "Gain").joined())
 	}
 }
 
 func TestExplicitValuesOnTheDetailsPage(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
-	sized(a)
-	a.ShowDetails(1)
-	texts := allTextsJoined(a.details.obj)
+	detailsOf(t, a, "Cam1")
+	d := details(t, a)
 	for _, want := range []string{"f/4.0", "+12 dB", "1/120 s", "5600 K", "35 mm", "objectif de 0,38 m à ∞", "100 %", "0°", "180,0°"} {
-		if !containsText(a, want) {
-			t.Errorf("%q missing in %s", want, texts)
+		if !d.has(want) {
+			t.Errorf("%q missing in %s", want, d.joined())
 		}
 	}
 }
 
-// containsText looks through every text, readouts and captions included.
-func containsText(a *App, want string) bool {
-	for _, o := range all(a.details.obj) {
-		var s string
-		switch w := o.(type) {
-		case *widgets.Readout:
-			s = w.Text.Text()
-		case *widgets.Text:
-			s = w.Text()
-		default:
-			continue
-		}
-		if s == want || (len(s) > len(want) && contains(s, want)) {
-			return true
-		}
-	}
-	return false
+// zoomLever is the Wide / Tele lever of the lens card.
+func zoomLever(t *testing.T, a *gui.App) *widgets.Lever {
+	t.Helper()
+	return one[*widgets.Lever](t, details(t, a).around("Télé", withA[*widgets.Lever]()))
 }
 
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
+const powerZoomBox = "Optique Power Zoom (zoom motorisé)"
 
 func TestPowerZoomSettingShowsOrHidesTheZoom(t *testing.T) {
 	a, svc, _ := newTestApp(t, true)
-	sized(a)
-	a.ShowConfig(1)
-	f := a.config.form
-	if !f.powerZoomBox.Visible() || !f.powerZoom.Checked {
-		t.Fatal("Studio 6K Pro with a power zoom: the box must be shown and ticked")
+	f := cameraForm(t, a, "Cam1")
+	pz := checkBox(t, f, powerZoomBox)
+	if !pz.Checked {
+		t.Fatal("Studio 6K Pro with a power zoom: the box must be ticked")
 	}
-	f.powerZoom.SetChecked(false)
-	f.save()
+	press(a, pz)
+	saveForm(t, a)
 	if svc.Rig().Slots[0].Camera.PowerZoom {
 		t.Fatal("power zoom not saved")
 	}
-	if a.ctl.Has(1, core.Zoom) {
-		t.Error("without a power zoom the camera must not declare a zoom")
+	clickIn(t, a, settings(a), "Fermer")
+	detailsOf(t, a, "Cam1")
+	if !zoomLever(t, a).Disabled() {
+		t.Error("without a power zoom the zoom lever must be greyed")
 	}
 
-	a.ShowConfig(3) // Panasonic PTZ: built-in zoom, no setting
-	if a.config.form.powerZoomBox.Visible() {
-		t.Error("a PTZ camera has its zoom built in: no power zoom setting")
+	f = cameraForm(t, a, "Cam3") // Panasonic PTZ: built-in zoom, no setting
+	for _, c := range allOf[*widget.Check](f) {
+		if c.Text == powerZoomBox {
+			t.Error("a PTZ camera has its zoom built in: no power zoom setting")
+		}
 	}
 }
 
 func TestDetailsShowEachControlOnce(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
-	sized(a)
-	a.ShowDetails(1)
-	for _, id := range []core.ControlID{core.ShutterAngle, core.MasterBlack, core.Record, core.ISO} {
-		if a.details.rows[id] != nil {
-			t.Errorf("%s has a generic row: it is already shown elsewhere", id)
+	detailsOf(t, a, "Cam1")
+	d := details(t, a)
+	// Exposure and transport controls have their cards: no generic
+	// section is left for them.
+	for _, title := range []string{"Exposition", "Enregistrement"} {
+		if d.shows(title) {
+			t.Errorf("section %q left with controls shown elsewhere", title)
 		}
 	}
-	for _, s := range a.details.secs {
-		if s.group == core.GroupTransport || s.group == core.GroupExposure {
-			t.Errorf("section %q left with controls shown elsewhere", s.title)
-		}
+	if n := len(allOf[*widgets.ColorWheel](d)); n != 3 {
+		t.Errorf("%d colour wheels, want lift, gamma and gain", n)
 	}
 }
 
 func TestStripShowsTheFStop(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
 	sized(a)
-	c := a.strips[0].content
-	if c.iris == nil || c.iris.Text() != "f/4.0" {
-		t.Fatalf("strip iris = %v", c.iris)
+	if s := strip(t, a, "Cam1"); !s.shows("f/4.0") {
+		t.Fatalf("strip of Cam1: %s", s.joined())
 	}
 }
 
@@ -169,16 +170,9 @@ func TestStripShowsTheFStop(t *testing.T) {
 // canvas (title bar and taskbar).
 func TestDetailsFitAMaximisedFullHDWindowWithoutScrolling(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
+	detailsOf(t, a, "Cam1")
 	a.Window().Resize(fyne.NewSize(1920, 990))
-	a.ShowDetails(1)
-	a.Window().Resize(fyne.NewSize(1920, 990))
-	var sc *container.Scroll
-	for _, o := range all(a.details.obj) {
-		if s, ok := o.(*container.Scroll); ok && s.Content != nil && s.Direction == container.ScrollVerticalOnly {
-			sc = s
-			break
-		}
-	}
+	sc := detailsScroll(a)
 	if sc == nil {
 		t.Fatal("details scroll not found")
 	}
@@ -192,36 +186,45 @@ func TestDetailsFitAMaximisedFullHDWindowWithoutScrolling(t *testing.T) {
 
 func TestDemoCameraNeedsNoAddressAndDrivesEverything(t *testing.T) {
 	a, svc, _ := newTestApp(t, true)
-	sized(a)
-	a.ShowConfig(4)
-	f := a.config.form
-	f.brand.SetSelected("Demo")
-	if f.current == nil || !f.current.NoAddress {
-		t.Fatal("the demo model must be picked")
-	}
-	if f.addrBox.Visible() {
+	cameraForm(t, a, "Cam4")
+	chooseModel(t, a, "Demo", "")
+	f := form(t, a)
+	if f.shows("Adresse de la caméra") || f.shows("Port") {
 		t.Error("the demo camera has no address: host and port are hidden")
 	}
-	if !f.powerZoomBox.Visible() {
-		t.Error("like a Studio 6K Pro, the demo offers the power zoom setting")
-	}
-	f.powerZoom.SetChecked(true)
-	f.save()
+	press(a, checkBox(t, f, powerZoomBox)) // like a Studio 6K Pro
+	saveForm(t, a)
 	cam := svc.Rig().Slots[3].Camera
 	if cam == nil || cam.Host != "" || cam.Status.State != core.StateConnected {
 		t.Fatalf("demo slot = %+v", cam)
 	}
-	a.ShowDetails(4)
-	for _, id := range []core.ControlID{core.Iris, core.Zoom, core.Focus, core.Gain, core.ND, core.WhiteBalance, core.Contrast} {
-		if !a.details.cards[id] {
-			t.Errorf("%s must be live on the demo camera", id)
+	clickIn(t, a, settings(a), "Fermer")
+	detailsOf(t, a, "Cam4")
+	d := details(t, a)
+	for _, title := range []string{"Iris", "Objectif", "Gain", "Filtre ND", "Balance des blancs", "Contraste"} {
+		if !d.shows(title) {
+			t.Errorf("no %q on the demo camera: %s", title, d.joined())
 		}
 	}
-	test.Tap(iconButtons(a, icons.Plus)[0]) // iris +
-	waitWrites(a.ctl)
-	if v := a.ctl.Value(4, core.Iris); v == nil || v.Number != 3.5 {
-		t.Errorf("demo iris after + = %v, want 3.5", v)
+	if zoomLever(t, a).Disabled() {
+		t.Error("the demo camera with a power zoom offers the zoom")
 	}
+	press(a, iconButtons(card(t, a, "Iris"), icons.Plus)[0])
+	waitWrites(a.Controller())
+	if !card(t, a, "Iris").shows("f/3.5") {
+		t.Errorf("demo iris after +: %s", card(t, a, "Iris").joined())
+	}
+}
+
+// countLabels counts the captions of the scope showing exactly text.
+func countLabels(s scope, text string) int {
+	n := 0
+	for _, w := range allOf[*widgets.Text](s) {
+		if w.Text() == text {
+			n++
+		}
+	}
+	return n
 }
 
 func TestTheModulePageLaysOutTheDetails(t *testing.T) {
@@ -229,27 +232,29 @@ func TestTheModulePageLaysOutTheDetails(t *testing.T) {
 	if err := svc.AssignSlot(1, app.SlotInput{Model: "demo", Name: "Demo"}); err != nil {
 		t.Fatal(err)
 	}
-	a := New(test.NewTempApp(t), svc, syncOptions())
-	t.Cleanup(func() { waitWrites(a.ctl) })
-	sized(a)
-	a.ShowDetails(1)
-	p := a.details
+	a := gui.New(test.NewTempApp(t), svc, syncOptions())
+	t.Cleanup(func() { waitWrites(a.Controller()) })
+	detailsOf(t, a, "Cam1")
+	block := details(t, a).around("Tally lamp", withText("Firmware"))
 	t.Run("the widgets of ui.go are used", func(t *testing.T) {
-		for id, want := range map[core.ControlID]widgets.WidgetKind{
-			"demo.tallyLamp": widgets.KindCheck, "demo.tallyTest": widgets.KindButton,
-			"demo.firmware": widgets.KindReadout, "demo.cameraId": widgets.KindText,
+		if block.roots == nil {
+			t.Fatalf("no Demo block: %s", details(t, a).joined())
+		}
+		for label, has := range map[string]func(scope) bool{
+			"Tally lamp":      withA[*widget.Check](),  // switch
+			"Flash the tally": withA[*widget.Button](), // button
+			"Firmware":        withText("demo 0.3.0"),  // readout
+			"Camera name":     withA[*widget.Entry](),  // text
 		} {
-			if r := p.rows[id]; r == nil || r.kind != want {
-				t.Errorf("%s: row %v, want a %s", id, r, want)
+			if block.around(label, has).roots == nil {
+				t.Errorf("%q has not the widget ui.go asks for: %s", label, block.joined())
 			}
 		}
 	})
 	t.Run("controls of the Demo block are not repeated in the generated sections", func(t *testing.T) {
-		for _, s := range p.secs {
-			for _, r := range s.rows {
-				if strings.HasPrefix(string(r.spec.ID), "demo.tally") || r.spec.ID == "demo.firmware" || r.spec.ID == "demo.cameraId" {
-					t.Errorf("%s shown again in section %q", r.spec.ID, s.title)
-				}
+		for _, label := range []string{"Tally lamp", "Flash the tally", "Firmware", "Camera name"} {
+			if n := countLabels(details(t, a), label); n != 1 {
+				t.Errorf("%q shown %d times", label, n)
 			}
 		}
 	})
@@ -264,31 +269,31 @@ func TestACustomPageReplacesTheStandardLayout(t *testing.T) {
 		{Blocks: []core.Block{{Type: core.BlockGrid, Columns: 2, Blocks: []core.Block{
 			{Type: core.BlockIris}, {Type: core.BlockWheel, Wheel: core.WheelLift},
 		}}}},
+		{Blocks: []core.Block{{Type: core.BlockPresets}}},
 		{Blocks: []core.Block{{Type: core.BlockRemaining}}},
 	}}
 	(*cams)[0].page = &page
-	a := New(test.NewTempApp(t), svc, syncOptions())
-	t.Cleanup(func() { waitWrites(a.ctl) })
-	sized(a)
-	a.ShowDetails(1)
-	p := a.details
+	a := gui.New(test.NewTempApp(t), svc, syncOptions())
+	t.Cleanup(func() { waitWrites(a.Controller()) })
+	detailsOf(t, a, "Cam1")
+	d := details(t, a)
 	t.Run("one wheel, the lift", func(t *testing.T) {
-		if len(p.wheels) != 1 || p.wheels[0].group != 0 {
-			t.Errorf("%d wheels", len(p.wheels))
+		if n := len(allOf[*widgets.ColorWheel](d)); n != 1 || !d.shows("Lift") || d.shows("Gamma") {
+			t.Errorf("%d wheels: %s", n, d.joined())
 		}
 	})
 	t.Run("the iris card drives the iris", func(t *testing.T) {
-		if !p.cards[core.Iris] {
-			t.Error("iris not driven by its card")
+		if len(iconButtons(card(t, a, "Iris"), icons.Plus)) == 0 {
+			t.Error("no iris card")
 		}
 	})
 	t.Run("everything else is in the remaining sections", func(t *testing.T) {
-		for _, id := range []core.ControlID{core.Gain, core.GammaR, core.WhiteBalance} {
-			if p.rows[id] == nil {
-				t.Errorf("%s is not reachable", id)
+		for _, label := range []string{"Gain", "Gamma rouge", "Balance des blancs"} {
+			if !d.shows(label) {
+				t.Errorf("%q is not reachable: %s", label, d.joined())
 			}
 		}
-		if p.rows[core.LiftR] != nil {
+		if d.shows("Lift rouge") {
 			t.Error("lift R is shown twice")
 		}
 	})

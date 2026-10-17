@@ -1,4 +1,4 @@
-package gui
+package gui_test
 
 import (
 	"fmt"
@@ -13,7 +13,9 @@ import (
 	"fyne.io/fyne/v2/test"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
 // TestScreenshots renders the main pages offscreen in both themes. It only
@@ -40,7 +42,7 @@ func TestScreenshots(t *testing.T) {
 	svc, _, cams := newLiveService(t)
 	seedRig(t, svc)
 	(*cams)[0].values[core.Tally] = core.Bool(true)
-	a := New(fa, svc, syncOptions())
+	a := gui.New(fa, svc, syncOptions())
 	a.Window().Resize(size)
 	save := func(name string, mode style.Mode) {
 		img := software.RenderCanvas(a.Window().Canvas(), style.NewTheme(mode))
@@ -73,8 +75,8 @@ func TestScreenshots(t *testing.T) {
 	for _, mode := range []style.Mode{style.ModeDark, style.ModeLight} {
 		a.SetMode(mode)
 		a.ShowConfig(0)
-		a.config.SelectTab(tabGeneral)
 		a.Window().Resize(size)
+		category(t, a, "Général")
 		save("5-general-fr", mode)
 	}
 	// the whole tab at once: a taller window
@@ -86,8 +88,8 @@ func TestScreenshots(t *testing.T) {
 	a.SetMode(style.ModeDark)
 	a.SetLanguage("en")
 	a.ShowConfig(0)
-	a.config.SelectTab(tabGeneral)
 	a.Window().Resize(size)
+	clickIn(t, a, scope{[]fyne.CanvasObject{one[*widgets.SideNav](t, win(a))}}, "General")
 	save("5-general-en", style.ModeDark)
 	a.ShowCameras()
 	a.Window().Resize(size)
@@ -96,11 +98,11 @@ func TestScreenshots(t *testing.T) {
 	a.Window().Resize(size)
 	save("7-config-cameras-en", style.ModeDark)
 	a.SetLanguage("fr")
-	for i, tab := range []int{tabPanel, tabAbout} {
+	for i, tab := range []string{"Panneau", "À propos"} {
 		a.ShowConfig(0)
-		a.config.SelectTab(tab)
 		a.Window().Resize(size)
-		save(fmt.Sprintf("8%c-settings-%d", 'a'+i, tab), style.ModeDark)
+		category(t, a, tab)
+		save(fmt.Sprintf("8%c-settings", 'a'+i), style.ModeDark)
 	}
 	a.ShowCameras()
 

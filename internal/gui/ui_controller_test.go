@@ -1,11 +1,13 @@
-package gui
+package gui_test
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
@@ -125,21 +127,21 @@ func numView(sp core.ControlSpec, v float64) app.ControlView {
 	return app.ControlView{Spec: sp, Value: &val}
 }
 
-func newCtl(f *fakeAPI) *Controller {
+func newCtl(f *fakeAPI) *gui.Controller {
 	o := syncOptions()
 	o.WriteInterval = 5 * time.Millisecond
-	c := NewController(f, o)
+	c := gui.NewController(f, o)
 	c.Load()
 	return c
 }
 
 type recorder struct {
 	mu  sync.Mutex
-	got []Change
+	got []gui.Change
 }
 
-func (r *recorder) fn(ch Change) { r.mu.Lock(); r.got = append(r.got, ch); r.mu.Unlock() }
-func (r *recorder) count(k ChangeKind) int {
+func (r *recorder) fn(ch gui.Change) { r.mu.Lock(); r.got = append(r.got, ch); r.mu.Unlock() }
+func (r *recorder) count(k gui.ChangeKind) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	n := 0
@@ -184,8 +186,8 @@ func TestWriteSuccessUpdatesCacheAndNotifies(t *testing.T) {
 	if v := c.Value(1, core.Iris); v == nil || v.Number != 0.7 {
 		t.Fatalf("cache = %v", v)
 	}
-	if rec.count(ChValue) != 1 {
-		t.Errorf("ChValue notifications = %d", rec.count(ChValue))
+	if rec.count(gui.ChValue) != 1 {
+		t.Errorf("gui.ChValue notifications = %d", rec.count(gui.ChValue))
 	}
 	if got := f.setCalls(); len(got) != 1 || got[0].ID != core.Iris || got[0].V.Number != 0.7 {
 		t.Errorf("service calls = %+v", got)
@@ -208,7 +210,7 @@ func TestWriteNotImplementedKeepsLastKnownAndShowsDiscreetNotice(t *testing.T) {
 	if n.Level != texts.LevelInfo || n.Text != "Contrôle pas encore disponible : pilote caméra en développement" {
 		t.Errorf("notice = %+v", n)
 	}
-	if rec.count(ChValue) != 1 {
+	if rec.count(gui.ChValue) != 1 {
 		t.Error("widgets must be told to return to the last known value")
 	}
 }
@@ -232,28 +234,30 @@ func TestWriteInvalidValueIsAnError(t *testing.T) {
 }
 
 func TestWriteIsThrottledAndFinalValueAlwaysSent(t *testing.T) {
-	f := newFakeAPI()
-	f.assign(1, "acme-cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.001), 0))
-	o := syncOptions()
-	o.WriteInterval = 20 * time.Millisecond
-	c := NewController(f, o)
-	c.Load()
-	start := time.Now()
-	for i := 1; i <= 100; i++ {
-		c.Write(1, core.Iris, core.Number(float64(i)/100))
-		time.Sleep(time.Millisecond)
-	}
-	waitWrites(c)
-	calls := f.setCalls()
-	if len(calls) == 0 || calls[len(calls)-1].V.Number != 1 {
-		t.Fatalf("final value not sent: %+v", calls[len(calls)-1:])
-	}
-	if max := int(time.Since(start)/(20*time.Millisecond)) + 2; len(calls) > max {
-		t.Errorf("%d writes in %v, want at most %d", len(calls), time.Since(start), max)
-	}
-	if v := c.Value(1, core.Iris); v == nil || v.Number != 1 {
-		t.Errorf("cache = %v", v)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFakeAPI()
+		f.assign(1, "acme-cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.001), 0))
+		o := syncOptions()
+		o.WriteInterval = 20 * time.Millisecond
+		c := gui.NewController(f, o)
+		c.Load()
+		start := time.Now()
+		for i := 1; i <= 100; i++ {
+			c.Write(1, core.Iris, core.Number(float64(i)/100))
+			time.Sleep(time.Millisecond)
+		}
+		waitWrites(c)
+		calls := f.setCalls()
+		if len(calls) == 0 || calls[len(calls)-1].V.Number != 1 {
+			t.Fatalf("final value not sent: %+v", calls[len(calls)-1:])
+		}
+		if max := int(time.Since(start)/(20*time.Millisecond)) + 2; len(calls) > max {
+			t.Errorf("%d writes in %v, want at most %d", len(calls), time.Since(start), max)
+		}
+		if v := c.Value(1, core.Iris); v == nil || v.Number != 1 {
+			t.Errorf("cache = %v", v)
+		}
+	})
 }
 
 func TestActionWriteDoesNotStoreAValue(t *testing.T) {
@@ -300,21 +304,21 @@ func TestServiceEventsUpdateState(t *testing.T) {
 	c.Subscribe(rec.fn)
 
 	c.Emit(app.EventPanelStatus, app.PanelStatus{Connected: true})
-	if !c.Panel().Connected || rec.count(ChPanel) != 1 {
+	if !c.Panel().Connected || rec.count(gui.ChPanel) != 1 {
 		t.Error("panel status")
 	}
 	c.Emit(app.EventPanelStatus, app.PanelStatus{Connected: true}) // same value: no change
-	if rec.count(ChPanel) != 1 {
+	if rec.count(gui.ChPanel) != 1 {
 		t.Error("identical panel status must not notify")
 	}
 
 	c.Emit(app.EventCamera, app.CameraEvent{Slot: 1, Event: core.Event{Control: core.Iris, Value: core.Number(0.8)}})
-	if v := c.Value(1, core.Iris); v == nil || v.Number != 0.8 || rec.count(ChValue) != 1 {
-		t.Errorf("camera event: %v, %d notifications", v, rec.count(ChValue))
+	if v := c.Value(1, core.Iris); v == nil || v.Number != 0.8 || rec.count(gui.ChValue) != 1 {
+		t.Errorf("camera event: %v, %d notifications", v, rec.count(gui.ChValue))
 	}
 	c.Emit(app.EventCamera, app.CameraEvent{Slot: 1, Event: core.Event{Control: "nope", Value: core.Number(1)}})
 	c.Emit(app.EventCamera, app.CameraEvent{Slot: 7, Event: core.Event{Control: core.Iris, Value: core.Number(1)}})
-	if rec.count(ChValue) != 1 {
+	if rec.count(gui.ChValue) != 1 {
 		t.Error("events for unknown controls or empty slots are ignored")
 	}
 
@@ -378,7 +382,7 @@ func TestStaleControlLoadIsDropped(t *testing.T) {
 	var pending []func()
 	o := syncOptions()
 	o.Go = func(fn func()) { pending = append(pending, fn) }
-	c := NewController(f, o)
+	c := gui.NewController(f, o)
 	c.Load() // load queued, not run
 	f.rig.Slots[0].Camera = nil
 	c.RefreshRig() // slot cleared before the answer comes
@@ -391,51 +395,55 @@ func TestStaleControlLoadIsDropped(t *testing.T) {
 }
 
 func TestNoticeExpires(t *testing.T) {
-	f := newFakeAPI()
-	o := syncOptions()
-	o.NoticeTTL = 20 * time.Millisecond
-	var mu sync.Mutex
-	o.UI = func(fn func()) { mu.Lock(); defer mu.Unlock(); fn() }
-	c := NewController(f, o)
-	c.Load()
-	c.SetNotice(texts.Notice{Text: "x"})
-	time.Sleep(80 * time.Millisecond)
-	mu.Lock()
-	got := c.Notice().Text
-	mu.Unlock()
-	if got != "" {
-		t.Errorf("notice still %q", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFakeAPI()
+		o := syncOptions()
+		o.NoticeTTL = 20 * time.Millisecond
+		var mu sync.Mutex
+		o.UI = func(fn func()) { mu.Lock(); defer mu.Unlock(); fn() }
+		c := gui.NewController(f, o)
+		c.Load()
+		c.SetNotice(texts.Notice{Text: "x"})
+		time.Sleep(80 * time.Millisecond)
+		mu.Lock()
+		got := c.Notice().Text
+		mu.Unlock()
+		if got != "" {
+			t.Errorf("notice still %q", got)
+		}
+	})
 }
 
 func TestPollRefreshesRig(t *testing.T) {
-	f := newFakeAPI()
-	f.assign(1, "acme-cam", core.StateDisconnected)
-	var mu sync.Mutex
-	o := Options{}
-	o.UI = func(fn func()) { mu.Lock(); defer mu.Unlock(); fn() }
-	c := NewController(f, o)
-	c.Load()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	c.Poll(ctx, 5*time.Millisecond)
-	f.setStatus(1, core.StateConnected)
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		mu.Lock()
-		st := c.Camera(1).Status.State
-		mu.Unlock()
-		if st == core.StateConnected {
-			return
+	synctest.Test(t, func(t *testing.T) {
+		f := newFakeAPI()
+		f.assign(1, "acme-cam", core.StateDisconnected)
+		var mu sync.Mutex
+		o := gui.Options{}
+		o.UI = func(fn func()) { mu.Lock(); defer mu.Unlock(); fn() }
+		c := gui.NewController(f, o)
+		c.Load()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		c.Poll(ctx, 5*time.Millisecond)
+		f.setStatus(1, core.StateConnected)
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			mu.Lock()
+			st := c.Camera(1).Status.State
+			mu.Unlock()
+			if st == core.StateConnected {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Error("poller did not pick up the new status")
+		t.Error("poller did not pick up the new status")
+	})
 }
 
 func TestIsAPIError(t *testing.T) {
 	err := fmt.Errorf("w: %w", &app.Error{Code: app.CodeInvalidConfig})
-	if !IsAPIError(err, app.CodeInvalidConfig) || IsAPIError(err, app.CodeInternal) || IsAPIError(errors.New("x"), app.CodeInternal) {
+	if !gui.IsAPIError(err, app.CodeInvalidConfig) || gui.IsAPIError(err, app.CodeInternal) || gui.IsAPIError(errors.New("x"), app.CodeInternal) {
 		t.Error("IsAPIError")
 	}
 }
@@ -456,8 +464,8 @@ func TestConfirmRequiredAsksAndNeverAutoConfirms(t *testing.T) {
 		t.Fatalf("without a handler: confirms %v notice %q", f.confirmCalls(), c.Notice().Text)
 	}
 
-	var asked []ConfirmRequest
-	c.OnConfirm(func(r ConfirmRequest) { asked = append(asked, r) })
+	var asked []gui.ConfirmRequest
+	c.OnConfirm(func(r gui.ConfirmRequest) { asked = append(asked, r) })
 	c.Write(1, core.ColorBars, core.Number(1))
 	waitWrites(c)
 	if len(asked) != 1 || asked[0].Slot != 1 || asked[0].Value.Number != 1 || asked[0].Spec.ID != core.ColorBars {
@@ -471,9 +479,9 @@ func TestConfirmRequiredAsksAndNeverAutoConfirms(t *testing.T) {
 	}
 
 	// cancel: the widget is told to show the last known value again
-	n := rec.count(ChValue)
+	n := rec.count(gui.ChValue)
 	c.Decline(asked[0])
-	if rec.count(ChValue) != n+1 || len(f.confirmCalls()) != 0 {
+	if rec.count(gui.ChValue) != n+1 || len(f.confirmCalls()) != 0 {
 		t.Error("decline must refresh the control and send nothing")
 	}
 
@@ -497,7 +505,7 @@ func TestStatusChangeDuringTheFirstLoadDoesNotLoseTheControls(t *testing.T) {
 	var pending []func()
 	o := syncOptions()
 	o.Go = func(fn func()) { pending = append(pending, fn) }
-	c := NewController(f, o)
+	c := gui.NewController(f, o)
 	c.Load() // the first read is in flight
 	f.setStatus(1, core.StateError)
 	c.RefreshRig()

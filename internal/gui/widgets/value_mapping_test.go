@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -173,64 +174,68 @@ func TestChooseKind(t *testing.T) {
 }
 
 func TestThrottlerCoalescesAndSendsFinalValue(t *testing.T) {
-	th := widgets.NewThrottler(20 * time.Millisecond)
-	var mu sync.Mutex
-	var got []int
-	start := time.Now()
-	for i := 1; i <= 200; i++ {
-		i := i
-		th.Do("k", func() { mu.Lock(); got = append(got, i); mu.Unlock() })
-		time.Sleep(time.Millisecond)
-	}
-	th.Wait()
-	mu.Lock()
-	defer mu.Unlock()
-	if len(got) == 0 || got[len(got)-1] != 200 {
-		t.Fatalf("final value not sent: %v", got)
-	}
-	if max := int(time.Since(start)/(20*time.Millisecond)) + 2; len(got) > max || len(got) > 150 {
-		t.Errorf("not throttled: %d calls for 200 submissions over ~200ms", len(got))
-	}
-	for i := 1; i < len(got); i++ {
-		if got[i] <= got[i-1] {
-			t.Fatalf("out of order: %v", got)
+	synctest.Test(t, func(t *testing.T) {
+		th := widgets.NewThrottler(20 * time.Millisecond)
+		var mu sync.Mutex
+		var got []int
+		start := time.Now()
+		for i := 1; i <= 200; i++ {
+			i := i
+			th.Do("k", func() { mu.Lock(); got = append(got, i); mu.Unlock() })
+			time.Sleep(time.Millisecond)
 		}
-	}
+		th.Wait()
+		mu.Lock()
+		defer mu.Unlock()
+		if len(got) == 0 || got[len(got)-1] != 200 {
+			t.Fatalf("final value not sent: %v", got)
+		}
+		if max := int(time.Since(start)/(20*time.Millisecond)) + 2; len(got) > max || len(got) > 150 {
+			t.Errorf("not throttled: %d calls for 200 submissions over ~200ms", len(got))
+		}
+		for i := 1; i < len(got); i++ {
+			if got[i] <= got[i-1] {
+				t.Fatalf("out of order: %v", got)
+			}
+		}
+	})
 }
 
 func TestThrottlerKeysAreIndependentAndSerial(t *testing.T) {
-	th := widgets.NewThrottler(5 * time.Millisecond)
-	var running, maxRun int32
-	var a, b int32
-	do := func(key string, ctr *int32) {
-		th.Do(key, func() {
-			n := atomic.AddInt32(&running, 1)
-			for m := atomic.LoadInt32(&maxRun); n > m && !atomic.CompareAndSwapInt32(&maxRun, m, n); m = atomic.LoadInt32(&maxRun) {
-			}
-			time.Sleep(2 * time.Millisecond)
-			atomic.AddInt32(ctr, 1)
-			atomic.AddInt32(&running, -1)
-		})
-	}
-	do("a", &a)
-	do("b", &b)
-	th.Wait()
-	if atomic.LoadInt32(&a) != 1 || atomic.LoadInt32(&b) != 1 {
-		t.Errorf("each key must run once: a=%d b=%d", a, b)
-	}
-	// same key never runs concurrently with itself
-	var inFlight, overlap int32
-	for i := 0; i < 50; i++ {
-		th.Do("s", func() {
-			if atomic.AddInt32(&inFlight, 1) > 1 {
-				atomic.AddInt32(&overlap, 1)
-			}
-			time.Sleep(time.Millisecond)
-			atomic.AddInt32(&inFlight, -1)
-		})
-	}
-	th.Wait()
-	if overlap != 0 {
-		t.Errorf("same key ran concurrently %d times", overlap)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		th := widgets.NewThrottler(5 * time.Millisecond)
+		var running, maxRun int32
+		var a, b int32
+		do := func(key string, ctr *int32) {
+			th.Do(key, func() {
+				n := atomic.AddInt32(&running, 1)
+				for m := atomic.LoadInt32(&maxRun); n > m && !atomic.CompareAndSwapInt32(&maxRun, m, n); m = atomic.LoadInt32(&maxRun) {
+				}
+				time.Sleep(2 * time.Millisecond)
+				atomic.AddInt32(ctr, 1)
+				atomic.AddInt32(&running, -1)
+			})
+		}
+		do("a", &a)
+		do("b", &b)
+		th.Wait()
+		if atomic.LoadInt32(&a) != 1 || atomic.LoadInt32(&b) != 1 {
+			t.Errorf("each key must run once: a=%d b=%d", a, b)
+		}
+		// same key never runs concurrently with itself
+		var inFlight, overlap int32
+		for i := 0; i < 50; i++ {
+			th.Do("s", func() {
+				if atomic.AddInt32(&inFlight, 1) > 1 {
+					atomic.AddInt32(&overlap, 1)
+				}
+				time.Sleep(time.Millisecond)
+				atomic.AddInt32(&inFlight, -1)
+			})
+		}
+		th.Wait()
+		if overlap != 0 {
+			t.Errorf("same key ran concurrently %d times", overlap)
+		}
+	})
 }

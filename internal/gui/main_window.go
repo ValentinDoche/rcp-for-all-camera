@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -60,6 +59,7 @@ type App struct {
 	lastStats HostStats
 	statsSrc  StatsSampler
 	openURL   func(*url.URL) error
+	files     FilePicker
 	version   string
 	unsub     func()
 
@@ -100,7 +100,14 @@ var _ app.Emitter = (*App)(nil)
 // New builds the window around api. Pass Options{} in production.
 func New(fa fyne.App, api AppAPI, o Options) *App {
 	a := &App{fa: fa, api: api, ctl: NewController(api, o), bundle: i18n.Default(), chrome: newWindowChrome()}
-	a.openURL = fa.OpenURL
+	a.openURL = o.OpenURL
+	if a.openURL == nil {
+		a.openURL = fa.OpenURL
+	}
+	a.files = o.Files
+	if a.files == nil {
+		a.files = fyneFiles{}
+	}
 	a.version = o.Version
 	a.statsSrc = o.Stats
 	if a.version == "" {
@@ -133,7 +140,7 @@ func New(fa fyne.App, api AppAPI, o Options) *App {
 // Window returns the main window.
 func (a *App) Window() fyne.Window { return a.win }
 
-// Controller returns the UI model (tests).
+// Controller returns the UI model.
 func (a *App) Controller() *Controller { return a.ctl }
 
 // Emit implements app.Emitter: service events reach the UI on the Fyne thread.
@@ -355,7 +362,7 @@ func (a *App) configEnv() *configEnv {
 	return &configEnv{
 		win: a.win, api: a.api, mode: a.mode, setMode: a.SetMode,
 		lang: a.lang, langs: a.bundle.Languages(), setLang: a.SetLanguage,
-		openURL: func(u *url.URL) error { return a.openURL(u) }, version: a.version, setTab: func(t int) { a.configTab = t },
+		openURL: a.openURL, files: a.files, version: a.version, setTab: func(t int) { a.configTab = t },
 		panels: panelAPIOf(a.api), panelChanged: a.syncChrome, close: a.CloseConfig,
 		showStats: a.ShowStats(), setShowStats: a.SetShowStats,
 	}
@@ -582,6 +589,17 @@ func (a *App) sampleHost(ctx context.Context, interval time.Duration) {
 	}
 }
 
+// RefreshStats samples the host now and shows it in the status bar (on the
+// Fyne thread). Run refreshes it every second by itself.
+func (a *App) RefreshStats() {
+	if a.statsSrc == nil || !a.showStats.Load() {
+		return
+	}
+	if st, err := a.statsSrc.Sample(); err == nil {
+		a.setStats(st)
+	}
+}
+
 func (a *App) setStats(st HostStats) {
 	a.lastStats = st
 	tx := a.ctl.Tx()
@@ -602,13 +620,4 @@ func (a *App) setStats(st HostStats) {
 	for i, txt := range []string{cpu, ram, down, up, ip} {
 		a.stats[i].SetText(txt)
 	}
-}
-
-// statsText is the status bar content as one string (tests).
-func (a *App) statsText() string {
-	parts := make([]string, len(a.stats))
-	for i, t := range a.stats {
-		parts[i] = t.Text()
-	}
-	return strings.Join(parts, "  ")
 }

@@ -1,8 +1,9 @@
-package gui
+package gui_test
 
 import (
 	"context"
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
 	"io"
 	"log/slog"
 	"math"
@@ -12,7 +13,6 @@ import (
 	"sync"
 	"testing"
 
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
@@ -25,10 +25,10 @@ import (
 // UI callbacks run inline on the test goroutine, like on Fyne's UI thread;
 // callbacks posted from another goroutine (the write throttler) are queued
 // and run by waitWrites, so UI state is never touched concurrently.
-func syncOptions() Options {
+func syncOptions() gui.Options {
 	q := &uiQueue{gid: goroutineID()}
 	testUI = q
-	return Options{UI: q.post, Go: func(f func()) { f() }}
+	return gui.Options{UI: q.post, Go: func(f func()) { f() }}
 }
 
 // testUI is the queue of the controller built last (GUI tests are not parallel).
@@ -64,7 +64,7 @@ func (u *uiQueue) drain() bool {
 
 // waitWrites waits for pending writes and applies their UI callbacks, until
 // nothing is left (a callback may start another write).
-func waitWrites(c *Controller) {
+func waitWrites(c *gui.Controller) {
 	for {
 		c.WaitWrites()
 		if testUI == nil || !testUI.drain() {
@@ -308,6 +308,12 @@ var (
 // newLiveService builds a Service whose real modules are wrapped (except the demo).
 func newLiveService(t testing.TB) (*app.Service, *memStore, *[]*liveCam) {
 	t.Helper()
+	return newLiveServiceWith(t, nil)
+}
+
+// newLiveServiceWith is newLiveService with service options set by with.
+func newLiveServiceWith(t testing.TB, with func(*app.Options)) (*app.Service, *memStore, *[]*liveCam) {
+	t.Helper()
 	cams := &[]*liveCam{}
 	testAuto = &fakeAuto{}
 	testIfaces = &ifaceList{nic: []app.NetInterface{{Name: "Ethernet", IP: "192.168.1.110"}, {Name: "Wi-Fi", IP: "10.0.0.5"}}}
@@ -321,12 +327,16 @@ func newLiveService(t testing.TB) (*app.Service, *memStore, *[]*liveCam) {
 		}
 	}
 	st := &memStore{}
-	svc, err := app.NewService(app.Options{
+	o := app.Options{
 		Registry: reg, Store: st, Secrets: config.NewMemorySecrets(),
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Interfaces: testIfaces.list, AutoStart: testAuto, LogDir: t.TempDir(),
 		Go: func(f func()) { f() },
-	})
+	}
+	if with != nil {
+		with(&o)
+	}
+	svc, err := app.NewService(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,16 +363,44 @@ func seedRig(t testing.TB, svc *app.Service) {
 }
 
 // newTestApp builds the GUI on a test driver app over the live service.
-func newTestApp(t *testing.T, seed bool) (*App, *app.Service, *[]*liveCam) {
+func newTestApp(t *testing.T, seed bool) (*gui.App, *app.Service, *[]*liveCam) {
+	t.Helper()
+	return newTestAppWith(t, seed, nil)
+}
+
+// newTestAppWith is newTestApp with options set by with (nil: none); the
+// UI and worker hooks of syncOptions are kept.
+func newTestAppWith(t *testing.T, seed bool, with func(*gui.Options)) (*gui.App, *app.Service, *[]*liveCam) {
 	t.Helper()
 	fa := test.NewTempApp(t)
 	svc, _, cams := newLiveService(t)
 	if seed {
 		seedRig(t, svc)
 	}
-	a := New(fa, svc, syncOptions())
-	t.Cleanup(func() { waitWrites(a.ctl) })
+	o := syncOptions()
+	if with != nil {
+		with(&o)
+	}
+	a := gui.New(fa, svc, o)
+	t.Cleanup(func() { waitWrites(a.Controller()) })
 	return a, svc, cams
 }
 
-var _ fyne.Window
+// fakeStats is the host the status bar shows.
+type fakeStats struct{ st gui.HostStats }
+
+func (f *fakeStats) Sample() (gui.HostStats, error) { return f.st, nil }
+
+// someStats is a busy workstation.
+func someStats() gui.HostStats {
+	return gui.HostStats{CPU: 12.4, MemUsed: 23915626496, MemTotal: 67939266560,
+		DownBps: 5329.3, UpBps: 1608.8, IP: "192.168.1.110", HasRates: true}
+}
+
+// newStatsApp is newTestApp with a host to show in the status bar.
+func newStatsApp(t *testing.T, st gui.HostStats) (*gui.App, *app.Service) {
+	t.Helper()
+	a, svc, _ := newTestAppWith(t, true, func(o *gui.Options) { o.Stats = &fakeStats{st} })
+	a.RefreshStats()
+	return a, svc
+}

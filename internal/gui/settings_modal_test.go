@@ -1,80 +1,97 @@
-package gui
+package gui_test
 
 import (
 	"bytes"
 	"errors"
 	"io"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
-func generalOf(t *testing.T, a *App) *generalTab {
+// fakeFiles is the file picker: the file the user opens, the file they
+// save to.
+type fakeFiles struct {
+	open  []byte
+	saved bytes.Buffer
+}
+
+func (f *fakeFiles) Open(_ fyne.Window, done func(io.ReadCloser, error)) {
+	done(io.NopCloser(bytes.NewReader(f.open)), nil)
+}
+
+func (f *fakeFiles) Save(_ fyne.Window, _ string, done func(io.WriteCloser, error)) {
+	done(nopCloser{&f.saved}, nil)
+}
+
+type nopCloser struct{ io.Writer }
+
+func (nopCloser) Close() error { return nil }
+
+// general opens Settings > Général.
+func general(t *testing.T, a *gui.App) scope {
 	t.Helper()
-	sized(a)
-	a.ShowConfig(0)
-	if a.config == nil || a.config.general == nil {
-		t.Fatal("configuration page missing")
-	}
-	return a.config.general
+	return category(t, a, "Général")
+}
+
+// segment is the selector of a setting.
+func segment(t *testing.T, a *gui.App, caption string) *widgets.Segmented {
+	t.Helper()
+	return one[*widgets.Segmented](t, setting(t, a, caption))
 }
 
 func TestSettingsCategoriesAndAbout(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
-	sized(a)
-	a.ShowConfig(0)
-	a.config.SelectTab(tabAbout)
-	txt := allTextsJoined(a.config.obj)
+	about := category(t, a, "À propos")
 	for _, want := range []string{"Valentin Doche", "github.com/ValentinDoche/rcp-for-all-camera", "© 2026"} {
-		if !strings.Contains(txt, want) {
+		if !about.has(want) {
 			t.Errorf("About lacks %q", want)
 		}
 	}
-	a.config.SelectTab(tabPanel)
-	if a.config.tabs.Selected() != tabPanel {
-		t.Fatal("side list not on Panel")
+	category(t, a, "Panneau")
+	if got := one[*widgets.SideNav](t, settings(a)).Selected(); got != 2 {
+		t.Fatalf("side list on %d, want Panneau", got)
 	}
-	a.CloseConfig()
-	if a.page != pageCameras || a.configOpen() {
-		t.Fatalf("after close: page %v open %v", a.page, a.configOpen())
+	clickIn(t, a, settings(a), "Fermer")
+	if settingsOpen(a) {
+		t.Fatal("Fermer must close Settings")
 	}
 }
 
-func TestConfigurationOpensOnGeneralAndRemembersTheTab(t *testing.T) {
+func TestSettingsOpensOnGeneralAndRemembersTheCategory(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
-	sized(a)
-	test.Tap(a.gear)
-	if a.config.tab != tabGeneral {
-		t.Fatalf("first tab = %d, want General", a.config.tab)
+	if s := openSettings(t, a); !s.shows("Carte réseau") {
+		t.Fatalf("first category: %s", s.joined())
 	}
-	a.config.SelectTab(tabCameras)
-	test.Tap(a.gear) // close
-	test.Tap(a.gear) // reopen
-	if a.config.tab != tabCameras {
-		t.Fatalf("reopened on tab %d, want the last used one (Cameras)", a.config.tab)
+	category(t, a, "Caméras")
+	clickIn(t, a, settings(a), "Fermer")
+	if s := openSettings(t, a); !s.shows("Emplacements") {
+		t.Fatalf("reopened on %s, want the last used category (Caméras)", s.joined())
 	}
-	a.ShowCameras()
-	a.ShowConfig(2) // assigning from a strip opens the form
-	if a.config.tab != tabCameras || a.config.editSlot != 2 {
-		t.Fatalf("tab %d slot %d, want Cameras form of slot 2", a.config.tab, a.config.editSlot)
+	clickIn(t, a, settings(a), "Fermer")
+	clickIn(t, a, strip(t, a, "Cam4"), "Assigner une caméra") // assigning from a strip opens the form
+	if !form(t, a).shows("Cam4 : assigner une caméra") || one[*widgets.SideNav](t, settings(a)).Selected() != 1 {
+		t.Fatalf("want the Caméras form of slot 4: %s", settings(a).joined())
 	}
 }
 
 func TestAutoStartToggleCallsTheService(t *testing.T) {
 	a, _, _ := newTestApp(t, false)
-	g := generalOf(t, a)
-	g.autoSeg.OnChange(0)
+	general(t, a)
+	choose(t, a, "Lancer au démarrage de Windows", "Oui")
 	if !testAuto.on {
 		t.Error("Oui must enable start with Windows")
 	}
-	g.autoSeg.OnChange(1)
+	choose(t, a, "Lancer au démarrage de Windows", "Non")
 	if testAuto.on {
 		t.Error("Non must disable it")
 	}
@@ -82,35 +99,41 @@ func TestAutoStartToggleCallsTheService(t *testing.T) {
 
 func TestAutoStartFailureRevertsAndShowsTheError(t *testing.T) {
 	a, _, _ := newTestApp(t, false)
-	g := generalOf(t, a)
+	general(t, a)
+	const caption = "Lancer au démarrage de Windows"
+	quiet := len(setting(t, a, caption).texts())
 	testAuto.err = errors.New("registry denied")
-	g.autoSeg.SetSelected(0)
-	g.autoSeg.OnChange(0)
-	if g.autoSeg.Selected() != 1 {
-		t.Errorf("control must go back to Non, selected %d", g.autoSeg.Selected())
+	choose(t, a, caption, "Oui")
+	if got := segment(t, a, caption).Selected(); got != 1 {
+		t.Errorf("the control must go back to Non, selected %d", got)
 	}
-	if g.autoRow.err.Text() == "" || !g.autoRow.err.Visible() {
+	if len(setting(t, a, caption).texts()) <= quiet {
 		t.Error("the error must show inline")
 	}
 	testAuto.err = nil
-	g.autoSeg.OnChange(0)
-	if g.autoRow.err.Visible() {
-		t.Error("the error must clear after a success")
+	choose(t, a, caption, "Oui")
+	if len(setting(t, a, caption).texts()) != quiet {
+		t.Errorf("the error must clear after a success: %s", setting(t, a, caption).joined())
 	}
+}
+
+func nicBox(t *testing.T, a *gui.App) *widget.Select {
+	t.Helper()
+	return selectBox(t, settings(a), "Carte réseau")
 }
 
 func TestNetworkAdapterList(t *testing.T) {
 	a, svc, _ := newTestApp(t, false)
-	g := generalOf(t, a)
+	general(t, a)
 	want := []string{"Par défaut (choisie par Windows)", "Ethernet : 192.168.1.110", "Wi-Fi : 10.0.0.5"}
-	if strings.Join(g.nic.Options, "|") != strings.Join(want, "|") {
-		t.Fatalf("options = %q", g.nic.Options)
+	if got := nicBox(t, a).Options; strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("options = %q", got)
 	}
-	g.nic.SetSelected("Wi-Fi : 10.0.0.5")
+	pick(t, a, nicBox(t, a), "Wi-Fi : 10.0.0.5")
 	if got := svc.Settings().BindIP; got != "10.0.0.5" {
 		t.Fatalf("BindIP = %q", got)
 	}
-	g.nic.SetSelectedIndex(0)
+	pick(t, a, nicBox(t, a), "Par défaut (choisie par Windows)")
 	if got := svc.Settings().BindIP; got != "" {
 		t.Fatalf("default must clear BindIP, got %q", got)
 	}
@@ -122,170 +145,159 @@ func TestStoredAdapterThatDisappearedIsMarkedUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	testIfaces.set(app.NetInterface{Name: "Ethernet", IP: "192.168.1.110"}) // Wi-Fi gone
-	g := generalOf(t, a)
-	if g.nic.Selected != "10.0.0.5 (indisponible)" {
-		t.Fatalf("selected = %q", g.nic.Selected)
+	general(t, a)
+	if got := nicBox(t, a).Selected; got != "10.0.0.5 (indisponible)" {
+		t.Fatalf("selected = %q", got)
 	}
-	if !strings.Contains(allTextsJoined(g.nicRow.obj), "n'existe plus") {
+	if !setting(t, a, "Carte réseau").has("n'existe plus") {
 		t.Error("a warning help text is expected")
 	}
 	if svc.Settings().BindIP != "10.0.0.5" {
-		t.Error("opening the tab must not change the stored address")
+		t.Error("opening the category must not change the stored address")
 	}
 }
 
-func TestNetworkAdapterListRefreshesWhenTheTabOpens(t *testing.T) {
+func TestNetworkAdapterListRefreshesWhenTheCategoryOpens(t *testing.T) {
 	a, _, _ := newTestApp(t, false)
-	g := generalOf(t, a)
+	general(t, a)
 	testIfaces.set(app.NetInterface{Name: "USB", IP: "172.16.0.2"})
-	a.config.SelectTab(tabCameras)
-	a.config.SelectTab(tabGeneral)
-	if len(g.nic.Options) != 2 || g.nic.Options[1] != "USB : 172.16.0.2" {
-		t.Fatalf("options after reopening = %q", g.nic.Options)
+	category(t, a, "Caméras")
+	general(t, a)
+	if got := nicBox(t, a).Options; len(got) != 2 || got[1] != "USB : 172.16.0.2" {
+		t.Fatalf("options after reopening = %q", got)
 	}
 }
 
 func TestOperatorLockAndLogLevelCallTheService(t *testing.T) {
 	a, svc, _ := newTestApp(t, false)
-	g := generalOf(t, a)
-	if !svc.Settings().OperatorLock || g.lockSeg.Selected() != 0 {
+	general(t, a)
+	if !svc.Settings().OperatorLock || segment(t, a, "Verrou opérateur").Selected() != 0 {
 		t.Fatal("the operator lock is on by default and shown as Oui")
 	}
-	g.lockSeg.OnChange(1)
+	choose(t, a, "Verrou opérateur", "Non")
 	if svc.Settings().OperatorLock {
 		t.Error("Non must turn the lock off")
 	}
-	g.lockSeg.OnChange(0)
+	choose(t, a, "Verrou opérateur", "Oui")
 	if !svc.Settings().OperatorLock {
 		t.Error("Oui must turn the lock back on")
 	}
-	g.logSeg.OnChange(1)
+	choose(t, a, "Journaux", "Debug")
 	if svc.Settings().LogLevel != app.LogDebug {
 		t.Error("Debug must be stored")
 	}
-	g.logSeg.OnChange(0)
+	choose(t, a, "Journaux", "Normal")
 	if svc.Settings().LogLevel != app.LogNormal {
 		t.Error("Normal must be stored")
 	}
 }
 
 func TestOpenLogsFolderUsesAFileURL(t *testing.T) {
-	a, svc, _ := newTestApp(t, false)
 	var got *url.URL
-	a.openURL = func(u *url.URL) error { got = u; return nil }
-	g := generalOf(t, a)
-	g.openLogs()
+	var fail error
+	a, svc, _ := newTestAppWith(t, false, func(o *gui.Options) {
+		o.OpenURL = func(u *url.URL) error { got = u; return fail }
+	})
+	general(t, a)
+	clickIn(t, a, setting(t, a, "Journaux"), "Ouvrir le dossier")
 	if got == nil || got.Scheme != "file" {
 		t.Fatalf("opened %v", got)
 	}
-	if !strings.HasSuffix(strings.ReplaceAll(got.Path, "\\", "/"), strings.ReplaceAll(svc.Settings().LogDir, "\\", "/")) &&
-		!strings.Contains(got.Path, "/") {
-		t.Errorf("path %q does not hold the log dir", got.Path)
+	if want := filepath.ToSlash(svc.Settings().LogDir); !strings.HasSuffix(got.Path, want) {
+		t.Errorf("opened %q, want the log folder %q", got.Path, want)
 	}
-	a.openURL = func(*url.URL) error { return errors.New("no explorer") }
-	g.openLogs()
-	if !g.logRow.err.Visible() {
+	fail = errors.New("no explorer")
+	clickIn(t, a, setting(t, a, "Journaux"), "Ouvrir le dossier")
+	if !setting(t, a, "Journaux").shows("Impossible d'ouvrir le dossier des journaux.") {
 		t.Error("a failure must show inline")
 	}
 }
 
-func TestLogDirURL(t *testing.T) {
-	if got := logDirURL("C:/Users/x/logs").String(); got != "file:///C:/Users/x/logs" {
-		t.Errorf("url = %q", got)
-	}
-	if got := logDirURL("/var/log/rcp").String(); got != "file:///var/log/rcp" {
-		t.Errorf("url = %q", got)
-	}
+// importFile opens Settings > Général and imports data as the chosen file.
+func importFile(t *testing.T, data []byte) (*gui.App, *app.Service) {
+	t.Helper()
+	files := &fakeFiles{open: data}
+	a, svc, _ := newTestAppWith(t, true, func(o *gui.Options) { o.Files = files })
+	general(t, a)
+	clickIn(t, a, setting(t, a, "Importer une configuration"), "Importer")
+	return a, svc
 }
 
 func TestImportRejectsABadFileInline(t *testing.T) {
-	a, svc, _ := newTestApp(t, true)
-	g := generalOf(t, a)
-	before := svc.Rig()
-	g.applyImport([]byte("this is not json"))
-	if !g.importRow.err.Visible() || !strings.Contains(g.importRow.err.Text(), "valide") {
-		t.Errorf("inline error = %q visible=%v", g.importRow.err.Text(), g.importRow.err.Visible())
+	a, svc := importFile(t, []byte("this is not json"))
+	clickIn(t, a, dialog(a), "Remplacer") // the file is read once confirmed
+	if !setting(t, a, "Importer une configuration").has("valide") {
+		t.Errorf("inline error: %s", setting(t, a, "Importer une configuration").joined())
 	}
-	after := svc.Rig()
-	for i := range before.Slots {
-		if (before.Slots[i].Camera == nil) != (after.Slots[i].Camera == nil) {
-			t.Fatal("a rejected file must not change the rig")
-		}
+	if svc.Rig().Slots[0].Camera == nil {
+		t.Fatal("a rejected file must not change the rig")
 	}
 }
 
 func TestImportRejectsAFileOverOneMebibyte(t *testing.T) {
-	a, _, _ := newTestApp(t, true)
-	g := generalOf(t, a)
-	g.importFrom(bytes.NewReader(make([]byte, maxImportSize+10)))
-	if !g.importRow.err.Visible() {
+	a, _ := importFile(t, make([]byte, 1<<20+10))
+	if !setting(t, a, "Importer une configuration").shows("Fichier trop volumineux (1 Mo maximum).") {
 		t.Fatal("too large file must be reported")
 	}
-	if extraOverlay(a) {
+	if dialogOpen(a) {
 		t.Error("no confirmation for a refused file")
 	}
 }
 
 func TestImportAsksBeforeReplacing(t *testing.T) {
-	a, svc, _ := newTestApp(t, true)
-	g := generalOf(t, a)
+	svc, _, _ := newLiveService(t)
+	seedRig(t, svc)
 	doc, err := svc.ExportConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	// cancel: nothing happens
+	a, svc := importFile(t, doc)
 	if err := svc.ClearSlot(1); err != nil {
 		t.Fatal(err)
 	}
-	g.importFrom(bytes.NewReader(doc))
-	if b := dialogButton(a, "Annuler"); b == nil {
-		t.Fatal("a confirmation dialog is expected")
-	} else {
-		test.Tap(b)
+	if !dialog(a).shows("Annuler") {
+		t.Fatalf("a confirmation dialog is expected: %s", dialog(a).joined())
 	}
+	clickIn(t, a, dialog(a), "Annuler")
 	if svc.Rig().Slots[0].Camera != nil {
 		t.Fatal("cancel must not import")
 	}
-	// confirm: replaces
-	g.importFrom(bytes.NewReader(doc))
-	b := dialogButton(a, "Remplacer")
-	if b == nil {
-		t.Fatal("confirm button missing")
-	}
-	test.Tap(b)
+	clickIn(t, a, setting(t, a, "Importer une configuration"), "Importer")
+	clickIn(t, a, dialog(a), "Remplacer")
 	if svc.Rig().Slots[0].Camera == nil {
 		t.Fatal("confirming must import the cameras")
 	}
 }
 
 func TestExportWritesTheDocument(t *testing.T) {
-	a, _, _ := newTestApp(t, true)
-	g := generalOf(t, a)
-	var buf bytes.Buffer
-	g.exportTo(nopCloser{&buf})
-	if !strings.Contains(buf.String(), app.ExportFormat) {
-		t.Errorf("exported %q", buf.String())
+	files := &fakeFiles{}
+	a, _, _ := newTestAppWith(t, true, func(o *gui.Options) { o.Files = files })
+	general(t, a)
+	clickIn(t, a, setting(t, a, "Exporter la configuration"), "Exporter")
+	if !strings.Contains(files.saved.String(), app.ExportFormat) {
+		t.Errorf("exported %q", files.saved.String())
+	}
+	if !win(a).shows("Configuration exportée") {
+		t.Error("no notice after the export")
 	}
 }
 
-type nopCloser struct{ io.Writer }
-
-func (nopCloser) Close() error { return nil }
-
 // --- operator lock confirmation ------------------------------------------------------
 
-func seedGuarded(t *testing.T) (*App, *app.Service, *liveCam) {
+// seedGuarded assigns a UE150 (it has colour bars) to slot 1 and opens its
+// details page.
+func seedGuarded(t *testing.T) (*gui.App, *liveCam) {
 	t.Helper()
 	a, svc, cams := newTestApp(t, false)
-	sized(a)
 	if err := svc.AssignSlot(1, app.SlotInput{Model: "panasonic-aw-ue150", Host: "192.168.1.46"}); err != nil {
 		t.Fatal(err)
 	}
-	a.ctl.RefreshRig()
+	a.Emit(app.EventRigChanged, svc.Rig())
 	if len(*cams) != 1 {
 		t.Fatalf("%d cameras built", len(*cams))
 	}
-	return a, svc, (*cams)[0]
+	detailsOf(t, a, "Cam1")
+	return a, (*cams)[0]
 }
 
 func colorBarsSets(c *liveCam) int {
@@ -298,165 +310,114 @@ func colorBarsSets(c *liveCam) int {
 	return n
 }
 
+// barsSwitch is the colour bars switch of the details page.
+func barsSwitch(t *testing.T, a *gui.App) *widget.Check {
+	t.Helper()
+	return one[*widget.Check](t, details(t, a).around("Mire de barres", withA[*widget.Check]()))
+}
+
 func TestGuardedControlAsksThenSendsOnConfirm(t *testing.T) {
-	a, _, cam := seedGuarded(t)
-	a.ctl.Write(1, core.ColorBars, core.Bool(true))
-	waitWrites(a.ctl)
+	a, cam := seedGuarded(t)
+	press(a, barsSwitch(t, a))
+	waitWrites(a.Controller())
 	if colorBarsSets(cam) != 0 {
 		t.Fatal("a guarded control must not be written before the user confirms")
 	}
-	if a.ctl.Value(1, core.ColorBars) != nil && a.ctl.Value(1, core.ColorBars).On {
-		t.Fatal("the widget must show the last known value while asking")
-	}
-	body := dialogText(a)
+	body := dialog(a).joined()
 	if !strings.Contains(body, "Cam1") || !strings.Contains(body, "Mire de barres") || !strings.Contains(body, "Activé") {
 		t.Errorf("dialog text = %q, want slot, control and new value", body)
 	}
-	b := dialogButton(a, "Confirmer")
-	if b == nil {
-		t.Fatal("confirm button missing")
-	}
-	test.Tap(b)
-	waitWrites(a.ctl)
+	clickIn(t, a, dialog(a), "Confirmer")
+	waitWrites(a.Controller())
 	if colorBarsSets(cam) != 1 {
 		t.Fatalf("confirm must write once, wrote %d", colorBarsSets(cam))
 	}
-	if v := a.ctl.Value(1, core.ColorBars); v == nil || !v.On {
-		t.Errorf("value after confirm = %v", v)
+	if !barsSwitch(t, a).Checked {
+		t.Error("the switch must show the bars on after the confirmation")
 	}
 }
 
 func TestGuardedControlCancelRestoresTheValue(t *testing.T) {
-	a, _, cam := seedGuarded(t)
-	rec := &recorder{}
-	a.ctl.Subscribe(rec.fn)
-	a.ctl.Write(1, core.ColorBars, core.Bool(true))
-	waitWrites(a.ctl)
-	n := rec.count(ChValue)
-	b := dialogButton(a, "Annuler")
-	if b == nil {
-		t.Fatal("cancel button missing")
-	}
-	test.Tap(b)
-	waitWrites(a.ctl)
+	a, cam := seedGuarded(t)
+	press(a, barsSwitch(t, a))
+	waitWrites(a.Controller())
+	clickIn(t, a, dialog(a), "Annuler")
+	waitWrites(a.Controller())
 	if colorBarsSets(cam) != 0 {
 		t.Error("cancel must not write")
 	}
-	if rec.count(ChValue) <= n {
-		t.Error("cancel must tell the widget to return to the last known value")
-	}
-	if v := a.ctl.Value(1, core.ColorBars); v != nil && v.On {
-		t.Error("value must stay off")
+	if barsSwitch(t, a).Checked {
+		t.Error("the switch must return to the last known value")
 	}
 }
 
 func TestUnguardedControlIsNotConfirmed(t *testing.T) {
-	a, _, cam := seedGuarded(t)
-	a.ctl.Write(1, core.Tint, core.Number(1))
-	waitWrites(a.ctl)
-	if a.Window().Canvas().Overlays().Top() != nil {
+	a, cam := seedGuarded(t)
+	row := details(t, a).around("Focus mode", withA[*widgets.Segmented]())
+	clickIn(t, a, scope{[]fyne.CanvasObject{one[*widgets.Segmented](t, row)}}, "Manual")
+	waitWrites(a.Controller())
+	if dialogOpen(a) {
 		t.Error("an ordinary control must not ask")
 	}
-	_ = cam
+	if len(cam.setCalls()) == 0 {
+		t.Error("the focus mode must be written at once")
+	}
 }
 
 // --- language ----------------------------------------------------------------------
 
 func TestLanguageSwitchRebuildsInPlace(t *testing.T) {
 	a, _, _ := newTestApp(t, true)
-	sized(a)
-	a.ShowDetails(1)
-	a.SetLanguage("en")
-	if a.Language() != "en" || a.fa.Preferences().String("language") != "en" {
-		t.Fatalf("language %q pref %q", a.Language(), a.fa.Preferences().String("language"))
+	detailsOf(t, a, "Cam1")
+	general(t, a)
+	choose(t, a, "Langue", "English")
+	if a.Language() != "en" {
+		t.Fatalf("language %q", a.Language())
 	}
-	if a.page != pageDetails || a.detailSlot != 1 {
-		t.Fatalf("page %v slot %d, want the same details page", a.page, a.detailSlot)
+	s := settings(a)
+	if !s.shows("Network adapter") || one[*widgets.SideNav](t, s).Selected() != 0 {
+		t.Errorf("Settings must stay open on General, in English: %s", s.joined())
 	}
-	if got := a.strips[3].stateTxt.Text(); got != "Free" {
-		t.Errorf("free strip = %q", got)
+	clickIn(t, a, s, "Close")
+	if !win(a).has("details") || detailsScroll(a) == nil {
+		t.Fatalf("the details page must stay open: %s", win(a).joined())
 	}
-	if a.panelTxt.Text() != "Micro Camera Panel not detected" {
-		t.Errorf("panel = %q", a.panelTxt.Text())
+	if !win(a).shows("Micro Camera Panel not detected") {
+		t.Error("the panel status must be in English")
 	}
-	joined := allTextsJoined(a.Window().Content())
 	for _, fr := range []string{"Caméras", "Détails", "Libre", "Connecté"} {
-		if strings.Contains(joined, fr) {
+		if win(a).has(fr) {
 			t.Errorf("French text %q left on the English window", fr)
 		}
 	}
-	a.SetLanguage("fr")
-	if a.strips[3].stateTxt.Text() != "Libre" {
+	clickIn(t, a, win(a), "Cameras")
+	if !strip(t, a, "Cam4").shows("Free") {
+		t.Errorf("free strip: %s", strip(t, a, "Cam4").joined())
+	}
+	press(a, gear(t, a))
+	choose(t, a, "Language", "Français")
+	clickIn(t, a, settings(a), "Fermer")
+	if !strip(t, a, "Cam4").shows("Libre") {
 		t.Error("switching back must restore French")
 	}
 }
 
-func TestLanguageSwitchFromTheGeneralTab(t *testing.T) {
-	a, _, _ := newTestApp(t, false)
-	g := generalOf(t, a)
-	if len(g.env.langs) < 2 {
-		t.Fatalf("languages = %v", g.env.langs)
-	}
-	g.langSeg.OnChange(0) // English (languages are sorted by code: en, fr)
-	if a.Language() != "en" || a.page != pageConfig {
-		t.Fatalf("language %q page %v", a.Language(), a.page)
-	}
-	if got := a.config.tabs.Selected(); got != tabGeneral {
-		t.Errorf("tab = %d", got)
-	}
-	if !strings.Contains(allTextsJoined(a.config.obj), "Network adapter") {
-		t.Error("General tab must be in English")
+func TestLanguagePersistsForTheNextStart(t *testing.T) {
+	a, svc, _ := newTestApp(t, false)
+	general(t, a)
+	choose(t, a, "Langue", "English")
+	if got := gui.New(fyne.CurrentApp(), svc, syncOptions()).Language(); got != "en" {
+		t.Errorf("the next start is in %q", got)
 	}
 }
 
 func TestStatusBarUsesTheLanguageUnits(t *testing.T) {
-	a, _, _ := newTestApp(t, false)
-	a.SetLanguage("en")
-	a.setStats(sysinfoStats())
-	got := a.statsText()
-	for _, want := range []string{"22.3 / 63.3 GB", "5.2 KB/s"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("status bar %q lacks %q", got, want)
+	a, _ := newStatsApp(t, someStats())
+	general(t, a)
+	choose(t, a, "Langue", "English")
+	for _, want := range []string{"RAM 22.3 / 63.3 GB", "↓ 5.2 KB/s"} {
+		if !win(a).shows(want) {
+			t.Errorf("status bar lacks %q: %s", want, win(a).joined())
 		}
 	}
-}
-
-func TestLanguageSurvivesRebuildOfStats(t *testing.T) {
-	a, _, _ := newTestApp(t, false)
-	a.setStats(sysinfoStats())
-	a.SetLanguage("en")
-	if !strings.Contains(a.statsText(), "KB/s") {
-		t.Errorf("stats lost on rebuild: %q", a.statsText())
-	}
-}
-
-// --- helpers ----------------------------------------------------------------------
-
-// extraOverlay reports whether a dialog is shown (the Settings window is a
-// layer of the window, not an overlay).
-func extraOverlay(a *App) bool {
-	return len(a.Window().Canvas().Overlays().List()) > 0
-}
-
-func allTextsJoined(o fyne.CanvasObject) string { return strings.Join(allTexts(o), " | ") }
-
-func sysinfoStats() HostStats {
-	return HostStats{CPU: 12.4, MemUsed: 23915626496, MemTotal: 67939266560,
-		DownBps: 5329.3, UpBps: 1608.8, IP: "192.168.1.110", HasRates: true}
-}
-
-func dialogButton(a *App, text string) *widget.Button {
-	ov := a.Window().Canvas().Overlays().Top()
-	if ov == nil {
-		return nil
-	}
-	return findButton(ov, text)
-}
-
-func dialogText(a *App) string {
-	ov := a.Window().Canvas().Overlays().Top()
-	if ov == nil {
-		return ""
-	}
-	return strings.Join(allTexts(ov), " | ")
 }

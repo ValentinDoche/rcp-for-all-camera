@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/url"
 	"slices"
 	"sync"
 	"time"
@@ -128,6 +130,20 @@ type Options struct {
 	Version string
 	// Stats samples the host for the status bar; nil shows placeholders.
 	Stats StatsSampler
+	// Files picks the files Settings imports and exports (default: Fyne's
+	// file dialogs).
+	Files FilePicker
+	// OpenURL opens a link or a folder (default: the Fyne app's OpenURL).
+	OpenURL func(*url.URL) error
+}
+
+// FilePicker is the port Settings asks for a file through. done gets nil
+// and no error when the user cancels.
+type FilePicker interface {
+	// Open asks for a JSON file to read.
+	Open(win fyne.Window, done func(io.ReadCloser, error))
+	// Save asks where to write a JSON file, suggesting name.
+	Save(win fyne.Window, name string, done func(io.WriteCloser, error))
 }
 
 // HostStats is what the status bar shows about the computer.
@@ -708,7 +724,7 @@ func (c *Controller) setNotice(n texts.Notice) {
 	})
 }
 
-// WaitWrites blocks until queued writes are done (tests).
+// WaitWrites blocks until queued writes are done.
 func (c *Controller) WaitWrites() { c.thr.Wait() }
 
 // IsAPIError reports whether err is an *app.Error with the given code.
