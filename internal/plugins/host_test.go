@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/cameratest"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -24,7 +26,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := modbuild.Build(context.Background(), "../../modules", dir, "demo"); err != nil {
+	if err := modbuild.Build(context.Background(), "../../modules", dir, "demo", "bm-studio-6k-pro"); err != nil {
 		fmt.Fprintln(os.Stderr, "build modules:", err)
 		os.Exit(1)
 	}
@@ -44,19 +46,21 @@ func openHost(t *testing.T) *plugins.Host {
 	return h
 }
 
-func demoModule(t *testing.T) core.Module {
+func loadModule(t *testing.T, id string) core.Module {
 	t.Helper()
-	m, err := openHost(t).LoadFile(context.Background(), filepath.Join(modulesDir, "demo.wasm"))
+	m, err := openHost(t).LoadFile(context.Background(), filepath.Join(modulesDir, id+".wasm"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return m
 }
 
+func demoModule(t *testing.T) core.Module { return loadModule(t, "demo") }
+
 func TestLoadScansTheFolder(t *testing.T) {
 	mods, problems := openHost(t).Load(context.Background(), modulesDir)
-	if len(problems) != 0 || len(mods) != 1 || mods[0].Info().ID != "demo" {
-		t.Fatalf("Load = %d modules, problems %v; want the demo module", len(mods), problems)
+	if len(problems) != 0 || len(mods) != 2 || mods[0].Info().ID != "bm-studio-6k-pro" || mods[1].Info().ID != "demo" {
+		t.Fatalf("Load = %d modules, problems %v; want bm-studio-6k-pro and demo", len(mods), problems)
 	}
 }
 
@@ -157,4 +161,94 @@ func TestClosedCameraRefusesCalls(t *testing.T) {
 	if st := cam.Status().State; st != core.StateDisconnected {
 		t.Errorf("status after Close = %s", st)
 	}
+}
+
+// The Blackmagic module over a real local network, against a fake camera.
+
+func connectedBlackmagic(t *testing.T, f *plugins.FakeBlackmagic) core.Camera {
+	t.Helper()
+	reg := core.NewRegistry()
+	if err := reg.Register(loadModule(t, "bm-studio-6k-pro")); err != nil {
+		t.Fatal(err)
+	}
+	host, port := f.HostPort()
+	cam, err := reg.New(core.CameraConfig{Model: "bm-studio-6k-pro", Host: host, Port: port, PowerZoom: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cam.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := cam.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	return cam
+}
+
+func TestBlackmagicPassesTheAppContract(t *testing.T) {
+	cameratest.Module(t, loadModule(t, "bm-studio-6k-pro"))
+}
+
+func TestBlackmagicOnline(t *testing.T) {
+	cameratest.Online(t, connectedBlackmagic(t, plugins.NewFakeBlackmagic(t)))
+}
+
+func TestBlackmagicWriteGoesOverTheNetwork(t *testing.T) {
+	f := plugins.NewFakeBlackmagic(t)
+	cam := connectedBlackmagic(t, f)
+	if err := cam.Set(context.Background(), core.Gain, core.Number(6)); err != nil {
+		t.Fatal(err)
+	}
+	if puts := f.Puts(); len(puts) != 1 || puts[0] != "/video/gain" {
+		t.Errorf("PUTs %v, want /video/gain", puts)
+	}
+	waitFor(t, "gain echo", func() bool {
+		v, err := cam.Get(context.Background(), core.Gain)
+		return err == nil && v == core.Number(6)
+	})
+}
+
+func TestBlackmagicReconnects(t *testing.T) {
+	f := plugins.NewFakeBlackmagic(t)
+	cam := connectedBlackmagic(t, f)
+	f.DropSockets()
+	waitFor(t, "offline", func() bool { return cam.Status().State == core.StateDisconnected })
+	waitFor(t, "back online", func() bool { return cam.Status().State == core.StateConnected })
+}
+
+func TestUnreachableCameraIsOffline(t *testing.T) {
+	reg := core.NewRegistry()
+	_ = reg.Register(loadModule(t, "bm-studio-6k-pro"))
+	cam, _ := reg.New(core.CameraConfig{Model: "bm-studio-6k-pro", Host: "127.0.0.1", Port: closedPort(t)})
+	defer cam.Close()
+	if err := cam.Connect(context.Background()); !errors.Is(err, core.ErrNotConnected) {
+		t.Errorf("Connect = %v, want ErrNotConnected", err)
+	}
+	if st := cam.Status(); st.State != core.StateDisconnected || st.Detail == "" {
+		t.Errorf("status %+v, want offline with a reason", st)
+	}
+}
+
+// waitFor polls cond for up to 10 s: the module and the fake run on their
+// own goroutines, over real sockets.
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func closedPort(t *testing.T) int {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	_ = l.Close()
+	return port
 }
