@@ -71,6 +71,8 @@ type View struct {
 	drag  target
 	accum float64 // fractional drag counts
 	dirty atomic.Bool
+
+	afterRefresh func() // runs on the Fyne thread after each redraw
 }
 
 // target is what a mouse press or scroll acts on.
@@ -99,6 +101,9 @@ func NewView(s *Sim) *View {
 			fyne.Do(func() {
 				v.dirty.Store(false)
 				v.Refresh()
+				if v.afterRefresh != nil {
+					v.afterRefresh()
+				}
 			})
 		}
 	})

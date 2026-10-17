@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 
 	appsvc "github.com/valentindoche/rcp-for-all-camera/internal/app"
@@ -19,6 +20,7 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui"
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel"
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsim"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsource"
 	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
@@ -30,7 +32,7 @@ func main() {
 }
 
 func run() error {
-	sim := flag.Bool("sim", false, "drive a simulated Micro Camera Panel window instead of the USB panel")
+	sim := flag.Bool("sim", false, "start on the simulated Micro Camera Panel (this run only)")
 	flag.Parse()
 
 	cfgPath, err := config.DefaultPath()
@@ -59,6 +61,10 @@ func run() error {
 		log.Warn("secret store unavailable, passwords kept in memory", "err", err)
 		secrets = config.NewMemorySecrets()
 	}
+	// The panel comes from USB (first or chosen panel) or the simulator,
+	// selected in the GUI and saved in rig.json.
+	simPanel := panelsim.New()
+	sources := panelsource.New(simPanel)
 	svc, err := appsvc.NewService(appsvc.Options{
 		Registry: reg,
 		Store:    config.FileStore{Path: cfgPath},
@@ -74,34 +80,45 @@ func run() error {
 		AutoStart: autoStarter(),
 		LogLevel:  level,
 		LogDir:    dir,
+		Panels:    sources,
 	})
 	if err != nil {
 		return err
 	}
-	// The USB panel is a control surface: rendered from and driving the
-	// Service. With -sim the same controller drives a simulated panel.
-	probe, surf := appsvc.PanelProbe(panelProbe), panel.Options{Logger: log}
-	var simPanel *panelsim.Sim
-	if *sim {
-		simPanel = panelsim.New()
-		probe = simPanel.Present
-		surf.Open, surf.Busy = simPanel.Open, func() bool { return false }
-		log.Info("panel simulator enabled")
+	if *sim { // for this run only, not saved
+		_ = sources.Select(appsvc.PanelSourceSim)
 	}
-	host := appsvc.NewHost(svc, probe, time.Second)
-	host.SetSurface(panel.New(surf))
+	// The panel is a control surface: rendered from and driving the Service.
+	ctl := panel.New(panel.Options{Logger: log, Open: sources.Open, Busy: sources.Busy})
+	host := appsvc.NewHost(svc, sources.Present, time.Second)
+	host.SetSurface(ctl)
 
 	fa := app.NewWithID(gui.AppID)
 	win := gui.New(fa, svc, gui.Options{})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	var simWin fyne.Window // created once the Fyne loop runs
+	showSim := func(id string) {
+		if simWin == nil {
+			return
+		}
+		if id == appsvc.PanelSourceSim {
+			simWin.Show()
+		} else {
+			simWin.Hide()
+		}
+	}
+	sources.OnSelect(func(id string) {
+		log.Info("panel source selected", "source", id)
+		ctl.Reconnect()
+		fyne.Do(func() { showSim(id) })
+	})
 	// events may only be delivered once the Fyne loop runs
 	fa.Lifecycle().SetOnStarted(func() {
 		host.Start(ctx, win)
-		if simPanel != nil {
-			// Shown after the main window, which stays the master window.
-			panelsim.NewWindow(fa, simPanel).Show()
-		}
+		// Created after the main window, which stays the master window.
+		simWin = panelsim.NewWindow(fa, simPanel)
+		showSim(sources.Selected())
 	})
 	defer host.Stop()
 	win.Run(ctx) // blocks until the window closes
