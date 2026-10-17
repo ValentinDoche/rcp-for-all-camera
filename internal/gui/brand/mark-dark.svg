@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>RCP For All Camera, mark for dark backgrounds</title>
+  <circle cx="32" cy="32" r="26.0" fill="none" stroke="#6B6F78" stroke-width="2.0"/>
+  <path d="M36.993 25.409L51.939 25.409A21 21 0 0 1 51.465 39.881Z" fill="#E8E9EC"/>
+  <path d="M40.191 30.87L50.759 41.438A21 21 0 0 1 40.191 51.337Z" fill="#E8E9EC"/>
+  <path d="M38.591 36.993L38.591 51.939A21 21 0 0 1 24.119 51.465Z" fill="#E8E9EC"/>
+  <path d="M33.13 40.191L22.562 50.759A21 21 0 0 1 12.663 40.191Z" fill="#E8E9EC"/>
+  <path d="M27.007 38.591L12.061 38.591A21 21 0 0 1 12.535 24.119Z" fill="#E8E9EC"/>
+  <path d="M23.809 33.13L13.241 22.562A21 21 0 0 1 23.809 12.663Z" fill="#E8E9EC"/>
+  <path d="M25.409 27.007L25.409 12.061A21 21 0 0 1 39.881 12.535Z" fill="#F47B20"/>
+  <path d="M30.87 23.809L41.438 13.241A21 21 0 0 1 51.337 23.809Z" fill="#E8E9EC"/>
+</svg>
