@@ -102,7 +102,7 @@ type decoder func(c *Camera, o map[string]any) map[core.ControlID]core.Value
 var decoders = func() map[string]decoder {
 	m := map[string]decoder{
 		pathFormat:  decodeFormat,
-		pathIris:    numberOf(core.Iris, "apertureStop"),
+		pathIris:    decodeIris,
 		pathFocus:   numberOf(core.Focus, "normalised", "focus"),
 		pathZoom:    numberOf(core.Zoom, "normalised"),
 		pathGain:    numberOf(core.Gain, "gain"),
@@ -124,7 +124,7 @@ var decoders = func() map[string]decoder {
 // idPath is the property that holds each readable control.
 var idPath = func() map[core.ControlID]string {
 	m := map[core.ControlID]string{
-		core.Iris: pathIris, core.Focus: pathFocus, core.Zoom: pathZoom, core.Gain: pathGain,
+		core.Iris: pathIris, core.IrisNorm: pathIris, core.Focus: pathFocus, core.Zoom: pathZoom, core.Gain: pathGain,
 		core.ISO: pathISO, core.ShutterSpeed: pathShutter, core.ShutterAngle: pathShutter,
 		core.ND: pathND, core.WhiteBalance: pathWB, core.Tint: pathTint, core.Record: pathRecord,
 	}
@@ -153,6 +153,53 @@ func numberOf(id core.ControlID, keys ...string) decoder {
 			}
 		}
 		return nil
+	}
+}
+
+// decodeIris reads the f-stop (Iris) and the position over the lens' range
+// (IrisNorm) of /lens/iris.
+func decodeIris(_ *Camera, o map[string]any) map[core.ControlID]core.Value {
+	out := map[core.ControlID]core.Value{}
+	if f, ok := num(o, "apertureStop"); ok {
+		out[core.Iris] = core.Number(f)
+	}
+	if n, ok := num(o, "normalised"); ok {
+		out[core.IrisNorm] = core.Number(n)
+	}
+	return out
+}
+
+// irisEndTol is how close to 0 or 1 "normalised" must be to mean the lens'
+// fully open or closed end.
+const irisEndTol = 0.002
+
+// learnIrisEnds infers the lens' f-stop limits from /lens/iris for firmwares
+// without /lens/iris/description: "normalised" is 0 at the lens' open end
+// and 1 at its closed end, so the f-stop reported there is that limit. A
+// stop reported beyond a learned limit (another lens) forgets that limit.
+// It runs with the camera lock held; c.irisDesc means the camera reported
+// real limits, which are kept.
+func (c *Camera) learnIrisEnds(o map[string]any) {
+	if c.irisDesc {
+		return
+	}
+	stop, ok := num(o, "apertureStop")
+	if !ok || stop <= 0 {
+		return
+	}
+	n, hasN := num(o, "normalised")
+	switch {
+	case hasN && n <= irisEndTol:
+		c.lens.IrisMin = stop
+	case hasN && n >= 1-irisEndTol:
+		c.lens.IrisMax = stop
+	default:
+		if c.lens.IrisMin > 0 && stop < c.lens.IrisMin {
+			c.lens.IrisMin = 0
+		}
+		if c.lens.IrisMax > 0 && stop > c.lens.IrisMax {
+			c.lens.IrisMax = 0
+		}
 	}
 }
 
@@ -254,6 +301,8 @@ func commandFor(id core.ControlID, v core.Value) (command, error) {
 	switch id {
 	case core.Iris:
 		return command{path: pathIris, body: kv("apertureStop", v.Number)}, nil
+	case core.IrisNorm:
+		return command{path: pathIris, body: kv("normalised", v.Number)}, nil
 	case core.AutoIris:
 		return command{path: pathAutoExp, body: kv("mode", "OneShot", "type", "Iris")}, nil
 	case core.Focus:

@@ -316,6 +316,7 @@ func TestCameraCommandBodies(t *testing.T) {
 		{core.WhiteBalance, core.Number(5600), pathWB, "whiteBalance", 5600.0},
 		{core.Tint, core.Number(-5), pathTint, "whiteBalanceTint", -5.0},
 		{core.Focus, core.Number(0.3), pathFocus, "normalised", 0.3},
+		{core.IrisNorm, core.Number(0.4), pathIris, "normalised", 0.4},
 		{core.AutoIris, core.Trigger(), pathAutoExp, "mode", "OneShot"},
 		{core.Record, core.Bool(true), pathRecord, "recording", true},
 	} {
@@ -512,6 +513,50 @@ func TestCameraWithoutLensDescriptions(t *testing.T) {
 	}
 	if l := cam.Lens(); l.IrisMin != 0 || l.FocalMax != 0 || l.FocalLength != 24 {
 		t.Errorf("lens = %+v, want focal length only", l)
+	}
+}
+
+func TestCameraIrisNormIsReadHidden(t *testing.T) {
+	f := newFakeCamera(t)
+	cam, _ := connected(t, f)
+	v, err := cam.Get(context.Background(), core.IrisNorm)
+	if err != nil || v.Number != 0.25 {
+		t.Fatalf("irisNorm = %v, %v; want 0.25", v, err)
+	}
+	for _, sp := range cam.Controls() {
+		if sp.ID == core.IrisNorm && !sp.Hidden {
+			t.Fatal("irisNorm must be hidden from the GUI")
+		}
+	}
+}
+
+// Without /lens/iris/description the lens limits come from the iris
+// reports at normalised 0 (open end) and 1 (closed end).
+func TestCameraLearnsIrisEndsWithoutDescription(t *testing.T) {
+	f := newFakeCamera(t)
+	for _, p := range lensWatched {
+		delete(f.state, p)
+	}
+	cam, rec := connected(t, f)
+	f.push(pathIris, map[string]any{"apertureStop": 2.8, "normalised": 0.0})
+	f.push(pathIris, map[string]any{"apertureStop": 16.0, "normalised": 1.0})
+	rec.waitFor(t, "learned lens", func([]core.Event) bool {
+		l := cam.Lens()
+		return l.IrisMin == 2.8 && l.IrisMax == 16
+	})
+	// another, wider lens: a stop below the learned open end forgets it
+	f.push(pathIris, map[string]any{"apertureStop": 2.0, "normalised": 0.1})
+	rec.waitFor(t, "open end forgotten", func([]core.Event) bool { return cam.Lens().IrisMin == 0 })
+}
+
+func TestCameraKeepsDescribedIrisLimits(t *testing.T) {
+	f := newFakeCamera(t)
+	cam, rec := connected(t, f)
+	f.push(pathIris, map[string]any{"apertureStop": 4.0, "normalised": 0.0})
+	f.push(pathZoom, map[string]any{"focalLength": 50.0, "normalised": 0.5}) // a marker
+	rec.waitFor(t, "marker", func([]core.Event) bool { return cam.Lens().FocalLength == 50 })
+	if l := cam.Lens(); l.IrisMin != 2.8 {
+		t.Fatalf("described open end replaced: %+v", l)
 	}
 }
 

@@ -95,12 +95,24 @@ func color(s core.ControlSpec, label string) core.ControlSpec {
 	return s
 }
 
+// irisNormSpec is the iris over the lens' range ("normalised" of
+// /lens/iris), for the panel's lever: the camera maps it to the mounted
+// lens, so the lever never asks for a stop the lens lacks. 0 = open,
+// 1 = closed, as ATEM Software Control sends it (1 - lever position).
+// TODO(verify) the direction on a live camera.
+func irisNormSpec() core.ControlSpec {
+	s := speckit.Range(core.IrisNorm, 0, 1, 0.001, "")
+	s.Hidden = true
+	return s
+}
+
 func lensSpecs() []core.ControlSpec {
 	return []core.ControlSpec{
 		// f-stops (apertureStop). The camera snaps to the lens' stops and
 		// reports the lens' own limits in /lens/iris/description (core.Lens).
 		// TODO(verify): f/1.0 to f/22 covers the lenses seen so far.
 		speckit.Range(core.Iris, 1, 22, 0.1, "f"),
+		irisNormSpec(),
 		speckit.Action(core.AutoIris),
 		speckit.Range(core.Focus, 0, 1, 0.001, ""),
 		speckit.Action(core.AutoFocus),

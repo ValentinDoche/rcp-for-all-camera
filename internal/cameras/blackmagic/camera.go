@@ -48,18 +48,21 @@ type Camera struct {
 	hc       *http.Client
 	log      *slog.Logger
 
-	mu      sync.Mutex
-	status  core.Status
-	vals    map[core.ControlID]core.Value
-	raw     map[string]map[string]any // last object seen per property
-	lens    core.Lens
-	fps     float64
-	subs    map[int]func(core.Event)
-	nextSub int
-	started bool
-	closed  bool
-	cancel  context.CancelFunc
-	ws      *wsConn
+	mu     sync.Mutex
+	status core.Status
+	vals   map[core.ControlID]core.Value
+	raw    map[string]map[string]any // last object seen per property
+	lens   core.Lens
+	// irisDesc: the lens limits come from /lens/iris/description, not from
+	// learnIrisEnds.
+	irisDesc bool
+	fps      float64
+	subs     map[int]func(core.Event)
+	nextSub  int
+	started  bool
+	closed   bool
+	cancel   context.CancelFunc
+	ws       *wsConn
 
 	done      chan struct{}
 	firstDone chan struct{}
@@ -499,9 +502,17 @@ func (c *Camera) applyJSON(path string, raw json.RawMessage) {
 	c.mu.Lock()
 	c.raw[path] = o
 	var events []core.Event
-	if lensDec != nil {
+	if lensDec != nil || path == pathIris {
 		old := c.lens
-		lensDec(&c.lens, o)
+		if lensDec != nil {
+			lensDec(&c.lens, o)
+		}
+		if path == pathIrisDesc {
+			c.irisDesc = c.lens.IrisMin > 0
+		}
+		if path == pathIris {
+			c.learnIrisEnds(o)
+		}
 		if c.lens != old {
 			l := c.lens
 			events = append(events, core.Event{Lens: &l})
