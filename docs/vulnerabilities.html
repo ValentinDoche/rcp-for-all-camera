@@ -29,7 +29,7 @@
     <div class="card">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M9 12l2 2l4 -4"/></svg>
       <a class="title" href="#dependencies">Dependencies: 0 open</a>
-      <p>14 vulnerabilities reported in the Go standard library, <code>x/net</code> and <code>x/image</code>, all fixed by upgrades.</p>
+      <p>15 vulnerabilities reported in the Go standard library, <code>x/net</code> and <code>x/image</code>, all fixed by upgrades.</p>
     </div>
     <div class="card">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/></svg>
@@ -72,8 +72,8 @@
 
 <section id="dependencies">
   <h2>Dependency vulnerabilities</h2>
-  <p>Found by govulncheck on 17 October 2026, all fixed the same day in 0.3.0-ALPHA by upgrading
-  <code>golang.org/x/net</code> to v0.60.0, <code>golang.org/x/image</code> to v0.43.0 and the Go toolchain to
+  <p>Found by govulncheck on 17 and 18 October 2026, all fixed in 0.3.0-ALPHA by upgrading
+  <code>golang.org/x/net</code> to v0.60.0, <code>golang.org/x/image</code> to v0.45.0 and the Go toolchain to
   go1.27.2. Each id links to its full description.</p>
   <div class="table-wrap"><table>
     <thead><tr><th>Id</th><th>Where</th><th>Affected</th><th>Fixed in</th><th>Status</th></tr></thead>
@@ -92,6 +92,7 @@
       <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-5062">GO-2026-5062</a></td><td>Image decoding</td><td><code>x/image</code> v0.24.0</td><td>v0.43.0</td><td><span class="pill ok">Fixed</span></td></tr>
       <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-5032">GO-2026-5032</a></td><td>Image decoding</td><td><code>x/image</code> v0.24.0</td><td>v0.43.0</td><td><span class="pill ok">Fixed</span></td></tr>
       <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-4815">GO-2026-4815</a></td><td>Image decoding</td><td><code>x/image</code> v0.24.0</td><td>v0.43.0</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6222">GO-2026-6222</a></td><td>Image decoding (never called by the application)</td><td><code>x/image</code> v0.43.0</td><td>v0.45.0</td><td><span class="pill ok">Fixed</span></td></tr>
     </tbody>
   </table></div>
   <details class="more"><summary>More info: why a desktop app cares about HTTP/2 and image bugs</summary><div>
