@@ -24,6 +24,9 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
 )
 
+// version is set by release builds (-ldflags "-X main.version=v1.2.3").
+var version = "dev"
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "rcp:", err)
@@ -93,6 +96,7 @@ func run() error {
 	host := appsvc.NewHost(svc, sources.Present, time.Second)
 	host.SetSurface(ctl)
 
+	gui.Version = version
 	fa := app.NewWithID(gui.AppID)
 	win := gui.New(fa, svc, gui.Options{})
 	ctx, cancel := context.WithCancel(context.Background())

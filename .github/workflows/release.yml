@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "dist/RCPForAllCamera"
-          go build -trimpath -ldflags "-H windowsgui -s -w" -o "dist/RCPForAllCamera/rcp.exe" ./cmd/rcp
+          go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=${{ github.ref_name }}" -o "dist/RCPForAllCamera/rcp.exe" ./cmd/rcp
           cp README.md "dist/RCPForAllCamera/"
 
       - name: Zip
