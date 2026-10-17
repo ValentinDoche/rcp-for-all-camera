@@ -243,17 +243,17 @@ implement ports the application or the panel controller declares.</figcaption>
   <h2>Build from source</h2>
   <p>You need Go 1.27 or later and, because the window toolkit uses cgo, a C compiler (MinGW-w64 on Windows).</p>
 <pre><code>winget install BrechtSanders.WinLibs.POSIX.UCRT
-go build -ldflags "-H windowsgui" -o rcp.exe ./cmd/rcp
-go run ./cmd/buildmodules -o modules</code></pre>
-  <p>The first command installs the compiler, the second builds the application (the first build takes a few minutes),
-  the third compiles every module of <code>modules/</code> into the <code>modules</code> folder next to
-  <code>rcp.exe</code>.</p>
+go build -ldflags "-H windowsgui" -o dist/rcp.exe ./cmd/rcp
+go run ./cmd/buildmodules</code></pre>
+  <p>The first command installs the compiler, the second builds the application into <code>dist</code> (the first
+  build takes a few minutes), the third compiles every module of <code>modules/</code> into <code>dist/modules</code>,
+  next to <code>dist/rcp.exe</code>. Then start <code>dist/rcp.exe</code>.</p>
   <div class="table-wrap"><table>
     <thead><tr><th>Command</th><th>Use</th></tr></thead>
     <tbody>
       <tr><td><code>rcp.exe -sim</code></td><td>Start on the panel simulator (this run only).</td></tr>
       <tr><td><code>rcp.exe -modules &lt;folder&gt;</code></td><td>Load the modules from another folder.</td></tr>
-      <tr><td><code>go run ./cmd/buildmodules -o out demo</code></td><td>Build only the named modules.</td></tr>
+      <tr><td><code>go run ./cmd/buildmodules demo</code></td><td>Build only the named modules (<code>-o</code> picks another output folder).</td></tr>
       <tr><td><code>go run ./cmd/panelcheck -t 60s</code></td><td>Show a fake rig on a real panel.</td></tr>
       <tr><td><code>go run ./cmd/panelprobe -t 10s</code></td><td>Authenticate the panel and dump its USB reports.</td></tr>
     </tbody>
