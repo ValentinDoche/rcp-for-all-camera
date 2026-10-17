@@ -39,7 +39,7 @@
       { href: "modules-camera.html", icon: "puzzle", title: "Camera modules", subs: [
         ["#how", "How modules work"], ["#concepts", "Key concepts"], ["#quickstart", "Quick start"],
         ["#contract", "The module contract"], ["#lifecycle", "Camera lifecycle"], ["#demo", "Walkthrough: demo"],
-        ["#controls", "Controls reference"], ["#custom", "Custom blocks"], ["#widgets", "Widget gallery"],
+        ["#controls", "Controls reference"], ["#ui", "The UI file"], ["#blocks", "Block gallery"], ["#widgets", "Widget gallery"],
         ["#host", "Host services"], ["#testing", "Testing"], ["#sandbox", "The sandbox"], ["#abi", "Appendix: the ABI"],
         ["#faq", "FAQ"]
       ] }
