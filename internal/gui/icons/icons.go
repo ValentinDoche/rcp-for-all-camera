@@ -52,6 +52,10 @@ const (
 	Adjustments   = "adjustments-horizontal"
 	Filter        = "filter"
 	Sun           = "sun-high"
+	Close         = "x"
+	Maximize      = "square"
+	Restore       = "window-restore" // drawn for this app in Tabler's style
+	Info          = "info-circle"
 )
 
 var (

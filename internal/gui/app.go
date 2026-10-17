@@ -15,6 +15,7 @@ import (
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/brand"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
@@ -68,6 +69,9 @@ type App struct {
 	body      *fyne.Container
 	gear      *widget.Button
 	stats     []*widgets.Text // CPU, RAM, down, up, IP
+	titleBar  *titleBar
+	chrome    windowChrome
+	zones     captionZones
 	panelDot  *widgets.Dot
 	panelTxt  *widgets.Text
 	noticeTxt *widgets.Text
@@ -86,7 +90,7 @@ var _ app.Emitter = (*App)(nil)
 
 // New builds the window around api. Pass Options{} in production.
 func New(fa fyne.App, api AppAPI, o Options) *App {
-	a := &App{fa: fa, api: api, ctl: NewController(api, o), bundle: i18n.Default()}
+	a := &App{fa: fa, api: api, ctl: NewController(api, o), bundle: i18n.Default(), chrome: newWindowChrome()}
 	a.openURL = fa.OpenURL
 	a.lang = fa.Preferences().StringWithFallback(langPref, "fr")
 	if !a.bundle.Has(a.lang) {
@@ -95,6 +99,7 @@ func New(fa fyne.App, api AppAPI, o Options) *App {
 	a.ctl.SetTexts(texts.New(a.bundle.Translator(a.lang)))
 	a.mode = style.ParseMode(fa.Preferences().StringWithFallback(themePref, string(style.ModeSystem)))
 	fa.Settings().SetTheme(style.NewTheme(a.mode))
+	fa.SetIcon(brand.Logo)
 	a.win = fa.NewWindow(WindowTitle)
 	a.build()
 	a.ctl.Load()
@@ -120,7 +125,9 @@ func (a *App) Emit(name string, payload any) { a.ctl.Emit(name, payload) }
 func (a *App) Run(ctx context.Context) {
 	a.ctl.Poll(ctx, 2*time.Second)
 	go a.sampleHost(ctx, time.Second)
-	a.win.ShowAndRun()
+	a.win.Show()
+	fyne.Do(func() { a.installChrome(40) }) // runs once the loop has created the window
+	a.fa.Run()
 }
 
 // Mode returns the current theme setting.
@@ -136,14 +143,15 @@ func (a *App) SetMode(m style.Mode) {
 // --- construction ------------------------------------------------------------------
 
 func (a *App) build() {
-	// top bar
-	name := widgets.NewText(WindowTitle, style.Text, 15).Bold()
+	// title bar (replaces the OS one): logo, name, panel status, window buttons
 	a.panelDot = widgets.NewDot(style.TextFaint)
 	a.panelTxt = widgets.NewText("", style.TextMuted, 12)
 	// Clicking the panel status chooses the panel: USB or simulator.
 	status := newTapArea(container.NewHBox(a.panelDot, a.panelTxt), a.showPanelMenu)
-	top := widgets.NewPanel(style.Surface, "", 0, container.New(layout.NewCustomPaddedLayout(10, 10, 16, 16),
-		container.NewBorder(nil, nil, name, status))).Flat()
+	native := a.titleBar != nil && a.titleBar.native
+	a.titleBar = newTitleBar(a.chrome, &a.zones, status, a.win.Close)
+	a.titleBar.native = native // kept across a rebuild (language switch)
+	top := a.titleBar
 
 	// slot tabs
 	items := make([]widgets.TabItem, app.SlotCount)
