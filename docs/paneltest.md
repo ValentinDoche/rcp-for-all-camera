@@ -28,10 +28,10 @@ and `-no-browser` to skip opening it. No driver install, no admin rights, no cgo
   once it has been tested. Knobs show their position from 0 to 1024. The lever
   and ring show their position from −4096 to 4096.
 - **Checklist.** All 42 physical controls (31 buttons, 9 knobs, the lever and the
-  ring), with progress shown as X / 42. *Réinitialiser checklist* starts over.
-- **Journal.** Every press, release and movement, with timestamps.
-- **Données simulées.** The state of the fake camera that the panel controls.
-- **Connexion.** Connection status, USB serial number and the raw report 0x04. The
+  ring), with progress shown as X / 42. *Reset checklist* starts over.
+- **Log.** Every press, release and movement, with timestamps.
+- **Simulated data.** The state of the fake camera that the panel controls.
+- **Connection.** Connection status, USB serial number and the raw report 0x04. The
   program reconnects on its own if the panel is unplugged.
 
 ## Simulated camera behaviour

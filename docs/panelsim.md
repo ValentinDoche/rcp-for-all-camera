@@ -7,10 +7,10 @@ Code: [internal/surfaces/panelsim](../internal/surfaces/panelsim).
 
 Click the panel status at the top right of the main window. The menu offers:
 
-- **USB : premier panneau trouvé** (default; shows the serial when one panel is plugged in);
-- **USB : <serial>** for each panel when several are plugged in (or when one was chosen
-  and is unplugged: "(non branché)");
-- **Simulateur**: opens the window "Simulateur ATEM Micro Camera Panel".
+- **USB: first panel found** (default; shows the serial when one panel is plugged in);
+- **USB: <serial>** for each panel when several are plugged in (or when one was chosen
+  and is unplugged: "(not plugged in)");
+- **Simulator**: opens the window "ATEM Micro Camera Panel simulator".
 
 The switch is immediate: the panel being driven is blanked and the new one is opened
 (`panel.Controller.Reconnect`). The choice is saved in `rig.json` (`"panel"`) and used
@@ -49,10 +49,10 @@ panel, and the unknown parts of the protocol (LED layers 1–5 meaning, features
 | Knobs (WHITE/BLACK R G B, top-right, SENS, COARSE) | Drag up/down (up = clockwise, 256 px for the whole travel) or the mouse wheel (8 counts per notch) |
 | Iris lever | Drag the lever area up (forward = open) or down (back = closed) |
 | Master black ring | Drag the lever area left/right, or the mouse wheel over it |
-| "Panneau branché" | Unplugs and replugs the panel (the session ends like a USB unplug) |
+| "Panel plugged in" | Unplugs and replugs the panel (the session ends like a USB unplug) |
 
 Closing the simulator window hides it and unplugs the panel; the main window keeps
-running. Choose "Simulateur" again in the menu to bring it back. The
+running. Choose "Simulator" again in the menu to bring it back. The
 lever and ring positions, as the panel would report them (±4096), are shown under the
 lever.
 

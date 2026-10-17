@@ -202,14 +202,14 @@ function update(st){
   ST=st||{};
   const held=new Set(ST.held||[]), seen=ST.seen||{};
   const ctl=(Array.isArray(ST.controls)&&ST.controls.length)?ST.controls.slice():fallbackControls();
-  // ids inconnus dans held/seen -> checklist
+  // unknown ids in held/seen -> checklist
   const ids=new Set(ctl.map(c=>c.id));
   [...held,...Object.keys(seen)].forEach(id=>{if(!ids.has(id)){ids.add(id);ctl.push({id,label:id,kind:"?"})}});
-  // lever / ring : ids reels depuis controls
+  // lever / ring: real ids from controls
   const lvId=(ctl.find(c=>c.kind==="lever")||{}).id, rgId=(ctl.find(c=>c.kind==="ring")||{}).id;
   if(lvId)$("#ltrack").dataset.id=lvId;
   if(rgId)$("[data-ring]").dataset.id=rgId;
-  // boutons / etat
+  // buttons / state
   $$("[data-id]").forEach(e=>{const id=e.dataset.id;e.classList.toggle("held",held.has(id));e.classList.toggle("seen",!!seen[id]);});
   $("#lthumb").classList.toggle("held",held.has($("#ltrack").dataset.id));
   // tally cam
@@ -230,11 +230,11 @@ function update(st){
   const rg=$("[data-ring]");rg.classList.toggle("seen",!!seen[rg.dataset.id]);rg.classList.toggle("held",held.has(rg.dataset.id));
   $("#ltrack").classList.toggle("seen",!!seen[$("#ltrack").dataset.id]);
   if(ST.ring!=null){$("#rtick").setAttribute("transform","rotate("+((ST.ring*0.35)%360)+" 48 48)");set($("#rtxt"),String(ST.ring));}
-  // afficheurs
+  // displays
   const D=ST.displays||{};
   $$("[data-disp]").forEach(e=>{const t=D[e.dataset.disp];if(t!=null)set(e.firstChild,String(t));});
   drawCam(D.CAMERA!=null?D.CAMERA:(ST.cam&&ST.cam.selected));
-  // connexion
+  // connection
   const cc=(el,ok,t)=>{el.className="chip "+(ok?"ok":"ko");el.textContent=t};
   cc($("#c-con"),ST.connected,ST.connected?"Connected":"Disconnected");
   cc($("#c-aut"),ST.authenticated,ST.authenticated?"Authenticated":"Not authenticated");
@@ -247,12 +247,12 @@ function update(st){
   $$("#chk div").forEach(e=>{const id=e.dataset.ck;const ok=!!seen[id];if(ok)n++;e.classList.toggle("ok",ok);e.classList.toggle("held",held.has(id));});
   set($("#cnt"),n+" / "+ctrlList.length);
   $("#prog i").style.width=(ctrlList.length?100*n/ctrlList.length:0)+"%";
-  // donnees simulees
+  // simulated data
   const m=ST.cam||{}, w=m.white||[], bk=m.black||[];
   const rows=[["Selected camera",m.selected],["Preview",m.preview],["ND",m.nd],["CC",m.cc],["Gain",m.gainDb!=null?m.gainDb+" dB":null],["Shutter",m.shutter],["Iris",m.iris],["Master black",m.masterBlack],["White balance",m.wbK!=null?m.wbK+" K":null],["White R/G/B",w.length?w.join(" / "):null],["Black R/G/B",bk.length?bk.join(" / "):null],["Auto iris",m.autoIris==null?null:m.autoIris?"yes":"no"],["Bars",m.bars==null?null:m.bars?"yes":"no"]];
   const h=rows.map(r=>`<span>${r[0]}</span><span>${r[1]==null?"—":esc(r[1])}</span>`).join("");
   if($("#sim").dataset.h!==h){$("#sim").dataset.h=h;$("#sim").innerHTML=h;}
-  // journal
+  // log
   let lg=Array.isArray(ST.log)?ST.log.slice():[];
   if(lg.length>1&&String(lg[0].t)<=String(lg[lg.length-1].t))lg.reverse();
   lg=lg.slice(0,100);
@@ -298,7 +298,7 @@ function startDemo(){
   const btns=ctl.filter(c=>c.kind==="button").map(c=>c.id);
   dt=setInterval(()=>{
     tick++;const t=(performance.now()-t0)/1000;
-    if(tick%10===1){ // nouveau bouton tenu
+    if(tick%10===1){ // newly held button
       const id=btns[(Math.random()*btns.length)|0];DS.held=[id];DS.seen[id]=true;dlog(id+" ↓");
       const m=/^CAM(\d)$/.exec(id);if(m){const n=+m[1];DS.cam.selected=n;DS.displays.CAMERA=String(n);DS.leds={};DS.leds["CAM"+n]="red";DS.leds["CAM"+(n%8+1)]="green";DS.cam.preview=n%8+1;}
       else if(id==="ND_UP"){DS.displays.ND=String((+DS.displays.ND%4)+1);}

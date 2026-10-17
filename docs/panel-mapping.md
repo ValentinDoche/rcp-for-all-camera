@@ -18,11 +18,11 @@ How the app drives the panel and what each physical control does. Code:
 - **ATEM Software Control running** (process `ATEM Software Control.exe`): the controller
   does not open the panel (both programs could open the HID device and fight over the
   displays). `PanelStatus` = connected, not active, detail
-  "utilisé par un autre logiciel (fermez ATEM Software Control)". The check repeats every
+  "used by another program (close ATEM Software Control)". The check repeats every
   2 s while driving: if ATEM Software Control starts, the app releases the panel without
   blanking it.
-- Open or authentication failure: detail "panneau détecté mais inaccessible, nouvel
-  essai…", logged once per failure streak, retried with backoff.
+- Open or authentication failure: detail "panel found but not accessible, retrying…",
+  logged once per failure streak, retried with backoff.
 - Unplug: the read fails, the session ends, `active` goes false and the controller retries.
 - Shutdown (`Host.Stop`): digits and matrix are blanked and all 6 LED layers cleared, then
   the device is closed.

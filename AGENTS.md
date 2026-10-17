@@ -33,7 +33,7 @@ Owner: Valentin (writes in French, so answer in French).
 Architecture overview: [docs/architecture.md](docs/architecture.md). Security model: [docs/security.md](docs/security.md).
 
 Phase 1 (USB feasibility spike) is complete, verdict **GO**. Full report:
-[docs/reports/2026-10-11-micro-camera-panel-usb-spike.md](docs/reports/2026-10-11-micro-camera-panel-usb-spike.md) (French).
+[docs/reports/2026-10-11-micro-camera-panel-usb-spike.md](docs/reports/2026-10-11-micro-camera-panel-usb-spike.md).
 
 ## 3. Repo map
 
@@ -61,7 +61,7 @@ internal/surfaces/micropanel/
   leds.go                         ← LED bitmap + full LED index constants (report 0x02)
 cmd/paneltest/                    ← test bench: HTTP server + SSE + fake cameras
   main.go, camera.go
-  web/index.html                  ← embedded UI (French), go:embed
+  web/index.html                  ← embedded UI, go:embed
 cmd/panelprobe/main.go            ← low-level probe: hex dump, raw -out/-feat/-get, -demo
 docs/atem-micro-camera-panel-protocol.md   ← THE protocol reference (byte layouts, maps)
 docs/paneltest.md                 ← how to use the test bench

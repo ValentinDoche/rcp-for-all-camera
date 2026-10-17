@@ -110,10 +110,10 @@ return `NOT_IMPLEMENTED`; the GUI shows this as "driver in development", not as 
 | `connected` | `active` | `detail` | Meaning |
 |---|---|---|---|
 | false | false | "" | No panel plugged in |
-| false | false | "détection USB indisponible" | USB enumeration failed |
+| false | false | "USB detection unavailable" | USB enumeration failed |
 | true | false | "" | Plugged in, being opened (or between retries) |
-| true | false | "utilisé par un autre logiciel (fermez ATEM Software Control)" | ATEM Software Control is running; the app leaves the panel alone and retries |
-| true | false | "panneau détecté mais inaccessible, nouvel essai…" | Open or authentication failed; retried with backoff |
+| true | false | "used by another program (close ATEM Software Control)" | ATEM Software Control is running; the app leaves the panel alone and retries |
+| true | false | "panel found but not accessible, retrying…" | Open or authentication failed; retried with backoff |
 | true | true | "" | Driven by the app: displays show the active camera, controls work |
 
 `active` was added on 2026-10-11 (additive). The panel mapping is in
