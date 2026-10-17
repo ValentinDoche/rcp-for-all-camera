@@ -16,8 +16,8 @@ import (
 // detailsPage shows one camera in full: its strip on the left; on the right a
 // header with the camera's state, the exposure cards (iris, gain, shutter,
 // ND, white balance), the lens cards (focus, zoom), the presets, the three
-// wheels with the image sliders, and a generated section for every other
-// control.
+// wheels with the image sliders, a generated section for every other
+// control, and last the custom blocks the camera's module declared.
 type detailsPage struct {
 	ctl  *Controller
 	win  fyne.Window
@@ -149,6 +149,11 @@ func (p *detailsPage) rebuild() {
 	for id := range p.cards {
 		skip[id] = true
 	}
+	for _, sp := range p.ctl.Specs(p.slot) {
+		if sp.Block != "" { // shown in its custom block, at the end
+			skip[sp.ID] = true
+		}
+	}
 	// the master black is the luma of the Lift wheel when there is one
 	if p.ctl.Has(p.slot, core.LiftY) && wheelAvailable(p.ctl, p.slot, 0) {
 		skip[core.MasterBlack] = true
@@ -187,6 +192,12 @@ func (p *detailsPage) rebuild() {
 		blocks = append(blocks, sectionObject(p.secs[0], 2))
 	default:
 		blocks = append(blocks, container.NewGridWithColumns(2, lower...))
+	}
+	for _, s := range customBlocks(p.ctl, p.slot) {
+		for _, r := range s.rows {
+			p.rows[r.spec.ID] = r
+		}
+		blocks = append(blocks, sectionObject(s, 2))
 	}
 	if len(p.cards) == 0 && len(p.rows) == 0 && len(p.wheels) == 0 {
 		blocks = append(blocks, container.NewCenter(widgets.NewText(p.ctl.tx.T("details.noControl"), style.TextMuted, 13)))

@@ -148,13 +148,40 @@ const (
 	KindCheck     WidgetKind = "check"
 	KindButton    WidgetKind = "button"
 	KindLabel     WidgetKind = "label"
+	KindStepper   WidgetKind = "stepper" // − and + around the value, no slider
+	KindText      WidgetKind = "text"    // a text field
+	KindReadout   WidgetKind = "readout" // a read-only value, large
 )
 
 // MaxSegmented is the largest enum shown as a segmented control.
 const MaxSegmented = 5
 
-// ChooseKind decides how a control is shown in the details page.
+// ChooseKind decides how a control is shown in the details page: the
+// widget the module asked for in a custom block (spec.Widget), else the
+// default widget of its kind.
 func ChooseKind(s core.ControlSpec) WidgetKind {
+	if s.Widget != "" && s.Widget.Fits(s.Kind, s.ReadOnly) {
+		switch s.Widget {
+		case core.WidgetSlider:
+			return KindSlider
+		case core.WidgetStepper:
+			return KindStepper
+		case core.WidgetButtons:
+			return KindSegmented
+		case core.WidgetSelect:
+			return KindSelect
+		case core.WidgetSwitch:
+			return KindCheck
+		case core.WidgetButton:
+			return KindButton
+		case core.WidgetReadout:
+			return KindReadout
+		case core.WidgetText:
+			if !s.ReadOnly {
+				return KindText
+			}
+		}
+	}
 	if s.ReadOnly {
 		return KindLabel
 	}
@@ -170,6 +197,8 @@ func ChooseKind(s core.ControlSpec) WidgetKind {
 		return KindCheck
 	case core.KindAction:
 		return KindButton
+	case core.KindText:
+		return KindText
 	}
 	return KindLabel
 }

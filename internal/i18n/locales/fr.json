@@ -130,6 +130,7 @@
   "preset.recalled": "Cam{slot} : preset {n} rappelé",
 
   "controlrow.numberExpected": "Valeur numérique attendue pour {label}",
+  "controlrow.textTooLong": "{label} : {max} caractères au plus",
   "controlrow.range": "{min} … {max}",
   "controlrow.step": "pas {step}",
   "controlrow.run": "Lancer",

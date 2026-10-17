@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/icons"
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
@@ -220,4 +221,35 @@ func TestDemoCameraNeedsNoAddressAndDrivesEverything(t *testing.T) {
 	if v := a.ctl.Value(4, core.Iris); v == nil || v.Number != 3.5 {
 		t.Errorf("demo iris after + = %v, want 3.5", v)
 	}
+}
+
+func TestCustomBlocksComeLastWithTheirWidgets(t *testing.T) {
+	svc, _, _ := newLiveService(t)
+	if _, err := svc.AssignSlot(1, app.SlotInput{Model: "demo", Name: "Démo"}); err != nil {
+		t.Fatal(err)
+	}
+	a := New(test.NewTempApp(t), svc, syncOptions())
+	t.Cleanup(func() { waitWrites(a.ctl) })
+	sized(a)
+	a.ShowDetails(1)
+	p := a.details
+	t.Run("the module's widgets are used", func(t *testing.T) {
+		for id, want := range map[core.ControlID]widgets.WidgetKind{
+			"demo.tallyLamp": widgets.KindCheck, "demo.tallyTest": widgets.KindButton,
+			"demo.firmware": widgets.KindReadout, "demo.cameraId": widgets.KindText,
+		} {
+			if r := p.rows[id]; r == nil || r.kind != want {
+				t.Errorf("%s: row %v, want a %s", id, r, want)
+			}
+		}
+	})
+	t.Run("custom controls are not in the standard sections", func(t *testing.T) {
+		for _, s := range p.secs {
+			for _, r := range s.rows {
+				if r.spec.Block != "" {
+					t.Errorf("%s shown in section %q", r.spec.ID, s.title)
+				}
+			}
+		}
+	})
 }

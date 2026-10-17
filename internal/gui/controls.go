@@ -46,7 +46,7 @@ func buildControlRow(ctl *Controller, slot int, spec core.ControlSpec, compact b
 		return widgets.Sized(labelColWidth, 0, container.NewVBox(items...))
 	}
 
-	if r.kind == widgets.KindSegmented && segmentedWidth(spec) > maxSegmentedWidth {
+	if r.kind == widgets.KindSegmented && spec.Widget == "" && segmentedWidth(spec) > maxSegmentedWidth {
 		r.kind = widgets.KindSelect // labels too long for one row
 	}
 
@@ -192,6 +192,52 @@ func buildControlRow(ctl *Controller, slot int, spec core.ControlSpec, compact b
 			chk.Refresh()
 		}
 
+	case widgets.KindStepper:
+		step := stepOf(spec)
+		rng := widgets.RangeOf(spec)
+		val := widgets.NewText(texts.Missing, style.Text, 14).Bold().Mono()
+		bump := func(dir float64) {
+			base := (spec.Min + spec.Max) / 2
+			if v := ctl.Target(slot, spec.ID); v != nil && v.Kind == core.KindRange {
+				base = v.Number
+			}
+			v := widgets.Quantize(base+dir*step, rng)
+			val.SetText(ctl.tx.Explicit(spec, v))
+			write(core.Number(v))
+		}
+		r.obj = container.NewBorder(nil, nil, name(""), nil, container.NewHBox(
+			stepButton(icons.Minus, func() { bump(-1) }), widgets.Sized(84, 0, container.NewCenter(val)),
+			stepButton(icons.Plus, func() { bump(1) })))
+		r.apply = func(v *core.Value) {
+			if v != nil && v.Kind == core.KindRange {
+				val.SetText(ctl.tx.Explicit(spec, v.Number))
+			} else {
+				val.SetText(texts.Missing)
+			}
+		}
+
+	case widgets.KindText:
+		entry := widget.NewEntry()
+		entry.OnSubmitted = func(s string) {
+			if len(s) > core.MaxTextLen {
+				ctl.SetNotice(texts.Notice{Text: ctl.tx.T("controlrow.textTooLong", "label", label, "max", core.MaxTextLen), Level: texts.LevelError})
+				r.apply(ctl.Value(slot, spec.ID))
+				return
+			}
+			write(core.Text(s))
+		}
+		r.obj = container.NewBorder(nil, nil, name(""), nil, widgets.Sized(220, 0, entry))
+		r.apply = func(v *core.Value) {
+			if v != nil && v.Kind == core.KindText {
+				entry.SetText(v.Text)
+			}
+		}
+
+	case widgets.KindReadout:
+		val := widgets.NewText(texts.Missing, style.Text, 18).Bold().Mono()
+		r.obj = container.NewBorder(nil, nil, name(""), nil, val)
+		r.apply = func(v *core.Value) { val.SetText(ctl.tx.FormatValue(spec, v)) }
+
 	case widgets.KindButton:
 		btn := widget.NewButton(ctl.tx.T("controlrow.run"), func() { write(core.Trigger()) })
 		r.obj = container.NewBorder(nil, nil, name(ctl.tx.T("controlrow.action")), nil, container.NewHBox(btn))
@@ -240,6 +286,26 @@ type section struct {
 	group core.ControlGroup
 	title string
 	rows  []*controlRow
+}
+
+// customBlocks builds the custom blocks a module declared (spec.Block), in
+// the order each block first appears, with the widgets it asked for.
+func customBlocks(ctl *Controller, slot int) []*section {
+	var out []*section
+	byTitle := map[string]*section{}
+	for _, sp := range ctl.Specs(slot) {
+		if sp.Block == "" || sp.Hidden {
+			continue
+		}
+		s := byTitle[sp.Block]
+		if s == nil {
+			s = &section{group: core.GroupMisc, title: sp.Block}
+			byTitle[sp.Block] = s
+			out = append(out, s)
+		}
+		s.rows = append(s.rows, buildControlRow(ctl, slot, sp, false))
+	}
+	return out
 }
 
 // buildSections groups every declared control that is not in skip by its

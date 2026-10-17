@@ -133,6 +133,11 @@ func (x Texts) FormatValue(s core.ControlSpec, v *core.Value) string {
 			return txt + "°"
 		}
 		return txt + " " + s.Unit
+	case core.KindText:
+		if v.Text == "" {
+			return Missing
+		}
+		return v.Text
 	case core.KindEnum:
 		for _, o := range s.Options {
 			if o.Value == v.Choice {
