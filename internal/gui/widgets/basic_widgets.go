@@ -32,11 +32,19 @@ func NewText(s string, token fyne.ThemeColorName, size float32) *Text {
 	return t
 }
 
-func (t *Text) Bold() *Text                  { t.bold = true; return t }
-func (t *Text) Mono() *Text                  { t.mono = true; return t }
-func (t *Text) Clip() *Text                  { t.clip = true; return t }
+// Bold draws the text in bold.
+func (t *Text) Bold() *Text { t.bold = true; return t }
+
+// Mono draws the text in the monospace font.
+func (t *Text) Mono() *Text { t.mono = true; return t }
+
+// Clip cuts the text that does not fit, with an ellipsis.
+func (t *Text) Clip() *Text { t.clip = true; return t }
+
+// Align sets the horizontal alignment.
 func (t *Text) Align(a fyne.TextAlign) *Text { t.align = a; return t }
 
+// SetText changes the text.
 func (t *Text) SetText(s string) {
 	if t.text != s {
 		t.text = s
@@ -44,6 +52,7 @@ func (t *Text) SetText(s string) {
 	}
 }
 
+// SetToken changes the colour, a theme colour name.
 func (t *Text) SetToken(tok fyne.ThemeColorName) {
 	if t.token != tok {
 		t.token = tok
@@ -51,6 +60,7 @@ func (t *Text) SetToken(tok fyne.ThemeColorName) {
 	}
 }
 
+// Text returns the text shown.
 func (t *Text) Text() string { return t.text }
 
 func (t *Text) style() fyne.TextStyle { return fyne.TextStyle{Bold: t.bold, Monospace: t.mono} }
@@ -130,6 +140,7 @@ func NewPanel(fill, stroke fyne.ThemeColorName, pad float32, content fyne.Canvas
 // Flat removes the corner radius (full-bleed bars).
 func (p *Panel) Flat() *Panel { p.flat = true; return p }
 
+// SetFill changes the background colour.
 func (p *Panel) SetFill(tok fyne.ThemeColorName) {
 	if p.fill != tok {
 		p.fill = tok
@@ -137,6 +148,7 @@ func (p *Panel) SetFill(tok fyne.ThemeColorName) {
 	}
 }
 
+// SetContent replaces what the panel holds.
 func (p *Panel) SetContent(o fyne.CanvasObject) {
 	p.content = o
 	p.Refresh()
@@ -205,6 +217,7 @@ type Hairline struct {
 	token fyne.ThemeColorName
 }
 
+// NewHairline returns a one-pixel separator line.
 func NewHairline() *Hairline {
 	h := &Hairline{token: style.Border}
 	h.ExtendBaseWidget(h)
@@ -261,12 +274,14 @@ type Dot struct {
 	token fyne.ThemeColorName
 }
 
+// NewDot returns a status dot of colour token.
 func NewDot(token fyne.ThemeColorName) *Dot {
 	d := &Dot{token: token}
 	d.ExtendBaseWidget(d)
 	return d
 }
 
+// SetToken changes the colour of the dot.
 func (d *Dot) SetToken(t fyne.ThemeColorName) {
 	if d.token != t {
 		d.token = t

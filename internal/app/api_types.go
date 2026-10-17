@@ -113,6 +113,7 @@ func (in SlotInput) String() string {
 
 func (in SlotInput) GoString() string { return "app.SlotInput" + in.String() }
 
+// LogValue logs the input without its password.
 func (in SlotInput) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("model", string(in.Model)), slog.String("name", in.Name),

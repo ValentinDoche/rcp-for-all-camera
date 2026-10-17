@@ -25,6 +25,8 @@ const Version = 1
 // cannot exhaust memory.
 const MaxFileSize = 1 << 20
 
+// ErrUnsupportedVersion is returned for a rig file written by a newer
+// version of the application.
 var ErrUnsupportedVersion = errors.New("unsupported config version")
 
 // rigFile is the on-disk format of the rig (rig.json). It is the
@@ -217,8 +219,10 @@ type MemorySecrets struct {
 	m  map[string]string
 }
 
+// NewMemorySecrets returns an empty in-memory store.
 func NewMemorySecrets() *MemorySecrets { return &MemorySecrets{m: map[string]string{}} }
 
+// Get returns the secret stored under key, and whether there is one.
 func (s *MemorySecrets) Get(key string) (string, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -226,6 +230,7 @@ func (s *MemorySecrets) Get(key string) (string, bool, error) {
 	return v, ok, nil
 }
 
+// Set stores value under key.
 func (s *MemorySecrets) Set(key, value string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -233,6 +238,7 @@ func (s *MemorySecrets) Set(key, value string) error {
 	return nil
 }
 
+// Delete removes the secret stored under key.
 func (s *MemorySecrets) Delete(key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

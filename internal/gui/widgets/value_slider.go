@@ -31,6 +31,7 @@ type Slider struct {
 	disabled bool
 }
 
+// NewSlider returns a slider from min to max.
 func NewSlider(min, max float64) *Slider {
 	s := &Slider{Min: min, Max: max}
 	s.ExtendBaseWidget(s)
@@ -50,6 +51,7 @@ func (s *Slider) Set(v float64) {
 	s.Refresh()
 }
 
+// SetDisabled greys the slider out and makes it ignore input.
 func (s *Slider) SetDisabled(d bool) {
 	if s.disabled != d {
 		s.disabled = d

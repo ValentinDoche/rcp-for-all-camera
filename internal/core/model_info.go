@@ -149,8 +149,12 @@ func (c CameraConfig) redacted() redacted {
 
 // String, GoString and LogValue keep the password out of fmt verbs and slog,
 // so a CameraConfig can be logged or wrapped in an error without leaking it.
-func (c CameraConfig) String() string   { return fmt.Sprintf("%+v", c.redacted()) }
+func (c CameraConfig) String() string { return fmt.Sprintf("%+v", c.redacted()) }
+
+// GoString is String for the %#v verb.
 func (c CameraConfig) GoString() string { return "core.CameraConfig" + c.String() }
+
+// LogValue logs the configuration without its password.
 func (c CameraConfig) LogValue() slog.Value {
 	return slog.GroupValue(
 		slog.String("model", string(c.Model)), slog.String("name", c.Name),

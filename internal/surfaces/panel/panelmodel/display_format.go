@@ -162,6 +162,7 @@ func RangePos(s core.ControlSpec, v float64) float64 {
 	return Clamp01((v - s.Min) / (s.Max - s.Min))
 }
 
+// Clamp01 limits v to 0..1.
 func Clamp01(v float64) float64 { return min(max(v, 0), 1) }
 
 // SectionText renders one panel display from the camera state: blank when no

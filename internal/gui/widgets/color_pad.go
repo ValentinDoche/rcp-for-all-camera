@@ -31,6 +31,7 @@ type IrisPad struct {
 	minSize    fyne.Size
 }
 
+// NewIrisPad returns a pad of at least min size.
 func NewIrisPad(min fyne.Size) *IrisPad {
 	p := &IrisPad{minSize: min}
 	p.ExtendBaseWidget(p)
@@ -62,6 +63,7 @@ func (p *IrisPad) SetPos(x, y float64) {
 	p.Refresh()
 }
 
+// Pos returns the puck position, -1..1 on each axis.
 func (p *IrisPad) Pos() (x, y float64) { return p.x, p.y }
 
 func clamp1(v float64) float64 { return math.Max(-1, math.Min(1, v)) }
@@ -200,6 +202,7 @@ type LevelMeter struct {
 	minSize  fyne.Size
 }
 
+// NewLevelMeter returns a meter of segments segments, at least min size.
 func NewLevelMeter(segments int, min fyne.Size) *LevelMeter {
 	m := &LevelMeter{segments: segments, minSize: min}
 	m.ExtendBaseWidget(m)

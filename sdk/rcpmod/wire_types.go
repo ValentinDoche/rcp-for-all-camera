@@ -124,12 +124,20 @@ type Value struct {
 	Text   string  `json:"text,omitempty"`
 }
 
-// Number, Choice, Bool, Text and Trigger build values.
+// Number is a value of a range control.
 func Number(v float64) Value { return Value{Kind: KindRange, Number: v} }
-func Choice(v string) Value  { return Value{Kind: KindEnum, Choice: v} }
-func Bool(v bool) Value      { return Value{Kind: KindToggle, On: v} }
-func Text(v string) Value    { return Value{Kind: KindText, Text: v} }
-func Trigger() Value         { return Value{Kind: KindAction} }
+
+// Choice is a value of an enum control.
+func Choice(v string) Value { return Value{Kind: KindEnum, Choice: v} }
+
+// Bool is a value of a toggle control.
+func Bool(v bool) Value { return Value{Kind: KindToggle, On: v} }
+
+// Text is a value of a text control.
+func Text(v string) Value { return Value{Kind: KindText, Text: v} }
+
+// Trigger is the value that runs an action control.
+func Trigger() Value { return Value{Kind: KindAction} }
 
 // Connection states.
 const (
@@ -172,12 +180,16 @@ type Event struct {
 	Lens    *Lens   `json:"lens,omitempty"`
 }
 
-// StatusEvent, ControlEvent and LensEvent build events.
+// StatusEvent reports a new connection state, with a reason for the user.
 func StatusEvent(state, detail string) Event {
 	return Event{Status: &Status{State: state, Detail: detail}}
 }
+
+// ControlEvent reports a new value of control id.
 func ControlEvent(id string, v Value) Event { return Event{Control: id, Value: v} }
-func LensEvent(l Lens) Event                { return Event{Lens: &l} }
+
+// LensEvent reports a change of the mounted lens.
+func LensEvent(l Lens) Event { return Event{Lens: &l} }
 
 // Standard control ids. Use them whenever the meaning matches, so the
 // panel and the GUI treat every camera alike; a control no standard id

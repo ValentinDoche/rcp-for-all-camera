@@ -24,12 +24,14 @@ type Segmented struct {
 	disabled bool
 }
 
+// NewSegmented returns a selector of options; onChange gets the index chosen.
 func NewSegmented(options []string, onChange func(i int)) *Segmented {
 	s := &Segmented{Options: options, OnChange: onChange, selected: -1}
 	s.ExtendBaseWidget(s)
 	return s
 }
 
+// Selected returns the index of the selected option.
 func (s *Segmented) Selected() int { return s.selected }
 
 // SetSelected changes the selection without calling OnChange. -1 clears it.
@@ -40,6 +42,7 @@ func (s *Segmented) SetSelected(i int) {
 	}
 }
 
+// SetDisabled greys the selector out and makes it ignore taps.
 func (s *Segmented) SetDisabled(d bool) {
 	if s.disabled != d {
 		s.disabled = d
@@ -189,17 +192,20 @@ type Tabs struct {
 	selected int
 }
 
+// NewTabs returns a tab bar of items; onSelect gets the index tapped.
 func NewTabs(items []TabItem, onSelect func(i int)) *Tabs {
 	t := &Tabs{items: items, OnSelect: onSelect, selected: -1}
 	t.ExtendBaseWidget(t)
 	return t
 }
 
+// Selected returns the index of the selected tab (-1: none).
 func (t *Tabs) Selected() int { return t.selected }
 
 // Disabled reports whether tab i cannot be selected.
 func (t *Tabs) Disabled(i int) bool { return i >= 0 && i < len(t.items) && t.items[i].Disabled }
 
+// SetSelected selects tab i without calling OnSelect.
 func (t *Tabs) SetSelected(i int) {
 	if t.selected != i {
 		t.selected = i
@@ -207,6 +213,7 @@ func (t *Tabs) SetSelected(i int) {
 	}
 }
 
+// SetItems replaces the tabs.
 func (t *Tabs) SetItems(items []TabItem) {
 	t.items = items
 	t.Refresh()

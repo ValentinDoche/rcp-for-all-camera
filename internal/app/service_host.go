@@ -29,6 +29,8 @@ type Host struct {
 	surf     SurfaceStatus
 }
 
+// NewHost builds the host of svc. probe reports whether a panel is plugged
+// in; it runs every interval.
 func NewHost(svc *Service, probe PanelProbe, interval time.Duration) *Host {
 	return &Host{svc: svc, probe: probe, interval: interval}
 }

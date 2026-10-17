@@ -29,6 +29,8 @@ type PickHint struct {
 	HavePos  bool
 }
 
+// Waiting reports whether the physical control has still to reach the
+// camera value before it takes control (soft takeover).
 func (h PickHint) Waiting() bool { return h.Declared && h.Known && !h.Picked }
 
 // State is everything the panel shows.
@@ -66,6 +68,7 @@ type Frame struct {
 	LEDs   micropanel.LEDBits
 }
 
+// Render draws the whole panel for state v.
 func Render(v State) Frame {
 	var f Frame
 	for _, s := range v.Rig.Slots {
@@ -207,6 +210,7 @@ func (v State) IrisWindowOf(s core.ControlSpec) Window {
 	return IrisWindow(s, v.Knobs)
 }
 
+// IrisCentreOf returns the f-stop at the centre of the iris window.
 func (v State) IrisCentreOf(s core.ControlSpec) float64 {
 	if v.IrisCentre > 0 {
 		return v.IrisCentre
@@ -256,6 +260,7 @@ func ActivePresets(r app.Rig) []int {
 	return nil
 }
 
+// ActiveCamera returns the camera of the active slot, nil when none.
 func ActiveCamera(r app.Rig) *app.CameraView {
 	for _, s := range r.Slots {
 		if s.Slot == r.Active && r.Active != 0 {
@@ -282,4 +287,5 @@ func MatrixFor(slot int, onAir bool) [32]byte {
 	return m
 }
 
+// LEDOn reports whether LED n is lit in l.
 func LEDOn(l *micropanel.LEDBits, n int) bool { return l[n>>3]&(1<<(n&7)) != 0 }

@@ -218,6 +218,7 @@ type Throttler struct {
 
 type throttleKey struct{ pending func() }
 
+// NewThrottler returns a throttler that runs a key at most once per interval.
 func NewThrottler(interval time.Duration) *Throttler {
 	return &Throttler{interval: interval, keys: map[string]*throttleKey{}}
 }

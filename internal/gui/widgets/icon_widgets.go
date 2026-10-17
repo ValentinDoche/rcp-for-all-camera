@@ -35,6 +35,7 @@ func NewIcon(name string, token fyne.ThemeColorName, size float32) *Icon {
 // Name is the icon's name.
 func (i *Icon) Name() string { return i.name }
 
+// SetToken changes the colour of the icon.
 func (i *Icon) SetToken(t fyne.ThemeColorName) {
 	if i.token != t {
 		i.token = t
@@ -42,6 +43,7 @@ func (i *Icon) SetToken(t fyne.ThemeColorName) {
 	}
 }
 
+// SetName changes the icon (a name of the icons package).
 func (i *Icon) SetName(n string) {
 	if i.name != n {
 		i.name = n
@@ -111,12 +113,16 @@ func NewIconButton(icon, label string, tapped func()) *IconButton {
 	return b
 }
 
+// Label returns the text of the button.
 func (b *IconButton) Label() string { return b.label }
 func (b *IconButton) Icon() string  { return b.icon }
+
+// Disabled reports whether the button ignores taps.
 func (b *IconButton) Disabled() bool {
 	return b.disabled
 }
 
+// SetLabel changes the text of the button.
 func (b *IconButton) SetLabel(s string) {
 	if b.label != s {
 		b.label = s
@@ -124,6 +130,7 @@ func (b *IconButton) SetLabel(s string) {
 	}
 }
 
+// SetIcon changes the icon of the button.
 func (b *IconButton) SetIcon(s string) {
 	if b.icon != s {
 		b.icon = s
@@ -134,6 +141,7 @@ func (b *IconButton) SetIcon(s string) {
 // Selected reports whether the button is shown as selected (armed).
 func (b *IconButton) Selected() bool { return b.selected }
 
+// SetSelected lights the button (a toggle that is on).
 func (b *IconButton) SetSelected(on bool) {
 	if b.selected != on {
 		b.selected = on
@@ -141,6 +149,7 @@ func (b *IconButton) SetSelected(on bool) {
 	}
 }
 
+// SetDanger draws the button in the danger colour.
 func (b *IconButton) SetDanger(on bool) {
 	if b.danger != on {
 		b.danger = on
@@ -148,6 +157,7 @@ func (b *IconButton) SetDanger(on bool) {
 	}
 }
 
+// SetDisabled greys the button out and makes it ignore taps.
 func (b *IconButton) SetDisabled(d bool) {
 	if b.disabled != d {
 		b.disabled = d
@@ -371,12 +381,14 @@ type Ticks struct {
 	ticks []Tick
 }
 
+// NewTicks returns an empty scale.
 func NewTicks() *Ticks {
 	t := &Ticks{}
 	t.ExtendBaseWidget(t)
 	return t
 }
 
+// SetTicks replaces the marks of the scale.
 func (t *Ticks) SetTicks(ts []Tick) {
 	t.ticks = ts
 	t.Refresh()

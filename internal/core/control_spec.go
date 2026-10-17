@@ -117,11 +117,20 @@ type Value struct {
 	Text   string
 }
 
+// Number is a value of a range control.
 func Number(v float64) Value { return Value{Kind: KindRange, Number: v} }
-func Choice(v string) Value  { return Value{Kind: KindEnum, Choice: v} }
-func Bool(v bool) Value      { return Value{Kind: KindToggle, On: v} }
-func Text(v string) Value    { return Value{Kind: KindText, Text: v} }
-func Trigger() Value         { return Value{Kind: KindAction} }
+
+// Choice is a value of an enum control.
+func Choice(v string) Value { return Value{Kind: KindEnum, Choice: v} }
+
+// Bool is a value of a toggle control.
+func Bool(v bool) Value { return Value{Kind: KindToggle, On: v} }
+
+// Text is a value of a text control.
+func Text(v string) Value { return Value{Kind: KindText, Text: v} }
+
+// Trigger is the value that runs an action control.
+func Trigger() Value { return Value{Kind: KindAction} }
 
 // MaxIDLen bounds control ids and enum choice values. Both cross the GUI
 // boundary and end up in logs, errors and camera commands.

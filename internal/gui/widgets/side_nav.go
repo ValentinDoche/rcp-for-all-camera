@@ -22,14 +22,17 @@ type SideNav struct {
 
 const sideNavRowH = 36
 
+// NewSideNav returns a vertical list of items; onSelect gets the index tapped.
 func NewSideNav(items []string, onSelect func(i int)) *SideNav {
 	n := &SideNav{items: items, OnSelect: onSelect, selected: -1, hover: -1}
 	n.ExtendBaseWidget(n)
 	return n
 }
 
+// Selected returns the index of the selected item.
 func (n *SideNav) Selected() int { return n.selected }
 
+// SetSelected selects item i without calling the callback.
 func (n *SideNav) SetSelected(i int) {
 	if n.selected != i {
 		n.selected = i

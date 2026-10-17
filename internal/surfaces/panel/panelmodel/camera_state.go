@@ -21,6 +21,7 @@ type Camera struct {
 	Lens   core.Lens
 }
 
+// NewCamera builds the panel view of slot from its control views.
 func NewCamera(slot int, views []app.ControlView) Camera {
 	c := Camera{Slot: slot, Specs: map[core.ControlID]core.ControlSpec{}, Values: map[core.ControlID]core.Value{}}
 	for _, v := range views {

@@ -248,11 +248,22 @@ func (c *Controller) notify(ch Change) {
 
 // --- read access -----------------------------------------------------------------
 
-func (c *Controller) Rig() app.Rig             { return c.rig }
-func (c *Controller) Panel() app.PanelStatus   { return c.panel }
+// Rig returns the rig as last loaded.
+func (c *Controller) Rig() app.Rig { return c.rig }
+
+// Panel returns the last panel status.
+func (c *Controller) Panel() app.PanelStatus { return c.panel }
+
+// Models returns the camera models the app can drive.
 func (c *Controller) Models() []core.ModelInfo { return c.models }
-func (c *Controller) Notice() texts.Notice     { return c.notice }
-func (c *Controller) Active() int              { return c.rig.Active }
+
+// Notice returns the notice shown in the bottom bar.
+func (c *Controller) Notice() texts.Notice { return c.notice }
+
+// Active returns the active slot (0: none).
+func (c *Controller) Active() int { return c.rig.Active }
+
+// Camera returns the camera of slot, nil when the slot is free.
 func (c *Controller) Camera(slot int) *app.CameraView {
 	if slot < 1 || slot > app.SlotCount {
 		return nil

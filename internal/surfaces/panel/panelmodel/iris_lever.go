@@ -52,6 +52,7 @@ func NormAt(s core.ControlSpec, w Window, pos float64) float64 {
 	return min(max(Quantize(s, w.Hi-pos*(w.Hi-w.Lo)), s.Min), s.Max)
 }
 
+// NormPos is the lever position (0..1) that gives IrisNorm v in window w.
 func NormPos(_ core.ControlSpec, w Window, v float64) float64 {
 	if w.Hi <= w.Lo {
 		return 0

@@ -33,6 +33,7 @@ type Lever struct {
 	stop chan struct{}
 }
 
+// NewLever returns a spring-loaded lever, vertical or horizontal.
 func NewLever(vertical bool) *Lever {
 	l := &Lever{Vertical: vertical}
 	l.ExtendBaseWidget(l)
@@ -42,8 +43,10 @@ func NewLever(vertical bool) *Lever {
 // Deflection is the current deflection, -1..1 (0 at rest).
 func (l *Lever) Deflection() float64 { return l.d }
 
+// Disabled reports whether the lever is greyed out.
 func (l *Lever) Disabled() bool { return l.disabled }
 
+// SetDisabled greys the lever out and makes it ignore drags.
 func (l *Lever) SetDisabled(d bool) {
 	if l.disabled != d {
 		l.disabled = d

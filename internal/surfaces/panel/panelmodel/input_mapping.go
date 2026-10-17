@@ -125,6 +125,7 @@ const (
 	KnobMargin = 128
 )
 
+// NearKnobEnd reports whether a knob position is within KnobMargin of an end.
 func NearKnobEnd(pos int) bool { return pos < KnobMargin || pos > micropanel.AnalogMax-KnobMargin }
 
 // KnobDeadband is the knob movement (in counts) ignored as noise: some
