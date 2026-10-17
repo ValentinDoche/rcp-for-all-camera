@@ -4,679 +4,573 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Modules caméra</title>
-<meta name="description" content="Comment brancher une caméra sur RCP For All Camera : le contrat d'un module, l'exemple du module demo, les bases partagées et les hooks.">
-<style>
-:root {
-  --bg: #f7f7f5; --surface: #ffffff; --surface-2: #f0efeb; --text: #1d1d1b; --muted: #5d5d58;
-  --border: #dddcd6; --accent: #c4561c; --accent-soft: #fbe9df; --ok: #2f7d4f; --ok-soft: #e3f2e8;
-  --warn: #9a6a00; --warn-soft: #fbf1d9; --info: #2b5f9e; --info-soft: #e4edf8; --code-bg: #f3f2ee;
-  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.04);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141413; --surface: #1d1d1b; --surface-2: #262624; --text: #ecebe6; --muted: #a8a7a0;
-    --border: #363633; --accent: #ec7a3d; --accent-soft: #3a2418; --ok: #5dbb83; --ok-soft: #1c3226;
-    --warn: #e2b44a; --warn-soft: #3a2f14; --info: #79a8e6; --info-soft: #1b2a3e; --code-bg: #232321;
-    --shadow: none;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #141413; --surface: #1d1d1b; --surface-2: #262624; --text: #ecebe6; --muted: #a8a7a0;
-  --border: #363633; --accent: #ec7a3d; --accent-soft: #3a2418; --ok: #5dbb83; --ok-soft: #1c3226;
-  --warn: #e2b44a; --warn-soft: #3a2f14; --info: #79a8e6; --info-soft: #1b2a3e; --code-bg: #232321;
-  --shadow: none;
-}
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body {
-  margin: 0; background: var(--bg); color: var(--text);
-  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-.wrap { max-width: 920px; margin: 0 auto; padding: 0 16px 80px; }
-header.hero { padding: 48px 0 24px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
-.kicker { color: var(--accent); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 13px; }
-h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 8px 0 12px; }
-h2 { font-size: 26px; margin: 56px 0 12px; padding-top: 8px; }
-h3 { font-size: 19px; margin: 28px 0 8px; }
-p, li { color: var(--text); }
-.lead { font-size: 18px; color: var(--muted); max-width: 70ch; }
-a { color: var(--accent); }
-code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .92em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
-pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 14px; line-height: 1.55; }
-pre code { background: none; padding: 0; font-size: inherit; }
-.c { color: var(--muted); font-style: italic; }
-.k { color: var(--accent); font-weight: 600; }
-.s { color: var(--ok); }
-nav.toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; box-shadow: var(--shadow); }
-nav.toc ol { margin: 6px 0 0; padding-left: 20px; columns: 2; column-gap: 32px; }
-@media (max-width: 640px) { nav.toc ol { columns: 1; } }
-nav.toc a { text-decoration: none; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; box-shadow: var(--shadow); margin: 16px 0; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; }
-.grid .card { margin: 0; }
-.card h3 { margin-top: 0; }
-.note { border-left: 4px solid var(--info); background: var(--info-soft); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 16px 0; }
-.tip { border-left: 4px solid var(--ok); background: var(--ok-soft); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 16px 0; }
-.warn { border-left: 4px solid var(--warn); background: var(--warn-soft); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 16px 0; }
-.note p, .tip p, .warn p { margin: 4px 0; }
-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
-th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-th { background: var(--surface-2); font-weight: 600; }
-.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
-.table-wrap table { margin: 0; }
-figure { margin: 20px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: var(--shadow); }
-figure svg { width: 100%; height: auto; display: block; }
-figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; text-align: center; }
-.steps { counter-reset: step; list-style: none; padding: 0; }
-.steps > li { counter-increment: step; position: relative; padding-left: 48px; margin: 18px 0; }
-.steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; }
-.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
-.pill.ok { background: var(--ok-soft); color: var(--ok); }
-.pill.info { background: var(--info-soft); color: var(--info); }
-dl.glossary dt { font-weight: 700; margin-top: 14px; }
-dl.glossary dd { margin: 2px 0 0 0; color: var(--text); }
-footer { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
-/* SVG diagrams */
-.d-box { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.5; }
-.d-core { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
-.d-mod { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 1.5; }
-.d-base { fill: var(--info-soft); stroke: var(--info); stroke-width: 1.5; }
-.d-cam { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
-.d-t { fill: var(--text); font: 600 14px system-ui, sans-serif; }
-.d-s { fill: var(--muted); font: 12px system-ui, sans-serif; }
-.d-m { fill: var(--text); font: 12px ui-monospace, Consolas, monospace; }
-.d-line { stroke: var(--muted); stroke-width: 1.6; fill: none; }
-.d-acc { stroke: var(--accent); stroke-width: 1.8; fill: none; }
-.d-life { stroke: var(--border); stroke-width: 1.5; stroke-dasharray: 4 4; }
-.d-head { fill: var(--muted); }
-.d-head-acc { fill: var(--accent); }
-</style>
+<meta name="description" content="Ajouter une caméra à RCP For All Camera : un module WebAssembly déposé dans le dossier modules, son contrat, l'exemple demo, les bases partagées et le bac à sable.">
+<link rel="stylesheet" href="assets/docs.css">
+<script src="assets/docs.js"></script>
 </head>
 <body>
-<div class="wrap">
+<header class="topbar" id="topbar"></header>
+<div class="layout">
+<aside class="sidebar" id="sidebar"></aside>
+<main>
 
-<header class="hero">
-  <div class="kicker">RCP For All Camera · 0.3.0-ALPHA · Documentation</div>
-  <h1>Brancher une caméra : les modules caméra</h1>
-  <p class="lead">Cette page explique, sans prérequis, comment l'application parle à n'importe quelle caméra
-  (Blackmagic, Sony, Panasonic…) grâce aux <strong>modules</strong>. On suit pas à pas le plus simple
-  d'entre eux : le module <code>demo</code>, une caméra simulée.</p>
-</header>
+<div class="hero">
+  <div class="kicker">Caméras · 0.3.0-ALPHA</div>
+  <h1>Modules caméra</h1>
+  <p>Ajouter une caméra en déposant un fichier dans le dossier modules, sans toucher à l'application.</p>
+</div>
 
-<nav class="toc" aria-label="Sommaire">
-  <strong>Sommaire</strong>
-  <ol>
-    <li><a href="#idee">L'idée en une image</a></li>
-    <li><a href="#mots">Les mots à connaître</a></li>
-    <li><a href="#contrat">Le contrat d'un module</a></li>
-    <li><a href="#vie">La vie d'une caméra</a></li>
-    <li><a href="#demo">Exemple : le module demo</a></li>
-    <li><a href="#brancher">Brancher le module</a></li>
-    <li><a href="#verifier">Vérifier le module</a></li>
-    <li><a href="#familles">Familles, base partagée et hooks</a></li>
-    <li><a href="#marques">Sony, Panasonic et les autres</a></li>
-    <li><a href="#regles">Les règles à respecter</a></li>
-    <li><a href="#faq">Questions fréquentes</a></li>
-  </ol>
-</nav>
+<section class="band">
+  <h2>L'essentiel</h2>
+  <p class="lead">Chaque modèle de caméra est un <strong>module</strong> : un petit fichier <code>.wasm</code> que l'application
+  charge au démarrage. Il traduit la langue commune de l'application dans le protocole de sa caméra, et il tourne
+  enfermé dans un bac à sable.</p>
+  <div class="cards">
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3a1 1 0 0 0 1 -1v-1a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 0 1 0 4h-1a1 1 0 0 0 -1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-1a2 2 0 0 0 -4 0v1a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1a2 2 0 0 0 0 -4h-1a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1"/></svg>
+      <a class="title" href="#idee">Comment ça marche</a>
+      <p>Un fichier par caméra dans <code>modules\</code>, une langue commune, un traducteur par modèle.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/><path d="M9 13l2 2l4 -4"/></svg>
+      <a class="title" href="#contrat">Le contrat</a>
+      <p>Ce qu'un module fournit et ce que l'application lui prête : le réseau vers sa caméra, des minuteries, des événements.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2zm-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/></svg>
+      <a class="title" href="#demo">Exemple : le module demo</a>
+      <p>Une caméra simulée, complète, pas à pas. Le meilleur modèle à recopier.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l-8 4l8 4l8 -4l-8 -4"/><path d="M4 12l8 4l8 -4"/><path d="M4 16l8 4l8 -4"/></svg>
+      <a class="title" href="#familles">Familles et hooks</a>
+      <p>Une base partagée par marque (<code>bm</code> pour Blackmagic), et des hooks pour ce qui est propre à un modèle.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M12 11m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/><path d="M12 12l0 2.5"/></svg>
+      <a class="title" href="#securite">Le bac à sable</a>
+      <p>Un module ne voit ni vos fichiers ni Internet : seulement l'adresse de sa caméra.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M9 12l2 2l4 -4"/></svg>
+      <a class="title" href="#verifier">Vérifier un module</a>
+      <p>Une suite de contrat, la même pour tous les modules, sans caméra branchée.</p>
+    </div>
+  </div>
+</section>
 
-<!-- 1 -->
-<h2 id="idee">1. L'idée en une image</h2>
-<p>Chaque marque de caméra a sa propre « langue » : Blackmagic se pilote par des requêtes web, Sony par
-son interface distante, Panasonic par des commandes CGI. L'application, elle, ne veut parler qu'une seule
-langue : « mets l'iris à f/4 », « le gain à 6 dB », « dis-moi quand la balance des blancs change ».</p>
-<p>Un <strong>module caméra</strong> est un <strong>traducteur</strong> entre les deux. L'application lui
-parle la langue commune ; le module traduit pour sa caméra, et traduit les réponses dans l'autre sens.
-Ajouter une caméra, c'est donc ajouter un traducteur, sans toucher au reste de l'application.</p>
+<section id="idee">
+  <h2>L'idée en une image</h2>
+  <p>Chaque marque de caméra a sa propre « langue » : Blackmagic se pilote par des requêtes web, Sony par son interface
+  distante, Panasonic par des commandes CGI. L'application, elle, ne parle qu'une langue : « mets l'iris à f/4 », « le
+  gain à 6 dB », « préviens-moi quand la balance des blancs change ».</p>
+  <p>Un <strong>module caméra</strong> est un <strong>traducteur</strong> entre les deux. Il est livré sous la forme d'un
+  fichier <code>.wasm</code> (WebAssembly, un format de programme portable) rangé dans le dossier <code>modules</code>.
+  Au démarrage, l'application ouvre ce dossier et charge chaque fichier qu'elle y trouve. Pour ajouter une caméra, on
+  ajoute un fichier ; pour en retirer une, on l'enlève.</p>
 
 <figure>
-<svg viewBox="0 0 860 400" role="img" aria-labelledby="f1t">
-  <title id="f1t">Le panneau et l'interface parlent à l'application, qui parle aux modules, qui parlent aux caméras</title>
+<svg viewBox="0 0 900 430" role="img" aria-labelledby="f1t">
+  <title id="f1t">Le panneau et l'interface parlent à l'application, qui charge les modules du dossier modules ; chaque module parle à sa caméra à travers l'application</title>
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-head"/></marker>
     <marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-head-acc"/></marker>
   </defs>
-  <!-- surfaces -->
-  <rect x="20" y="40" width="170" height="64" rx="10" class="d-box"/>
-  <text x="105" y="68" text-anchor="middle" class="d-t">Panneau USB</text>
-  <text x="105" y="88" text-anchor="middle" class="d-s">Micro Camera Panel</text>
-  <rect x="20" y="130" width="170" height="64" rx="10" class="d-box"/>
-  <text x="105" y="158" text-anchor="middle" class="d-t">Interface</text>
-  <text x="105" y="178" text-anchor="middle" class="d-s">fenêtre de l'application</text>
-  <!-- app -->
-  <rect x="250" y="40" width="200" height="154" rx="12" class="d-core"/>
-  <text x="350" y="72" text-anchor="middle" class="d-t">Application</text>
-  <text x="350" y="94" text-anchor="middle" class="d-s">une seule langue :</text>
-  <text x="350" y="116" text-anchor="middle" class="d-m">iris = f/4</text>
-  <text x="350" y="136" text-anchor="middle" class="d-m">gain = 6 dB</text>
-  <text x="350" y="166" text-anchor="middle" class="d-s">+ le registre des modules</text>
-  <path d="M190 72 H246" class="d-line" marker-end="url(#ah)"/>
-  <path d="M190 162 H246" class="d-line" marker-end="url(#ah)"/>
-  <!-- modules -->
-  <rect x="520" y="20" width="160" height="56" rx="10" class="d-mod"/>
-  <text x="600" y="44" text-anchor="middle" class="d-t">demo</text>
-  <text x="600" y="62" text-anchor="middle" class="d-s">caméra simulée</text>
-  <rect x="520" y="92" width="160" height="56" rx="10" class="d-mod"/>
-  <text x="600" y="116" text-anchor="middle" class="d-t">bm-studio-6k-pro</text>
-  <text x="600" y="134" text-anchor="middle" class="d-s">REST + WebSocket</text>
-  <rect x="520" y="164" width="160" height="56" rx="10" class="d-mod"/>
-  <text x="600" y="188" text-anchor="middle" class="d-t">sony-fx6</text>
-  <text x="600" y="206" text-anchor="middle" class="d-s">à écrire</text>
-  <rect x="520" y="236" width="160" height="56" rx="10" class="d-mod"/>
-  <text x="600" y="260" text-anchor="middle" class="d-t">panasonic-aw-ue150</text>
-  <text x="600" y="278" text-anchor="middle" class="d-s">à écrire</text>
-  <path d="M450 100 C490 100 490 48 516 48" class="d-acc" marker-end="url(#aha)"/>
-  <path d="M450 112 C490 112 490 120 516 120" class="d-acc" marker-end="url(#aha)"/>
-  <path d="M450 124 C490 124 490 192 516 192" class="d-acc" marker-end="url(#aha)"/>
-  <path d="M450 136 C490 136 490 264 516 264" class="d-acc" marker-end="url(#aha)"/>
-  <!-- cameras -->
-  <rect x="740" y="20" width="100" height="56" rx="10" class="d-cam"/>
-  <text x="790" y="53" text-anchor="middle" class="d-s">(aucune)</text>
-  <rect x="740" y="92" width="100" height="56" rx="10" class="d-cam"/>
-  <text x="790" y="125" text-anchor="middle" class="d-t">caméra</text>
-  <rect x="740" y="164" width="100" height="56" rx="10" class="d-cam"/>
-  <text x="790" y="197" text-anchor="middle" class="d-t">caméra</text>
-  <rect x="740" y="236" width="100" height="56" rx="10" class="d-cam"/>
-  <text x="790" y="269" text-anchor="middle" class="d-t">caméra</text>
-  <path d="M680 120 H736" class="d-line" marker-end="url(#ah)"/>
-  <path d="M680 192 H736" class="d-line" marker-end="url(#ah)"/>
-  <path d="M680 264 H736" class="d-line" marker-end="url(#ah)"/>
-  <!-- legend -->
-  <rect x="250" y="330" width="16" height="16" rx="3" class="d-core"/><text x="274" y="343" class="d-s">la langue commune (core)</text>
-  <rect x="460" y="330" width="16" height="16" rx="3" class="d-mod"/><text x="484" y="343" class="d-s">les traducteurs (modules)</text>
-  <rect x="660" y="330" width="16" height="16" rx="3" class="d-cam"/><text x="684" y="343" class="d-s">les vraies caméras</text>
-  <text x="430" y="384" text-anchor="middle" class="d-s">Le panneau et l'interface ignorent la marque : ils ne voient que la langue commune.</text>
+  <rect x="20" y="60" width="160" height="62" rx="10" class="d-box"/>
+  <text x="100" y="88" text-anchor="middle" class="d-t">Panneau USB</text>
+  <text x="100" y="107" text-anchor="middle" class="d-s">Micro Camera Panel</text>
+  <rect x="20" y="150" width="160" height="62" rx="10" class="d-box"/>
+  <text x="100" y="178" text-anchor="middle" class="d-t">Interface</text>
+  <text x="100" y="197" text-anchor="middle" class="d-s">fenêtre de l'application</text>
+  <rect x="230" y="40" width="250" height="300" rx="12" class="d-core"/>
+  <text x="355" y="70" text-anchor="middle" class="d-t">rcp.exe (l'application)</text>
+  <text x="355" y="92" text-anchor="middle" class="d-s">une seule langue :</text>
+  <text x="355" y="114" text-anchor="middle" class="d-m">iris = f/4 · gain = 6 dB</text>
+  <rect x="254" y="138" width="202" height="52" rx="8" class="d-box"/>
+  <text x="355" y="160" text-anchor="middle" class="d-t">Chargeur de modules</text>
+  <text x="355" y="178" text-anchor="middle" class="d-s">scanne modules\*.wasm</text>
+  <rect x="254" y="204" width="202" height="52" rx="8" class="d-box"/>
+  <text x="355" y="226" text-anchor="middle" class="d-t">Fonctions prêtées</text>
+  <text x="355" y="244" text-anchor="middle" class="d-s">réseau, minuteries, journal</text>
+  <text x="355" y="290" text-anchor="middle" class="d-s">le réseau ne va qu'à</text>
+  <text x="355" y="308" text-anchor="middle" class="d-s">l'adresse de chaque caméra</text>
+  <path d="M180 91 H226" class="d-line" marker-end="url(#ah)"/>
+  <path d="M180 181 H226" class="d-line" marker-end="url(#ah)"/>
+  <rect x="520" y="20" width="230" height="330" rx="14" class="d-sand"/>
+  <text x="635" y="42" text-anchor="middle" class="d-s">dossier modules\ · un bac à sable chacun</text>
+  <rect x="545" y="60" width="180" height="54" rx="10" class="d-mod"/>
+  <text x="635" y="84" text-anchor="middle" class="d-t">demo.wasm</text>
+  <text x="635" y="102" text-anchor="middle" class="d-s">caméra simulée</text>
+  <rect x="545" y="128" width="180" height="54" rx="10" class="d-mod"/>
+  <text x="635" y="152" text-anchor="middle" class="d-t">bm-studio-6k-pro.wasm</text>
+  <text x="635" y="170" text-anchor="middle" class="d-s">REST + WebSocket</text>
+  <rect x="545" y="196" width="180" height="54" rx="10" class="d-mod"/>
+  <text x="635" y="220" text-anchor="middle" class="d-t">sony-fx6.wasm</text>
+  <text x="635" y="238" text-anchor="middle" class="d-s">prévu</text>
+  <rect x="545" y="264" width="180" height="54" rx="10" class="d-mod"/>
+  <text x="635" y="288" text-anchor="middle" class="d-t">panasonic-aw-ue150.wasm</text>
+  <text x="635" y="306" text-anchor="middle" class="d-s">prévu</text>
+  <path d="M456 164 C500 164 500 87 541 87" class="d-acc" marker-end="url(#aha)"/>
+  <path d="M456 164 H541" class="d-acc" marker-end="url(#aha)"/>
+  <path d="M456 170 C500 170 500 223 541 223" class="d-acc" marker-end="url(#aha)"/>
+  <path d="M456 176 C500 176 500 291 541 291" class="d-acc" marker-end="url(#aha)"/>
+  <rect x="790" y="128" width="96" height="54" rx="10" class="d-cam"/>
+  <text x="838" y="160" text-anchor="middle" class="d-t">caméra</text>
+  <rect x="790" y="196" width="96" height="54" rx="10" class="d-cam"/>
+  <text x="838" y="228" text-anchor="middle" class="d-t">caméra</text>
+  <path d="M355 340 V380 H838 V254" class="d-line" marker-end="url(#ah)"/>
+  <text x="600" y="400" text-anchor="middle" class="d-s">le module demande, l'application envoie à la caméra</text>
 </svg>
-<figcaption>Figure 1 : un module par modèle de caméra. Seuls les modules connaissent les protocoles.</figcaption>
+<figcaption>Figure 1 : un fichier par modèle de caméra ; seuls les modules connaissent les protocoles, seule l'application touche au réseau.</figcaption>
 </figure>
+  <div class="tip"><p><strong>À retenir.</strong> Le panneau, l'interface, les presets et les réglages ne savent pas quelle
+  marque ils pilotent. Toute la connaissance d'une caméra est dans son module, et un module ne peut rien faire d'autre que
+  parler à sa caméra.</p></div>
+</section>
 
-<div class="tip"><p><strong>À retenir.</strong> Le panneau, l'interface, les presets et les réglages
-ne savent pas quelle marque ils pilotent. Toute la connaissance d'une caméra est rangée dans son module.</p></div>
+<section id="mots" class="band">
+  <h2>Les mots à connaître</h2>
+  <dl class="glossary">
+    <dt>Module</dt>
+    <dd>Le code qui pilote <em>un</em> modèle de caméra, livré dans un fichier <code>&lt;identifiant&gt;.wasm</code>.</dd>
+    <dt>Identifiant de module</dt>
+    <dd>Des mots en minuscules séparés par des tirets, en commençant par la marque : <code>bm-studio-6k-pro</code>,
+    <code>sony-fx6</code>, <code>panasonic-aw-ue150</code>, <code>demo</code>. Le fichier porte ce nom. L'identifiant est
+    enregistré dans <code>rig.json</code>, donc il ne change plus une fois publié (voir les <a href="#faq">alias</a>).</dd>
+    <dt>WebAssembly (<code>.wasm</code>)</dt>
+    <dd>Un format de programme portable et enfermé : le même fichier marche sous Windows, macOS et Linux, et il ne peut
+    rien faire que l'application ne lui permette. On l'écrit en Go (ou en Rust, ou dans un autre langage).</dd>
+    <dt>SDK <code>rcpmod</code></dt>
+    <dd>La boîte à outils pour écrire un module en Go (dossier <code>sdk/rcpmod</code>) : les types du contrat, les
+    outils pour décrire les réglages, et le branchement avec l'application.</dd>
+    <dt>Hôte</dt>
+    <dd>L'application vue par le module. Elle lui <em>prête</em> des fonctions : envoyer une requête à sa caméra, ouvrir
+    une connexion WebSocket vers elle, programmer une minuterie, publier un événement, écrire au journal.</dd>
+    <dt>Réglage (<em>control</em>) et fiche (<code>ControlSpec</code>)</dt>
+    <dd>Un paramètre de la caméra (iris, gain, lift rouge…) et sa description : type (plage, liste, interrupteur, action),
+    limites, unité. L'interface dessine ses curseurs <strong>à partir des fiches</strong> : un nouveau réglage n'exige
+    aucune modification de l'interface.</dd>
+    <dt>Valeur et événement</dt>
+    <dd>Une valeur se lit ou s'écrit (<code>Number(4)</code>, <code>Choice("400")</code>, <code>Bool(true)</code>,
+    <code>Trigger()</code>). Un événement est ce que la caméra signale d'elle-même : « l'iris est passé à f/5.6 »,
+    « je suis connectée », « l'objectif a changé ».</dd>
+    <dt>Base partagée et hook</dt>
+    <dd>Le code commun à une famille de caméras qui parlent le même protocole (<code>bm</code> pour Blackmagic), et les
+    points d'entrée où un module remplace un comportement de la base par le sien.</dd>
+  </dl>
+</section>
 
-<!-- 2 -->
-<h2 id="mots">2. Les mots à connaître</h2>
-<dl class="glossary">
-  <dt>Module</dt>
-  <dd>Le code qui pilote <em>un</em> modèle de caméra. Il a un identifiant (<code>demo</code>,
-  <code>bm-studio-6k-pro</code>) et sait fabriquer une caméra à partir de ce que l'utilisateur a saisi.</dd>
-  <dt>Identifiant de module</dt>
-  <dd>Des mots en minuscules séparés par des tirets, en commençant par la marque :
-  <code>bm-studio-6k-pro</code>, <code>sony-fx6</code>, <code>panasonic-aw-ue150</code>. Il est enregistré dans
-  <code>rig.json</code>, donc il ne change plus une fois publié (voir les <a href="#faq">alias</a>).</dd>
-  <dt>Réglage (<em>control</em>)</dt>
-  <dd>Un paramètre de la caméra : iris, gain, balance des blancs, lift rouge… Chaque réglage a un nom
-  standard (<code>iris</code>, <code>gain</code>, <code>whiteBalance</code>) pour que le panneau traite toutes
-  les caméras pareil.</dd>
-  <dt>Fiche d'un réglage (<code>ControlSpec</code>)</dt>
-  <dd>La description d'un réglage : son type (plage, liste de choix, interrupteur, action), ses limites, son
-  unité. L'interface dessine ses curseurs et ses boutons <strong>à partir de ces fiches</strong> : un nouveau
-  réglage n'exige aucune modification de l'interface.</dd>
-  <dt>Valeur (<code>Value</code>)</dt>
-  <dd>Ce qu'on écrit dans un réglage ou ce qu'on y lit : un nombre (<code>Number(4)</code>), un choix
-  (<code>Choice("400")</code>), un état (<code>Bool(true)</code>) ou un déclenchement (<code>Trigger()</code>).</dd>
-  <dt>Événement (<code>Event</code>)</dt>
-  <dd>Ce que la caméra signale de sa propre initiative : « l'iris vient de passer à f/5.6 », « je suis
-  connectée », « l'objectif a changé ».</dd>
-  <dt>Registre (<code>Registry</code>)</dt>
-  <dd>L'annuaire des modules. L'application y inscrit tous les modules au démarrage, puis lui demande
-  « fabrique-moi une caméra <code>demo</code> ».</dd>
-  <dt>Base partagée</dt>
-  <dd>Le code commun à toute une famille de caméras qui parlent le même protocole, par exemple
-  <code>bm</code> pour Blackmagic. Ce n'est pas un module : les modules de la famille s'en servent.</dd>
-  <dt>Hook</dt>
-  <dd>Un point d'entrée prévu dans la base partagée, où un module peut remplacer un comportement par le
-  sien (« pour ce modèle, l'ISO s'écrit autrement »).</dd>
-</dl>
+<section id="dossier">
+  <h2>Le dossier modules</h2>
+  <p>Il existe à deux endroits, scanné les deux fois.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Où</th><th>Ce qu'il contient</th><th>Qui le scanne</th></tr></thead>
+    <tbody>
+      <tr><td><code>C:\Program Files\RCP For All Camera\modules\</code></td><td>Un fichier <code>.wasm</code> par module : <code>demo.wasm</code>, <code>bm-studio-6k-pro.wasm</code>…</td><td><code>rcp.exe</code>, à chaque démarrage. Seul un administrateur peut écrire dans Program Files.</td></tr>
+      <tr><td><code>modules/</code> dans les sources</td><td>Un dossier par module, avec son <code>main.go</code> : <code>modules/demo/</code>, <code>modules/bm-studio-6k-pro/</code>… Le code partagé est dans <code>modules/internal/</code>.</td><td>L'outil de construction <code>go run ./cmd/buildmodules</code>, qui compile chaque dossier en <code>.wasm</code>.</td></tr>
+    </tbody>
+  </table></div>
+<pre><code>modules/
+├── demo/main.go                 <span class="c">→ demo.wasm</span>
+├── bm-studio-6k-pro/main.go     <span class="c">→ bm-studio-6k-pro.wasm</span>
+├── bm-pocket-4k/main.go         <span class="c">→ bm-pocket-4k.wasm (prévu)</span>
+├── sony-fx6/main.go             <span class="c">→ sony-fx6.wasm (prévu)</span>
+├── …
+└── internal/
+    ├── bm/                      <span class="c">la base Blackmagic (REST + WebSocket), avec ses hooks</span>
+    ├── sony/                    <span class="c">les réglages Sony</span>
+    └── panasonic/               <span class="c">les réglages Panasonic</span></code></pre>
+  <div class="note"><p>Un module dont le fichier ne porte pas le nom de son identifiant, dont la fiche est mal formée ou qui
+  ne répond pas est écarté au démarrage : il est signalé dans le journal, et les autres modules se chargent normalement.</p></div>
+</section>
 
-<!-- 3 -->
-<h2 id="contrat">3. Le contrat d'un module</h2>
-<p>Un contrat, c'est la liste de ce que l'application attend d'un module. Si un module le respecte, il
-fonctionne avec tout le reste : le panneau, l'interface, les presets, la sauvegarde. Le contrat est écrit
-dans <code>internal/core</code>, le cœur de l'application, qui ne dépend d'aucune caméra.</p>
+<section id="contrat" class="band">
+  <h2>Le contrat d'un module</h2>
+  <p>Le contrat est la liste de ce que l'application attend d'un module. Si un module le respecte, il fonctionne avec tout
+  le reste : le panneau, l'interface, les presets, la sauvegarde. En Go, il s'écrit avec le SDK <code>rcpmod</code>.</p>
 
-<h3>Ce qu'un module fournit : deux choses</h3>
+  <h3>Ce que le module fournit</h3>
 <pre><code><span class="c">// Module est le code qui pilote un modèle de caméra.</span>
 <span class="k">type</span> Module <span class="k">interface</span> {
-    Info() ModelInfo                       <span class="c">// sa fiche : identifiant, marque, nom, port…</span>
-    New(cfg CameraConfig) (Camera, error)  <span class="c">// fabrique une caméra pour cette saisie</span>
+    Info() Info                                     <span class="c">// sa fiche : identifiant, marque, nom, port…</span>
+    New(cfg Config, host Host) (Camera, error)      <span class="c">// une caméra pour cette saisie</span>
+}
+
+<span class="c">// Camera est une caméra configurée.</span>
+<span class="k">type</span> Camera <span class="k">interface</span> {
+    Controls() []ControlSpec                 <span class="c">// ses réglages, sans connexion</span>
+    Connect() error                          <span class="c">// commence à se connecter</span>
+    Close()                                  <span class="c">// coupe tout</span>
+    Get(id string) (Value, error)            <span class="c">// lit un réglage</span>
+    Set(id string, v Value) error            <span class="c">// écrit un réglage</span>
 }</code></pre>
 
-<div class="grid">
-  <div class="card">
-    <h3><code>Info()</code> : la fiche</h3>
-    <p>Identifiant, marque, nom affiché, liaisons (Ethernet, Wi-Fi), port par défaut, besoin d'un mot de
-    passe, niveau de prise en charge (<span class="pill">prévu</span> <span class="pill info">expérimental</span>
-    <span class="pill ok">pris en charge</span>), et quelques options (objectif interchangeable, pas d'adresse
-    réseau…).</p>
-  </div>
-  <div class="card">
-    <h3><code>New(cfg)</code> : la fabrique</h3>
-    <p>Reçoit la saisie de l'utilisateur (<code>CameraConfig</code> : nom, adresse, port, identifiant,
-    mot de passe), <strong>déjà vérifiée</strong> par le registre. Elle construit la caméra
-    <strong>sans se connecter</strong> : se connecter, c'est le travail de <code>Connect</code>.</p>
-  </div>
-</div>
+  <h3>Ce que l'application prête au module</h3>
+<pre><code><span class="c">// Host est l'application vue par le module.</span>
+<span class="k">type</span> Host <span class="k">interface</span> {
+    HTTP(method, path <span class="k">string</span>, body []<span class="k">byte</span>) (status <span class="k">int</span>, resp []<span class="k">byte</span>, err error)  <span class="c">// vers SA caméra</span>
+    OpenWebSocket(path <span class="k">string</span>, onMessage <span class="k">func</span>([]<span class="k">byte</span>), onClose <span class="k">func</span>(error)) (WebSocket, error)
+    After(d time.Duration, fn <span class="k">func</span>()) (cancel <span class="k">func</span>())   <span class="c">// une minuterie</span>
+    Emit(e Event)                                       <span class="c">// un événement vers l'application</span>
+    Log(level Level, msg <span class="k">string</span>)                        <span class="c">// le journal de l'application</span>
+}</code></pre>
+  <p>Le module ne donne jamais d'adresse : <code>HTTP("PUT", "/control/api/v1/lens/iris", …)</code> part toujours vers
+  l'adresse et le port que l'utilisateur a saisis pour cette caméra. C'est ce qui rend le bac à sable possible.</p>
 
-<h3>Ce que la caméra fabriquée sait faire : sept gestes</h3>
-<div class="table-wrap"><table>
-  <thead><tr><th>Méthode</th><th>Ce qu'elle fait</th><th>Qui l'appelle, et quand</th></tr></thead>
-  <tbody>
-    <tr><td><code>Controls()</code></td><td>Donne les fiches de tous les réglages. Ne demande pas de connexion.</td><td>L'interface, pour dessiner la page de la caméra, même hors ligne.</td></tr>
-    <tr><td><code>Connect(ctx)</code></td><td>Lance la connexion et attend la première tentative. Ensuite, la caméra se reconnecte toute seule jusqu'à <code>Close</code>.</td><td>L'application, à l'ajout de la caméra et au démarrage.</td></tr>
-    <tr><td><code>Close()</code></td><td>Coupe la connexion et libère tout.</td><td>L'application, quand on retire la caméra ou qu'on quitte.</td></tr>
-    <tr><td><code>Status()</code></td><td>Dit où en est la connexion : déconnectée, en cours, connectée, en erreur.</td><td>L'interface (pastille de couleur) et le panneau.</td></tr>
-    <tr><td><code>Get(ctx, id)</code></td><td>Lit la valeur actuelle d'un réglage.</td><td>L'interface et le panneau, à l'affichage.</td></tr>
-    <tr><td><code>Set(ctx, id, v)</code></td><td>Écrit une valeur. Vérifie d'abord qu'elle est permise, <strong>avant</strong> tout envoi réseau.</td><td>Un geste sur le panneau ou l'interface, le rappel d'un preset.</td></tr>
-    <tr><td><code>Subscribe(fn)</code></td><td>Inscrit une fonction appelée à chaque événement. Renvoie de quoi se désinscrire.</td><td>L'application, qui relaie les événements à l'interface et au panneau.</td></tr>
-  </tbody>
-</table></div>
+  <h3>Les règles du contrat</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Règle</th><th>Pourquoi</th></tr></thead>
+    <tbody>
+      <tr><td><code>Controls()</code> ne demande aucune connexion et ne change pas.</td><td>L'interface dessine la page d'une caméra même éteinte.</td></tr>
+      <tr><td><code>Set</code> vérifie la valeur avant tout envoi.</td><td>Une valeur invalide n'atteint jamais la caméra. L'application la vérifie aussi avant d'appeler le module : deux lignes de défense.</td></tr>
+      <tr><td><code>Connect</code> lance la connexion et la caméra annonce son état par un événement <code>Status</code>.</td><td>L'application attend ce premier état pour savoir si la caméra répond. Ensuite, le module se reconnecte tout seul (avec une minuterie) jusqu'à <code>Close</code>.</td></tr>
+      <tr><td>Le module publie chaque changement par <code>Emit</code>.</td><td>L'interface et le panneau affichent ce que la caméra a vraiment fait, pas ce qu'on lui a demandé.</td></tr>
+      <tr><td>Les erreurs sont celles du SDK : <code>ErrUnknownControl</code>, <code>ErrInvalidValue</code>, <code>ErrReadOnly</code>, <code>ErrNotConnected</code>, <code>ErrNotImplemented</code>.</td><td>L'interface sait les afficher sans connaître la marque. Toute autre erreur devient « erreur interne ».</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><p><strong>Un module ne s'exécute jamais en même temps que lui-même.</strong> L'application lui passe les
+  appels un par un : un geste sur le panneau, un message de la caméra, une minuterie. Pas de verrou ni de goroutine à
+  gérer dans un module : on écrit du code simple, qui réagit aux événements.</p></div>
+</section>
 
-<div class="note">
-  <p><strong>Pourquoi vérifier avant d'envoyer ?</strong> Une valeur hors limites (gain à 900 dB, un choix
-  inconnu) est refusée tout de suite avec une erreur claire, sans jamais atteindre la caméra. Les erreurs
-  possibles sont toujours les mêmes, quel que soit le module : réglage inconnu, valeur invalide, réglage en
-  lecture seule, caméra non connectée, pas encore écrit. L'interface sait les afficher sans connaître la
-  marque.</p>
-</div>
-
-<h3>Une capacité en option</h3>
-<p>Une caméra qui connaît son objectif (ouverture mini et maxi, focale, distance de mise au point) le dit en
-ajoutant la méthode <code>Lens()</code> (interface <code>LensReporter</code>). L'interface affiche alors des
-valeurs parlantes (f/2.8, 35 mm, 1,2 m) au lieu de pourcentages. Une caméra qui ne la fournit pas
-fonctionne quand même.</p>
-
-<!-- 4 -->
-<h2 id="vie">4. La vie d'une caméra</h2>
-<p>Voici ce qui se passe, dans l'ordre, du démarrage de l'application au réglage de l'iris.</p>
-
+<section id="vie">
+  <h2>La vie d'une caméra</h2>
 <figure>
-<svg viewBox="0 0 860 560" role="img" aria-labelledby="f2t">
-  <title id="f2t">Séquence : enregistrement des modules, ajout d'une caméra demo, connexion, réglage, événement</title>
+<svg viewBox="0 0 900 580" role="img" aria-labelledby="f2t">
+  <title id="f2t">Séquence : scan du dossier, ajout d'une caméra demo, connexion, réglage, événement</title>
   <defs>
     <marker id="sq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="d-head"/></marker>
     <marker id="sqa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="d-head-acc"/></marker>
   </defs>
-  <!-- heads -->
-  <rect x="20" y="16" width="140" height="44" rx="8" class="d-box"/><text x="90" y="43" text-anchor="middle" class="d-t">Interface</text>
-  <rect x="200" y="16" width="140" height="44" rx="8" class="d-core"/><text x="270" y="43" text-anchor="middle" class="d-t">Application</text>
-  <rect x="380" y="16" width="140" height="44" rx="8" class="d-core"/><text x="450" y="43" text-anchor="middle" class="d-t">Registre</text>
-  <rect x="560" y="16" width="140" height="44" rx="8" class="d-mod"/><text x="630" y="43" text-anchor="middle" class="d-t">Module demo</text>
-  <rect x="720" y="16" width="120" height="44" rx="8" class="d-mod"/><text x="780" y="43" text-anchor="middle" class="d-t">Caméra</text>
-  <line x1="90" y1="60" x2="90" y2="545" class="d-life"/>
-  <line x1="270" y1="60" x2="270" y2="545" class="d-life"/>
-  <line x1="450" y1="60" x2="450" y2="545" class="d-life"/>
-  <line x1="630" y1="60" x2="630" y2="545" class="d-life"/>
-  <line x1="780" y1="60" x2="780" y2="545" class="d-life"/>
-  <!-- 1 register -->
-  <text x="14" y="92" class="d-s">①</text>
-  <path d="M270 96 H446" class="d-line" marker-end="url(#sq)"/><text x="358" y="89" text-anchor="middle" class="d-m">Register(modules…)</text>
-  <path d="M450 116 H626" class="d-line" marker-end="url(#sq)"/><text x="538" y="109" text-anchor="middle" class="d-m">Info()</text>
-  <!-- 2 assign -->
-  <text x="14" y="160" class="d-s">②</text>
-  <path d="M90 164 H266" class="d-line" marker-end="url(#sq)"/><text x="178" y="157" text-anchor="middle" class="d-m">AssignSlot(1, demo)</text>
-  <path d="M270 188 H446" class="d-line" marker-end="url(#sq)"/><text x="358" y="181" text-anchor="middle" class="d-m">New(cfg)</text>
-  <text x="450" y="206" text-anchor="middle" class="d-s">vérifie la saisie</text>
-  <path d="M450 222 H626" class="d-line" marker-end="url(#sq)"/><text x="538" y="215" text-anchor="middle" class="d-m">New(cfg)</text>
-  <path d="M630 246 H776" class="d-line" marker-end="url(#sq)"/><text x="703" y="239" text-anchor="middle" class="d-s">construit</text>
-  <!-- 3 connect -->
-  <text x="14" y="290" class="d-s">③</text>
-  <path d="M270 294 H776" class="d-line" marker-end="url(#sq)"/><text x="523" y="287" text-anchor="middle" class="d-m">Subscribe(…) puis Connect(ctx)</text>
-  <path d="M780 322 H274" class="d-acc" marker-end="url(#sqa)"/><text x="523" y="315" text-anchor="middle" class="d-m">Event{Status: connectée}</text>
-  <path d="M270 346 H94" class="d-acc" marker-end="url(#sqa)"/><text x="182" y="339" text-anchor="middle" class="d-s">pastille verte</text>
-  <!-- 4 set -->
-  <text x="14" y="390" class="d-s">④</text>
-  <path d="M90 394 H266" class="d-line" marker-end="url(#sq)"/><text x="178" y="387" text-anchor="middle" class="d-m">SetControl(iris, 1.4)</text>
-  <path d="M270 418 H776" class="d-line" marker-end="url(#sq)"/><text x="523" y="411" text-anchor="middle" class="d-m">Set(ctx, iris, Number(1.4))</text>
-  <text x="780" y="442" text-anchor="middle" class="d-s">objectif f/2.8 mini</text>
-  <!-- 5 event -->
-  <text x="14" y="476" class="d-s">⑤</text>
-  <path d="M780 480 H274" class="d-acc" marker-end="url(#sqa)"/><text x="523" y="473" text-anchor="middle" class="d-m">Event{iris = 2.8}</text>
-  <path d="M270 506 H94" class="d-acc" marker-end="url(#sqa)"/><text x="182" y="499" text-anchor="middle" class="d-s">affiche f/2.8</text>
-  <text x="430" y="540" text-anchor="middle" class="d-s">Les flèches orange sont les événements : ils remontent de la caméra vers l'interface.</text>
+  <rect x="30" y="16" width="140" height="44" rx="8" class="d-box"/><text x="100" y="43" text-anchor="middle" class="d-t">Interface</text>
+  <rect x="220" y="16" width="160" height="44" rx="8" class="d-core"/><text x="300" y="43" text-anchor="middle" class="d-t">Application</text>
+  <rect x="430" y="16" width="160" height="44" rx="8" class="d-core"/><text x="510" y="43" text-anchor="middle" class="d-t">Chargeur</text>
+  <rect x="640" y="16" width="220" height="44" rx="8" class="d-mod"/><text x="750" y="43" text-anchor="middle" class="d-t">demo.wasm (bac à sable)</text>
+  <line x1="100" y1="60" x2="100" y2="565" class="d-life"/>
+  <line x1="300" y1="60" x2="300" y2="565" class="d-life"/>
+  <line x1="510" y1="60" x2="510" y2="565" class="d-life"/>
+  <line x1="750" y1="60" x2="750" y2="565" class="d-life"/>
+  <text x="14" y="96" class="d-s">①</text>
+  <path d="M300 100 H506" class="d-line" marker-end="url(#sq)"/><text x="403" y="93" text-anchor="middle" class="d-m">scanne modules\</text>
+  <path d="M510 124 H746" class="d-line" marker-end="url(#sq)"/><text x="628" y="117" text-anchor="middle" class="d-m">charge, Info()</text>
+  <path d="M750 146 H514" class="d-line" marker-end="url(#sq)"/><text x="628" y="140" text-anchor="middle" class="d-s">fiche vérifiée, module inscrit</text>
+  <text x="14" y="190" class="d-s">②</text>
+  <path d="M100 194 H296" class="d-line" marker-end="url(#sq)"/><text x="198" y="187" text-anchor="middle" class="d-m">ajoute « demo » au bouton 1</text>
+  <path d="M300 220 H746" class="d-line" marker-end="url(#sq)"/><text x="523" y="213" text-anchor="middle" class="d-m">nouvelle instance, New(cfg, host)</text>
+  <text x="14" y="270" class="d-s">③</text>
+  <path d="M300 274 H746" class="d-line" marker-end="url(#sq)"/><text x="523" y="267" text-anchor="middle" class="d-m">Connect()</text>
+  <path d="M750 302 H304" class="d-acc" marker-end="url(#sqa)"/><text x="523" y="295" text-anchor="middle" class="d-m">Emit(Status: connectée)</text>
+  <path d="M300 328 H104" class="d-acc" marker-end="url(#sqa)"/><text x="200" y="321" text-anchor="middle" class="d-s">pastille verte</text>
+  <text x="14" y="380" class="d-s">④</text>
+  <path d="M100 384 H296" class="d-line" marker-end="url(#sq)"/><text x="198" y="377" text-anchor="middle" class="d-m">iris = f/1.4</text>
+  <text x="300" y="404" text-anchor="middle" class="d-s">vérifie la valeur</text>
+  <path d="M300 424 H746" class="d-line" marker-end="url(#sq)"/><text x="523" y="417" text-anchor="middle" class="d-m">Set("iris", Number(1.4))</text>
+  <text x="750" y="446" text-anchor="middle" class="d-s">objectif f/2.8 au plus ouvert</text>
+  <text x="14" y="486" class="d-s">⑤</text>
+  <path d="M750 490 H304" class="d-acc" marker-end="url(#sqa)"/><text x="523" y="483" text-anchor="middle" class="d-m">Emit(iris = 2.8)</text>
+  <path d="M300 516 H104" class="d-acc" marker-end="url(#sqa)"/><text x="200" y="509" text-anchor="middle" class="d-s">affiche f/2.8</text>
+  <text x="450" y="556" text-anchor="middle" class="d-s">Les flèches orange sont les événements : ils remontent du module vers l'interface.</text>
 </svg>
 <figcaption>Figure 2 : du démarrage au réglage de l'iris.</figcaption>
 </figure>
+  <ol class="steps">
+    <li><strong>Au démarrage</strong>, l'application scanne le dossier <code>modules</code>, charge chaque fichier, lit sa
+    fiche et la vérifie. Un module mal formé est écarté et signalé dans le journal.</li>
+    <li><strong>L'utilisateur ajoute une caméra</strong> sur le bouton 1 en choisissant « Caméra de démonstration ».
+    L'application vérifie la saisie, puis crée une <strong>instance</strong> du module rien que pour cette caméra :
+    deux caméras du même modèle ne partagent rien.</li>
+    <li><strong>L'application se connecte.</strong> Le module annonce « connectée » : la pastille passe au vert.</li>
+    <li><strong>L'utilisateur demande f/1.4.</strong> L'application vérifie que la valeur est dans les limites déclarées,
+    puis la transmet au module. L'objectif simulé ne descend pas sous f/2.8.</li>
+    <li><strong>Le module publie la valeur réelle</strong> (f/2.8). L'interface et le panneau affichent ce que la caméra a
+    vraiment fait.</li>
+  </ol>
+</section>
 
-<ol class="steps">
-  <li><strong>Au démarrage</strong>, l'application inscrit tous les modules dans le registre. Le registre lit
-  leur fiche et refuse un identifiant mal formé ou déjà pris.</li>
-  <li><strong>L'utilisateur ajoute une caméra</strong> sur le bouton 1 en choisissant « Caméra de
-  démonstration ». Le registre vérifie la saisie (nom, adresse, port, identifiants) puis demande au module
-  <code>demo</code> de fabriquer la caméra.</li>
-  <li><strong>L'application s'abonne aux événements, puis se connecte.</strong> La caméra annonce
-  « connectée » : la pastille passe au vert.</li>
-  <li><strong>L'utilisateur demande f/1.4.</strong> L'objectif simulé ne descend pas sous f/2.8 : la caméra
-  s'arrête à f/2.8, comme le ferait une vraie.</li>
-  <li><strong>La caméra signale la valeur réelle</strong> (f/2.8). L'interface et le panneau affichent ce que
-  la caméra a vraiment fait, pas ce qu'on lui a demandé.</li>
-</ol>
+<section id="demo" class="band">
+  <h2>Exemple : le module demo</h2>
+  <p>Le module <code>demo</code> (dossier <code>modules/demo</code>) simule une caméra de studio avec un zoom 24-70 mm
+  f/2.8. Il n'a pas d'adresse réseau : il sert à essayer l'interface et le panneau sans caméra.</p>
 
-<!-- 5 -->
-<h2 id="demo">5. Exemple : le module demo</h2>
-<p>Le module <code>demo</code> (dossier <code>internal/cameras/demo</code>) simule une caméra de studio avec
-un zoom 24-70 mm f/2.8. Il n'a pas d'adresse réseau : il sert à essayer l'interface et le panneau sans
-caméra. C'est le plus petit module complet, donc le meilleur modèle à recopier.</p>
+  <h3>Étape 1 : le programme et la fiche</h3>
+<pre><code><span class="k">package</span> main
 
-<h3>Étape 1 : la fiche du module</h3>
-<pre><code><span class="k">package</span> demo
+<span class="k">import</span> <span class="s">"github.com/valentindoche/rcp-for-all-camera/sdk/rcpmod"</span>
 
-<span class="c">// ID est l'identifiant du module.</span>
-<span class="k">const</span> ID core.ModelID = <span class="s">"demo"</span>
+<span class="c">// main reste vide : le SDK branche le module sur l'application.</span>
+<span class="k">func</span> main() {}
 
-<span class="c">// Module est le module demo. Il n'a besoin d'aucune dépendance.</span>
-<span class="k">type</span> Module <span class="k">struct</span>{}
+<span class="k">func</span> init() { rcpmod.Register(module{}) }
 
-<span class="k">func</span> (Module) Info() core.ModelInfo {
-    <span class="k">return</span> core.ModelInfo{
-        ID: ID, Brand: <span class="s">"Démo"</span>, Name: <span class="s">"Caméra de démonstration"</span>,
-        Transports: []core.Transport{core.TransportEthernet},
-        Auth:       core.AuthNone,          <span class="c">// pas de mot de passe</span>
-        Support:    core.SupportSupported,
-        NoAddress:  <span class="k">true</span>,                <span class="c">// pas d'adresse à saisir</span>
-        InterchangeableLens: <span class="k">true</span>,       <span class="c">// la case « zoom motorisé » est proposée</span>
-        Aliases:    []core.ModelID{<span class="s">"demo.camera"</span>}, <span class="c">// ancien identifiant (0.2.x)</span>
+<span class="k">type</span> module <span class="k">struct</span>{}
+
+<span class="k">func</span> (module) Info() rcpmod.Info {
+    <span class="k">return</span> rcpmod.Info{
+        ID: <span class="s">"demo"</span>, Brand: <span class="s">"Démo"</span>, Name: <span class="s">"Caméra de démonstration"</span>,
+        Transports: []<span class="k">string</span>{rcpmod.TransportEthernet},
+        Auth:       rcpmod.AuthNone,        <span class="c">// pas de mot de passe</span>
+        Support:    rcpmod.SupportSupported,
+        NoAddress:  <span class="k">true</span>,                  <span class="c">// pas d'adresse à saisir</span>
+        InterchangeableLens: <span class="k">true</span>,         <span class="c">// la case « zoom motorisé » est proposée</span>
+        Aliases:    []<span class="k">string</span>{<span class="s">"demo.camera"</span>}, <span class="c">// ancien identifiant (0.2.x)</span>
     }
 }</code></pre>
 
-<h3>Étape 2 : la liste des réglages</h3>
-<p>Chaque réglage est décrit par une fiche, construite avec les petits outils de <code>speckit</code>. Le nom
-standard (<code>core.Iris</code>, <code>core.Gain</code>…) donne aussi le libellé et la rubrique à l'écran.</p>
-<pre><code><span class="k">func</span> specs() []core.ControlSpec {
-    <span class="k">return</span> []core.ControlSpec{
-        speckit.Range(core.Iris, 1, 22, 0.1, <span class="s">"f"</span>),        <span class="c">// une plage, de f/1 à f/22</span>
-        speckit.Action(core.AutoIris),                       <span class="c">// un bouton « auto »</span>
-        speckit.Range(core.Gain, -12, 36, 2, <span class="s">"dB"</span>),        <span class="c">// pas de 2 dB</span>
-        speckit.Enum(core.ISO, speckit.Opts(<span class="s">"400"</span>, <span class="s">"800"</span>, <span class="s">"1600"</span>)), <span class="c">// une liste</span>
-        speckit.Toggle(core.Record),                         <span class="c">// un interrupteur</span>
+  <h3>Étape 2 : les réglages</h3>
+  <p>Chaque réglage est une fiche. Le nom standard (<code>rcpmod.Iris</code>, <code>rcpmod.Gain</code>…) suffit : l'application
+  y ajoute le libellé et la rubrique affichés à l'écran.</p>
+<pre><code><span class="k">func</span> specs() []rcpmod.ControlSpec {
+    <span class="k">return</span> []rcpmod.ControlSpec{
+        rcpmod.Range(rcpmod.Iris, 1, 22, 0.1, <span class="s">"f"</span>),          <span class="c">// une plage, de f/1 à f/22</span>
+        rcpmod.Action(rcpmod.AutoIris),                         <span class="c">// un bouton « auto »</span>
+        rcpmod.Range(rcpmod.Gain, -12, 36, 2, <span class="s">"dB"</span>),          <span class="c">// pas de 2 dB</span>
+        rcpmod.Enum(rcpmod.ISO, rcpmod.Opts(<span class="s">"400"</span>, <span class="s">"800"</span>, <span class="s">"1600"</span>)),   <span class="c">// une liste</span>
+        rcpmod.Toggle(rcpmod.Record),                           <span class="c">// un interrupteur</span>
         <span class="c">// … et une quarantaine d'autres</span>
     }
 }</code></pre>
-<div class="note"><p>Un réglage qu'aucun nom standard ne décrit reçoit un nom préfixé par sa marque, par
-exemple <code>blackmagic.offsetR</code> ou <code>demo.offsetR</code>. L'interface l'affiche dans une ligne
-générique avec − et +.</p></div>
 
-<h3>Étape 3 : la fabrique</h3>
-<pre><code><span class="c">// New fabrique une caméra demo, sans aucune entrée-sortie. Comme une Studio
-// Camera, elle n'a de zoom que si l'objectif est motorisé.</span>
-<span class="k">func</span> (Module) New(cfg core.CameraConfig) (core.Camera, error) {
-    s := camerakit.NewSpecs(specs())
-    <span class="k">if</span> !cfg.PowerZoom {
-        s = s.Without(core.Zoom)
-    }
-    <span class="k">return</span> newCamera(s), <span class="k">nil</span>
-}</code></pre>
-
-<h3>Étape 4 : la caméra</h3>
-<p>La caméra garde ses valeurs en mémoire. Deux outils de <code>camerakit</code> évitent de réécrire
-le même code dans chaque module :</p>
-<ul>
-  <li><code>camerakit.Specs</code> : retrouve la fiche d'un réglage et vérifie une valeur ;</li>
-  <li><code>camerakit.Subscribers</code> : tient la liste des abonnés et leur envoie les événements.</li>
-</ul>
-<pre><code><span class="k">type</span> Camera <span class="k">struct</span> {
-    specs camerakit.Specs
-    subs  camerakit.Subscribers
-
-    mu    sync.Mutex                     <span class="c">// protège ce qui suit</span>
-    state core.ConnState
-    vals  <span class="k">map</span>[core.ControlID]core.Value
+  <h3>Étape 3 : la caméra</h3>
+<pre><code><span class="k">type</span> camera <span class="k">struct</span> {
+    host  rcpmod.Host
+    specs rcpmod.Specs                        <span class="c">// retrouve et vérifie les fiches</span>
+    on    <span class="k">bool</span>
+    vals  <span class="k">map</span>[<span class="k">string</span>]rcpmod.Value
 }
 
-<span class="c">// Set vérifie la valeur, l'applique avec ses conséquences, puis prévient les abonnés.</span>
-<span class="k">func</span> (c *Camera) Set(_ context.Context, id core.ControlID, v core.Value) error {
+<span class="k">func</span> (module) New(cfg rcpmod.Config, host rcpmod.Host) (rcpmod.Camera, error) {
+    s := rcpmod.NewSpecs(specs())
+    <span class="k">if</span> !cfg.PowerZoom {
+        s = s.Without(rcpmod.Zoom)             <span class="c">// pas de zoom sans objectif motorisé</span>
+    }
+    <span class="k">return</span> &amp;camera{host: host, specs: s, vals: initial()}, <span class="k">nil</span>
+}
+
+<span class="c">// Connect réussit tout de suite : il n'y a rien à joindre.</span>
+<span class="k">func</span> (c *camera) Connect() error {
+    c.on = <span class="k">true</span>
+    c.host.Emit(rcpmod.StatusEvent(rcpmod.StateConnected, <span class="s">""</span>))
+    <span class="k">return</span> <span class="k">nil</span>
+}
+
+<span class="c">// Set vérifie la valeur, l'applique comme une vraie caméra, publie les changements.</span>
+<span class="k">func</span> (c *camera) Set(id <span class="k">string</span>, v rcpmod.Value) error {
     <span class="k">if</span> _, err := c.specs.Validate(id, v); err != <span class="k">nil</span> {
-        <span class="k">return</span> err                       <span class="c">// refusé avant tout le reste</span>
+        <span class="k">return</span> err
     }
-    c.mu.Lock()
-    <span class="k">if</span> c.state != core.StateConnected {
-        c.mu.Unlock()
-        <span class="k">return</span> fmt.Errorf(<span class="s">"set %s: %w"</span>, id, core.ErrNotConnected)
+    <span class="k">if</span> !c.on {
+        <span class="k">return</span> rcpmod.ErrNotConnected
     }
-    events := c.apply(id, v)               <span class="c">// l'iris reste dans l'objectif, etc.</span>
-    c.mu.Unlock()
-    c.subs.Publish(events...)              <span class="c">// hors du verrou : un abonné lent ne bloque rien</span>
+    <span class="k">for</span> _, e := <span class="k">range</span> c.apply(id, v) {     <span class="c">// l'iris reste dans l'objectif, etc.</span>
+        c.host.Emit(e)
+    }
     <span class="k">return</span> <span class="k">nil</span>
 }</code></pre>
+  <div class="tip"><p><strong>Comme une vraie caméra.</strong> Le module demo applique les conséquences d'un réglage :
+  l'iris reste entre f/2.8 et f/22, la vitesse d'obturation et l'angle se suivent, le noir (<em>master black</em>) est le
+  lift de luminance, la balance automatique s'arrête sur 5600 K. Ce qui marche sur la démo marche sur une vraie caméra.</p></div>
+</section>
 
-<div class="tip"><p><strong>Comportement « comme une vraie caméra ».</strong> Le module demo applique les
-conséquences d'un réglage : l'iris reste entre f/2.8 et f/22, la vitesse d'obturation et l'angle se suivent,
-le noir (<em>master black</em>) est le lift de luminance, la balance automatique s'arrête sur 5600 K. Ainsi,
-ce qui marche sur la démo marche sur une vraie caméra.</p></div>
+<section id="construire">
+  <h2>Construire et installer</h2>
+  <ol class="steps">
+    <li><strong>Construire tous les modules</strong> : l'outil scanne <code>modules/</code> et compile chaque dossier.
+<pre><code>go run ./cmd/buildmodules -o dist/modules</code></pre>
+    Pour un seul module : <code>go run ./cmd/buildmodules -o dist/modules demo</code>. Sous le capot, c'est
+    <code>GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared</code>.</li>
+    <li><strong>Installer</strong> : copier <code>demo.wasm</code> dans le dossier <code>modules</code> à côté de
+    <code>rcp.exe</code> (l'installeur le fait pour les modules fournis).</li>
+    <li><strong>Relancer l'application</strong> : le modèle apparaît dans la liste des caméras.</li>
+  </ol>
+  <p>Pour développer, <code>rcp.exe -modules dist\modules</code> charge un autre dossier.</p>
+</section>
 
-<!-- 6 -->
-<h2 id="brancher">6. Brancher le module</h2>
-<p>Un module écrit ne sert à rien tant que l'application ne le connaît pas. Tous les modules sont listés à
-un seul endroit, <code>internal/cameras/modules.go</code>, dans l'ordre où ils apparaissent dans la liste
-des modèles :</p>
-<pre><code><span class="c">// All renvoie tous les modules caméra de l'application, dans l'ordre d'affichage.</span>
-<span class="k">func</span> All(log *slog.Logger) []core.Module {
-    mods := planned.Modules()                              <span class="c">// Blackmagic pas encore écrits</span>
-    mods = append(mods, studio6kpro.Module{Logger: log})   <span class="c">// bm-studio-6k-pro</span>
-    mods = append(mods, sony.Modules()...)
-    mods = append(mods, panasonic.Modules()...)
-    <span class="k">return</span> append(mods, demo.Module{})                  <span class="c">// ← le module demo</span>
+<section id="verifier" class="band">
+  <h2>Vérifier un module</h2>
+  <p>Un module se teste comme n'importe quel code Go, sans WebAssembly et sans caméra, grâce à un <strong>hôte de test</strong>
+  (<code>sdk/rcpmod/rcpmodtest</code>) qui joue le rôle de l'application : il enregistre les requêtes du module, lui
+  répond, déclenche les minuteries à la demande et collecte les événements.</p>
+<pre><code><span class="k">func</span> TestContract(t *testing.T) { rcpmodtest.Module(t, module{}) }
+
+<span class="k">func</span> TestIrisStaysInsideTheLens(t *testing.T) {
+    host := rcpmodtest.NewHost()
+    cam := host.Connected(t, module{}, rcpmod.Config{Model: <span class="s">"demo"</span>})
+    _ = cam.Set(rcpmod.Iris, rcpmod.Number(1.4))
+    <span class="k">if</span> got := host.Last(rcpmod.Iris); got.Number != 2.8 {
+        t.Errorf(<span class="s">"iris = f/%g, want f/2.8"</span>, got.Number)
+    }
 }</code></pre>
-<p>Au démarrage, <code>cmd/rcp</code> appelle <code>cameras.Register(registre, log)</code>, qui inscrit cette
-liste. <strong>Il n'y a pas d'inscription cachée</strong> (pas de <code>init()</code> magique) : la liste
-ci-dessus est la seule vérité, on la lit d'un coup d'œil.</p>
+  <p>La suite de contrat <code>rcpmodtest.Module</code> est la même pour tous les modules. Elle vérifie que la fiche est bien
+  formée, que chaque réglage a une fiche valide et n'est déclaré qu'une fois, qu'une valeur du mauvais type est refusée
+  avant tout envoi, et qu'une caméra connectée répond à chaque lecture avec une valeur du bon type.</p>
+  <p>Enfin, l'application teste le vrai fichier <code>.wasm</code> : elle construit le module demo, le charge comme en
+  production et lui fait passer le contrat de l'application (<code>cameratest</code>). Les modules qui pilotent une vraie
+  caméra ont aussi des tests « live », sautés par défaut, à ne lancer sur une caméra en exploitation qu'avec l'accord de
+  son propriétaire.</p>
+</section>
 
+<section id="familles">
+  <h2>Familles, base partagée et hooks</h2>
+  <p>Plusieurs caméras d'une même marque parlent le même protocole : les Blackmagic Studio et Pocket récentes se pilotent
+  toutes par la même API REST. Ce protocole est écrit une seule fois, dans la <strong>base partagée</strong>
+  <code>modules/internal/bm</code>. Chaque modèle a son petit module qui s'en sert. Chaque fichier <code>.wasm</code>
+  embarque sa copie de la base : les modules restent indépendants.</p>
 <figure>
-<svg viewBox="0 0 860 250" role="img" aria-labelledby="f3t">
-  <title id="f3t">Dossiers des modules et sens des dépendances</title>
-  <defs><marker id="dp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="d-head"/></marker></defs>
-  <rect x="20" y="20" width="170" height="56" rx="10" class="d-box"/>
-  <text x="105" y="44" text-anchor="middle" class="d-t">cmd/rcp</text>
-  <text x="105" y="62" text-anchor="middle" class="d-s">assemble tout</text>
-  <rect x="240" y="20" width="190" height="56" rx="10" class="d-box"/>
-  <text x="335" y="44" text-anchor="middle" class="d-t">cameras/modules.go</text>
-  <text x="335" y="62" text-anchor="middle" class="d-s">la liste des modules</text>
-  <rect x="480" y="10" width="160" height="40" rx="8" class="d-mod"/><text x="560" y="35" text-anchor="middle" class="d-t">demo</text>
-  <rect x="480" y="60" width="160" height="40" rx="8" class="d-mod"/><text x="560" y="85" text-anchor="middle" class="d-t">bm/studio6kpro</text>
-  <rect x="480" y="110" width="160" height="40" rx="8" class="d-mod"/><text x="560" y="135" text-anchor="middle" class="d-t">sony, panasonic…</text>
-  <rect x="690" y="60" width="150" height="40" rx="8" class="d-base"/><text x="765" y="85" text-anchor="middle" class="d-t">bm (base)</text>
-  <rect x="300" y="186" width="340" height="50" rx="10" class="d-core"/>
-  <text x="470" y="208" text-anchor="middle" class="d-t">core + camerakit + speckit</text>
-  <text x="470" y="226" text-anchor="middle" class="d-s">le contrat et les outils communs</text>
-  <path d="M190 48 H236" class="d-line" marker-end="url(#dp)"/>
-  <path d="M430 40 H476" class="d-line" marker-end="url(#dp)"/>
-  <path d="M430 56 C455 56 455 80 476 80" class="d-line" marker-end="url(#dp)"/>
-  <path d="M430 66 C450 66 450 130 476 130" class="d-line" marker-end="url(#dp)"/>
-  <path d="M640 80 H686" class="d-line" marker-end="url(#dp)"/>
-  <path d="M560 150 V182" class="d-line" marker-end="url(#dp)"/>
-  <path d="M765 100 C765 160 700 211 644 211" class="d-line" marker-end="url(#dp)"/>
-  <path d="M476 30 H462 V130 H476" class="d-line"/>
-  <text x="456" y="168" text-anchor="end" class="d-s">tous les modules</text>
-</svg>
-<figcaption>Figure 3 : une flèche veut dire « utilise ». Un module n'utilise jamais un autre module ; le cœur n'utilise personne.</figcaption>
-</figure>
-
-<!-- 7 -->
-<h2 id="verifier">7. Vérifier le module</h2>
-<p>Chaque module passe une <strong>suite de contrat</strong> écrite une fois pour toutes dans
-<code>internal/cameras/cameratest</code>. Elle vérifie, sans caméra :</p>
-<ul>
-  <li>que la fiche est bien formée (identifiant, marque, nom, port, liaisons) ;</li>
-  <li>que chaque réglage a une fiche valide, un libellé et une rubrique, et n'est déclaré qu'une fois ;</li>
-  <li>qu'un réglage inconnu ou une valeur du mauvais type est refusé <em>avant</em> tout envoi ;</li>
-  <li>qu'une caméra neuve est « déconnectée ».</li>
-</ul>
-<p>Une seconde suite, <code>cameratest.Online</code>, vérifie une caméra <strong>connectée</strong> : chaque
-réglage lisible renvoie une valeur du bon type et dans ses limites. Le module demo la passe, et la base
-Blackmagic aussi, contre un faux serveur de caméra. C'est ce qui garantit que la démo se comporte comme une
-vraie caméra.</p>
-<pre><code><span class="c">// internal/cameras/demo/demo_test.go</span>
-<span class="k">func</span> TestContract(t *testing.T) { cameratest.Module(t, demo.Module{}) }
-
-<span class="k">func</span> TestOnline(t *testing.T) {
-    cam, _ := demo.Module{}.New(core.CameraConfig{Model: demo.ID, PowerZoom: <span class="k">true</span>})
-    _ = cam.Connect(context.Background())
-    cameratest.Online(t, cam)
-}</code></pre>
-<p>Pour lancer les tests d'un module :</p>
-<pre><code>go test ./internal/cameras/demo/</code></pre>
-<p>Les modules qui pilotent une vraie caméra ont en plus des tests « live », sautés par défaut, qu'on lance
-avec l'adresse de la caméra (par exemple <code>BMD_CAMERA=192.168.1.20</code>). On ne les lance jamais sur une
-caméra en exploitation sans accord : ils écrivent des valeurs.</p>
-
-<!-- 8 -->
-<h2 id="familles">8. Familles, base partagée et hooks</h2>
-<p>Plusieurs caméras d'une même marque parlent souvent le même protocole. Les Blackmagic Studio et Pocket
-récentes se pilotent toutes par la même API REST. Réécrire ce protocole dans chaque module serait une
-perte de temps et une source d'erreurs. On le range donc une seule fois dans une <strong>base
-partagée</strong>, le package <code>bm</code> ; chaque modèle a son petit module qui s'en sert.</p>
-
-<figure>
-<svg viewBox="0 0 860 320" role="img" aria-labelledby="f4t">
+<svg viewBox="0 0 900 320" role="img" aria-labelledby="f4t">
   <title id="f4t">Le module bm-studio-6k-pro compose la base bm avec ses réglages et ses hooks</title>
   <defs><marker id="hk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="d-head-acc"/></marker></defs>
-  <rect x="20" y="20" width="370" height="280" rx="14" class="d-mod"/>
-  <text x="205" y="48" text-anchor="middle" class="d-t">module bm-studio-6k-pro</text>
-  <text x="205" y="66" text-anchor="middle" class="d-s">internal/cameras/bm/studio6kpro</text>
-  <rect x="44" y="86" width="322" height="50" rx="8" class="d-box"/>
-  <text x="205" y="108" text-anchor="middle" class="d-t">Info()</text>
-  <text x="205" y="126" text-anchor="middle" class="d-s">identifiant, nom, port 80…</text>
-  <rect x="44" y="148" width="322" height="50" rx="8" class="d-box"/>
-  <text x="205" y="170" text-anchor="middle" class="d-t">Specs()</text>
-  <text x="205" y="188" text-anchor="middle" class="d-s">ses réglages (pas de mire, pas de tally…)</text>
-  <rect x="44" y="210" width="322" height="66" rx="8" class="d-box"/>
-  <text x="205" y="234" text-anchor="middle" class="d-t">Hooks (facultatifs)</text>
-  <text x="205" y="254" text-anchor="middle" class="d-s">Encode · Decode · Watch</text>
-  <text x="205" y="270" text-anchor="middle" class="d-s">seulement ce qui diffère de la base</text>
-  <rect x="470" y="20" width="370" height="280" rx="14" class="d-base"/>
-  <text x="655" y="48" text-anchor="middle" class="d-t">base bm (package partagé)</text>
-  <text x="655" y="66" text-anchor="middle" class="d-s">internal/cameras/bm</text>
-  <text x="500" y="102" class="d-s">• connexion et reconnexion automatique</text>
-  <text x="500" y="126" class="d-s">• requêtes REST (PUT / GET), délais bornés</text>
-  <text x="500" y="150" class="d-s">• WebSocket d'événements, keep-alive</text>
-  <text x="500" y="174" class="d-s">• traduction réglage ⇄ propriété REST</text>
-  <text x="500" y="198" class="d-s">• objectif : limites d'iris, focale, distance</text>
-  <text x="500" y="222" class="d-s">• vitesse ⇄ angle d'obturation</text>
-  <text x="500" y="246" class="d-s">• fiches communes : LensSpecs, ColorSpecs…</text>
-  <text x="500" y="276" class="d-m">bm.New(cfg, bm.Model{…})</text>
-  <path d="M366 243 C420 243 420 280 466 280" class="d-acc" marker-end="url(#hk)"/>
-  <path d="M366 173 C420 173 420 276 466 276" class="d-acc" marker-end="url(#hk)"/>
+  <rect x="20" y="20" width="380" height="280" rx="14" class="d-mod"/>
+  <text x="210" y="48" text-anchor="middle" class="d-t">module bm-studio-6k-pro</text>
+  <text x="210" y="66" text-anchor="middle" class="d-s">modules/bm-studio-6k-pro/main.go</text>
+  <rect x="44" y="86" width="332" height="50" rx="8" class="d-box"/>
+  <text x="210" y="108" text-anchor="middle" class="d-t">Info()</text>
+  <text x="210" y="126" text-anchor="middle" class="d-s">identifiant, nom, port 80…</text>
+  <rect x="44" y="148" width="332" height="50" rx="8" class="d-box"/>
+  <text x="210" y="170" text-anchor="middle" class="d-t">Specs()</text>
+  <text x="210" y="188" text-anchor="middle" class="d-s">ses réglages (pas de mire, pas de tally…)</text>
+  <rect x="44" y="210" width="332" height="66" rx="8" class="d-box"/>
+  <text x="210" y="234" text-anchor="middle" class="d-t">Hooks (facultatifs)</text>
+  <text x="210" y="254" text-anchor="middle" class="d-s">Encode · Decode · Watch</text>
+  <text x="210" y="270" text-anchor="middle" class="d-s">seulement ce qui diffère de la base</text>
+  <rect x="490" y="20" width="390" height="280" rx="14" class="d-base"/>
+  <text x="685" y="48" text-anchor="middle" class="d-t">base bm (code partagé)</text>
+  <text x="685" y="66" text-anchor="middle" class="d-s">modules/internal/bm</text>
+  <text x="520" y="102" class="d-s">• connexion, reconnexion avec minuterie</text>
+  <text x="520" y="126" class="d-s">• requêtes REST (PUT / GET) par l'hôte</text>
+  <text x="520" y="150" class="d-s">• abonnement aux événements WebSocket</text>
+  <text x="520" y="174" class="d-s">• traduction réglage ⇄ propriété REST</text>
+  <text x="520" y="198" class="d-s">• objectif : limites d'iris, focale, distance</text>
+  <text x="520" y="222" class="d-s">• vitesse ⇄ angle d'obturation</text>
+  <text x="520" y="246" class="d-s">• fiches communes : LensSpecs, ColorSpecs…</text>
+  <text x="520" y="276" class="d-m">bm.New(cfg, host, bm.Model{…})</text>
+  <path d="M376 243 C430 243 430 280 486 280" class="d-acc" marker-end="url(#hk)"/>
+  <path d="M376 173 C430 173 430 276 486 276" class="d-acc" marker-end="url(#hk)"/>
 </svg>
-<figcaption>Figure 4 : le module apporte ce qui lui est propre ; la base fait tout le reste.</figcaption>
+<figcaption>Figure 3 : le module apporte ce qui lui est propre ; la base fait tout le reste.</figcaption>
 </figure>
+  <h3>« Hériter » en Go : la composition</h3>
+  <p>Go n'a pas d'héritage de classes. On obtient le même résultat par <strong>composition</strong> : le module construit la
+  base en lui donnant ses réglages et, s'il le faut, ses hooks. Le module entier tient en quelques lignes :</p>
+<pre><code><span class="k">func</span> init() { rcpmod.Register(module{}) }
 
-<h3>« Hériter » en Go : la composition</h3>
-<p>Go n'a pas d'héritage de classes. On obtient le même résultat par <strong>composition</strong> : le module
-construit la base en lui donnant ses réglages et, s'il le faut, ses hooks. Le module entier tient en
-quelques lignes :</p>
-<pre><code><span class="k">package</span> studio6kpro
-
-<span class="k">const</span> ID core.ModelID = <span class="s">"bm-studio-6k-pro"</span>
-
-<span class="c">// Module pilote la Blackmagic Studio Camera 6K Pro avec la base bm.</span>
-<span class="k">type</span> Module <span class="k">struct</span> {
-    Logger *slog.Logger  <span class="c">// où écrire les commandes envoyées (niveau debug)</span>
-}
-
-<span class="k">func</span> (m Module) New(cfg core.CameraConfig) (core.Camera, error) {
-    <span class="k">return</span> bm.New(cfg, bm.Model{Specs: Specs(cfg.PowerZoom)}, bm.Options{Logger: m.Logger}), <span class="k">nil</span>
+<span class="k">func</span> (module) New(cfg rcpmod.Config, host rcpmod.Host) (rcpmod.Camera, error) {
+    <span class="k">return</span> bm.New(cfg, host, bm.Model{Specs: specs(cfg.PowerZoom)}), <span class="k">nil</span>
 }</code></pre>
-
-<h3>Les hooks : changer un comportement précis</h3>
-<p>Un hook est une fonction facultative que la base appelle à un moment donné. S'il est vide, la base fait
-son travail habituel. Trois hooks existent :</p>
-<div class="table-wrap"><table>
-  <thead><tr><th>Hook</th><th>Quand la base l'appelle</th><th>À quoi il sert</th></tr></thead>
-  <tbody>
-    <tr><td><code>Encode</code></td><td>Avant d'envoyer une écriture</td><td>Écrire un réglage autrement que la base (autre adresse, autre format). Il renvoie « pas pour moi » pour laisser faire la base.</td></tr>
-    <tr><td><code>Decode</code></td><td>À chaque propriété que la caméra signale</td><td>Lire une propriété propre au modèle, ou corriger une valeur que ce firmware rapporte mal. Ses valeurs remplacent celles de la base pour cette propriété.</td></tr>
-    <tr><td><code>Watch</code></td><td>À l'abonnement aux événements</td><td>Ajouter des propriétés à surveiller, que seul ce modèle possède.</td></tr>
-  </tbody>
-</table></div>
-<p>Exemple imaginaire : un modèle dont le firmware attend l'ISO dans une propriété différente.</p>
-<pre><code><span class="k">var</span> hooks = bm.Hooks{
-    Encode: <span class="k">func</span>(id core.ControlID, v core.Value) (bm.Command, bool, error) {
-        <span class="k">if</span> id != core.ISO {
-            <span class="k">return</span> bm.Command{}, <span class="k">false</span>, <span class="k">nil</span>     <span class="c">// pas pour moi : la base s'en charge</span>
+  <h3>Les hooks : changer un comportement précis</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Hook</th><th>Quand la base l'appelle</th><th>À quoi il sert</th></tr></thead>
+    <tbody>
+      <tr><td><code>Encode</code></td><td>Avant d'envoyer une écriture</td><td>Écrire un réglage autrement que la base. Il répond « pas pour moi » pour laisser faire la base.</td></tr>
+      <tr><td><code>Decode</code></td><td>À chaque propriété que la caméra signale</td><td>Lire une propriété propre au modèle, ou corriger une valeur que ce firmware rapporte mal.</td></tr>
+      <tr><td><code>Watch</code></td><td>À l'abonnement aux événements</td><td>Surveiller des propriétés que seul ce modèle possède.</td></tr>
+    </tbody>
+  </table></div>
+<pre><code><span class="c">// Exemple imaginaire : un firmware qui attend l'ISO dans une autre propriété.</span>
+<span class="k">var</span> hooks = bm.Hooks{
+    Encode: <span class="k">func</span>(id <span class="k">string</span>, v rcpmod.Value) (bm.Command, <span class="k">bool</span>, error) {
+        <span class="k">if</span> id != rcpmod.ISO {
+            <span class="k">return</span> bm.Command{}, <span class="k">false</span>, <span class="k">nil</span>      <span class="c">// pas pour moi : la base s'en charge</span>
         }
-        n, err := strconv.Atoi(v.Choice)
-        <span class="k">if</span> err != <span class="k">nil</span> {
-            <span class="k">return</span> bm.Command{}, <span class="k">true</span>, fmt.Errorf(<span class="s">"iso: %w"</span>, core.ErrInvalidValue)
-        }
-        <span class="k">return</span> bm.Command{Path: <span class="s">"/video/sensitivity"</span>, Body: <span class="k">map</span>[string]any{<span class="s">"iso"</span>: n}}, <span class="k">true</span>, <span class="k">nil</span>
+        <span class="k">return</span> bm.Command{Path: <span class="s">"/video/sensitivity"</span>, Body: <span class="k">map</span>[<span class="k">string</span>]any{<span class="s">"iso"</span>: v.Choice}}, <span class="k">true</span>, <span class="k">nil</span>
     },
 }</code></pre>
-<div class="note"><p>La Studio Camera 6K Pro n'a besoin d'aucun hook aujourd'hui : tout ce qu'elle fait est déjà le
-comportement de la base. Les hooks sont là pour le prochain modèle qui différera, sans toucher au code des
-autres.</p></div>
+  <div class="note"><p>La Studio Camera 6K Pro n'a besoin d'aucun hook aujourd'hui. Les hooks sont là pour le prochain
+  modèle qui différera, sans toucher au code des autres.</p></div>
+</section>
 
-<!-- 9 -->
-<h2 id="marques">9. Sony, Panasonic et les autres</h2>
-<p>Le contrat ne dit rien de Blackmagic : il parle de réglages, de valeurs et d'événements. Un module Sony
-ou Panasonic implémente exactement les mêmes méthodes. La recette est toujours la même :</p>
-<ol class="steps">
-  <li><strong>Déclarer le modèle</strong> tant que le protocole n'est pas écrit : un module « prévu »
-  (<code>camerakit.Planned</code>) avec sa fiche et ses réglages. Il apparaît dans la liste, l'interface sait
-  dessiner sa page, et chaque action répond « pas encore écrit ». C'est l'état actuel des modèles Sony,
-  Panasonic et des autres Blackmagic.</li>
-  <li><strong>Écrire le protocole</strong> une fois, dans une base de marque (<code>internal/cameras/sony</code>
-  par exemple), avec ses tests contre un faux serveur.</li>
-  <li><strong>Créer le module du modèle</strong> (<code>internal/cameras/sony/fx6</code>), qui compose la base
-  avec ses réglages et ses hooks, et garder le même identifiant (<code>sony-fx6</code>).</li>
-  <li><strong>Passer les contrats</strong> (<code>cameratest.Module</code> et <code>cameratest.Online</code>), puis
-  les tests live sur la vraie caméra, avec l'accord de son propriétaire.</li>
-</ol>
+<section id="securite" class="band">
+  <h2>Le bac à sable</h2>
+  <p>Un module WebAssembly ne peut rien faire seul : ni lire un fichier, ni ouvrir une connexion, ni lancer un programme.
+  Il ne dispose que des fonctions que l'application lui prête, et l'application les limite.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Limite</th><th>Effet</th></tr></thead>
+    <tbody>
+      <tr><td>Le réseau ne va qu'à l'adresse et au port saisis pour la caméra, en HTTP et WebSocket.</td><td>Un module ne peut ni contacter Internet, ni scanner le réseau local, ni joindre une autre caméra.</td></tr>
+      <tr><td>Aucun accès aux fichiers, aux variables d'environnement, aux autres programmes.</td><td>Vos documents et vos mots de passe restent hors de portée. Le mot de passe de la caméra n'est donné qu'à son module.</td></tr>
+      <tr><td>Mémoire plafonnée par instance, réponses et messages limités à 1 Mo, délai sur chaque appel.</td><td>Un module qui boucle ou gonfle ne fige pas l'application : il est arrêté et sa caméra passe en erreur.</td></tr>
+      <tr><td>Un module qui plante n'arrête que sa caméra.</td><td>Les autres caméras, le panneau et l'interface continuent de fonctionner.</td></tr>
+      <tr><td>Le dossier <code>modules</code> est dans Program Files.</td><td>Seul un administrateur peut y déposer un module.</td></tr>
+    </tbody>
+  </table></div>
+</section>
 
-<div class="table-wrap"><table>
-  <thead><tr><th>Identifiant</th><th>Caméra</th><th>État</th></tr></thead>
-  <tbody>
-    <tr><td><code>demo</code></td><td>Caméra de démonstration</td><td><span class="pill ok">pris en charge</span></td></tr>
-    <tr><td><code>bm-studio-6k-pro</code></td><td>Blackmagic Studio Camera 6K Pro</td><td><span class="pill info">expérimental</span> protocole vérifié sur la caméra</td></tr>
-    <tr><td><code>bm-pocket-4k</code>, <code>bm-pocket-6k-g2</code>, <code>bm-pocket-6k-pro</code>, <code>bm-studio-4k-plus-g2</code>, <code>bm-studio-4k-pro-g2</code></td><td>Autres Blackmagic</td><td><span class="pill">prévu</span></td></tr>
-    <tr><td><code>sony-generic</code>, <code>sony-fx3</code>, <code>sony-fx6</code>, <code>sony-fx9</code>, <code>sony-fr7</code></td><td>Sony</td><td><span class="pill">prévu</span></td></tr>
-    <tr><td><code>panasonic-generic</code>, <code>panasonic-aw-ue100</code>, <code>panasonic-aw-ue150</code>, <code>panasonic-aw-ue160</code></td><td>Panasonic</td><td><span class="pill">prévu</span></td></tr>
-  </tbody>
-</table></div>
+<section id="marques">
+  <h2>Sony, Panasonic et les autres</h2>
+  <p>Le contrat ne dit rien de Blackmagic : il parle de réglages, de valeurs et d'événements. La recette est toujours la
+  même :</p>
+  <ol class="steps">
+    <li><strong>Déclarer le modèle</strong> tant que son protocole n'est pas écrit : un module « prévu »
+    (<code>rcpmod.Planned</code>), avec sa fiche et ses réglages. Il apparaît dans la liste, l'interface dessine sa page, et
+    chaque action répond « pas encore écrit ».</li>
+    <li><strong>Écrire le protocole</strong> une fois, dans une base de marque (<code>modules/internal/sony</code>), avec ses
+    tests sur l'hôte de test.</li>
+    <li><strong>Brancher le module du modèle</strong> sur cette base, en gardant son identifiant (<code>sony-fx6</code>).</li>
+    <li><strong>Passer le contrat</strong>, puis les tests live sur la vraie caméra, avec l'accord de son propriétaire.</li>
+  </ol>
+  <p>Les fonctions prêtées par l'hôte grandiront avec les besoins : TCP et UDP pour le protocole VISCA des caméras PTZ,
+  par exemple. Elles garderont la même règle : seulement vers l'adresse de la caméra.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Module</th><th>Caméra</th><th>État</th></tr></thead>
+    <tbody>
+      <tr><td><code>demo</code></td><td>Caméra de démonstration</td><td><span class="pill ok">pris en charge</span></td></tr>
+      <tr><td><code>bm-studio-6k-pro</code></td><td>Blackmagic Studio Camera 6K Pro</td><td><span class="pill info">expérimental</span> protocole vérifié sur la caméra</td></tr>
+      <tr><td><code>bm-pocket-4k</code>, <code>bm-pocket-6k-g2</code>, <code>bm-pocket-6k-pro</code>, <code>bm-studio-4k-plus-g2</code>, <code>bm-studio-4k-pro-g2</code></td><td>Autres Blackmagic</td><td><span class="pill">prévu</span></td></tr>
+      <tr><td><code>sony-generic</code>, <code>sony-fx3</code>, <code>sony-fx6</code>, <code>sony-fx9</code>, <code>sony-fr7</code></td><td>Sony</td><td><span class="pill">prévu</span></td></tr>
+      <tr><td><code>panasonic-generic</code>, <code>panasonic-aw-ue100</code>, <code>panasonic-aw-ue150</code>, <code>panasonic-aw-ue160</code></td><td>Panasonic</td><td><span class="pill">prévu</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
 
-<!-- 10 -->
-<h2 id="regles">10. Les règles à respecter</h2>
-<p>Elles découlent des <a href="go-engineering-rules.md">règles d'ingénierie Go</a> du projet (les codes entre
-parenthèses y renvoient). Un test d'architecture fait échouer la compilation des tests si l'une des trois
-premières est enfreinte.</p>
-<div class="table-wrap"><table>
-  <thead><tr><th>Règle</th><th>Pourquoi</th></tr></thead>
-  <tbody>
-    <tr><td>Un module n'importe jamais un autre module (M5, X3).</td><td>On peut supprimer ou réécrire un module sans casser les autres.</td></tr>
-    <tr><td>Le protocole reste dans le module ou sa base (A1, I2).</td><td>Le cœur, l'interface et le panneau ne voient que des réglages et des valeurs.</td></tr>
-    <tr><td>Le cœur (<code>core</code>) n'importe ni module, ni réseau, ni interface (A1).</td><td>C'est le contrat : il doit rester stable et sans dépendance.</td></tr>
-    <tr><td><code>New</code> ne fait aucune entrée-sortie (contrat).</td><td>L'interface peut construire une caméra hors ligne pour dessiner sa page.</td></tr>
-    <tr><td><code>Set</code> vérifie la valeur avant tout envoi (S3, D21).</td><td>Une valeur invalide n'atteint jamais la caméra.</td></tr>
-    <tr><td>Ce que la caméra renvoie est vérifié (S2, I3).</td><td>Une réponse réseau n'est pas digne de confiance : nombres finis, choix connus, tailles bornées.</td></tr>
-    <tr><td>Chaque appel réseau a un délai et un <code>context</code> (S10, K8).</td><td>Une caméra débranchée ne bloque jamais l'application.</td></tr>
-    <tr><td>Les abonnés sont appelés hors verrou et ne doivent pas bloquer (K7).</td><td>Un abonné lent ne fige ni la caméra ni les autres abonnés.</td></tr>
-    <tr><td>Le logger est injecté, jamais global (C6).</td><td>On sait d'où vient chaque ligne de journal, et les tests restent isolés.</td></tr>
-    <tr><td>Les mots de passe ne sont jamais journalisés (S12).</td><td><code>CameraConfig</code> masque le mot de passe dans tous les formats d'affichage.</td></tr>
-  </tbody>
-</table></div>
+<section id="abi" class="band">
+  <h2>Annexe : l'ABI, pour écrire un module dans un autre langage</h2>
+  <p>Le SDK Go cache ce qui suit. Un module écrit en Rust, en Zig ou en C doit le faire lui-même. Un module est un
+  « réacteur » WASI preview 1 (il exporte <code>_initialize</code>). Toutes les données échangées sont du JSON en UTF-8.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Sens</th><th>Fonction</th><th>Rôle</th></tr></thead>
+    <tbody>
+      <tr><td>exportée</td><td><code>rcp_alloc(len i32) → ptr i32</code></td><td>Réserve <code>len</code> octets où l'hôte écrit la requête.</td></tr>
+      <tr><td>exportée</td><td><code>rcp_call(ptr i32, len i32) → i64</code></td><td>Traite une requête <code>{"op": …}</code> ; renvoie <code>ptr &lt;&lt; 32 | len</code> de la réponse, valable jusqu'à l'appel suivant.</td></tr>
+      <tr><td>importée</td><td><code>rcp.call(ptr i32, len i32) → i64</code></td><td>Demande un service à l'hôte ; renvoie <code>id &lt;&lt; 32 | len</code> de la réponse, gardée par l'hôte.</td></tr>
+      <tr><td>importée</td><td><code>rcp.take(id i32, ptr i32)</code></td><td>Copie cette réponse à l'adresse donnée (le module a réservé <code>len</code> octets).</td></tr>
+      <tr><td>importée</td><td><code>rcp.log(level i32, ptr i32, len i32)</code></td><td>Écrit une ligne au journal.</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Requêtes de l'hôte vers le module (<code>rcp_call</code>)</h3>
+  <p><code>info</code>, <code>new</code> (avec <code>config</code>), <code>controls</code>, <code>connect</code>, <code>close</code>,
+  <code>get</code> (<code>id</code>), <code>set</code> (<code>id</code>, <code>value</code>), <code>wsMessage</code>
+  (<code>socket</code>, <code>text</code>), <code>wsClosed</code> (<code>socket</code>, <code>error</code>), <code>timer</code>
+  (<code>timer</code>). Une réponse est <code>{"result": …}</code> ou <code>{"error": {"code": "INVALID_VALUE", "message": …}}</code>.</p>
+  <h3>Services de l'hôte (<code>rcp.call</code>)</h3>
+  <p><code>http</code> (<code>method</code>, <code>path</code>, <code>body</code>), <code>wsOpen</code> (<code>path</code>),
+  <code>wsSend</code> (<code>socket</code>, <code>text</code>), <code>wsClose</code> (<code>socket</code>), <code>after</code>
+  (<code>ms</code>), <code>cancel</code> (<code>timer</code>), <code>emit</code> (<code>event</code>). La référence exacte des
+  champs est le code du SDK : <code>sdk/rcpmod/wire.go</code>.</p>
+</section>
 
-<!-- 11 -->
-<h2 id="faq">11. Questions fréquentes</h2>
-<h3>J'avais des caméras enregistrées avant la 0.3.0. Sont-elles perdues ?</h3>
-<p>Non. Les anciens identifiants (<code>blackmagic.studio6kpro</code>, <code>demo.camera</code>…) sont déclarés
-comme <strong>alias</strong> dans la fiche du module (<code>Aliases</code>). Le registre les reconnaît et
-l'application réécrit le nouvel identifiant à la prochaine sauvegarde. Les presets suivent.</p>
-<h3>Où mettre un réglage propre à une marque ?</h3>
-<p>Dans le module ou dans sa base, avec un nom préfixé par la marque (<code>blackmagic.contrastPivot</code>).
-L'interface l'affiche sans modification. Si plusieurs marques finissent par avoir le même réglage, il devient
-un nom standard dans <code>core/catalog.go</code>.</p>
-<h3>Une caméra a deux façons de régler l'iris : laquelle déclarer ?</h3>
-<p>Celle que les gens voient (<code>iris</code>, en f-stops). Une seconde forme destinée au panneau
-(<code>irisNorm</code>, la course de l'objectif) est déclarée <code>Hidden</code> : le panneau s'en sert,
-l'interface et les presets l'ignorent.</p>
-<h3>Que fait l'application si un module renvoie une erreur ?</h3>
-<p>Elle la traduit en un code stable (<code>INVALID_VALUE</code>, <code>NOT_CONNECTED</code>…) que l'interface
-affiche et que le panneau signale par le voyant ALARM. Une erreur inattendue devient <code>INTERNAL</code>,
-sans détail technique à l'écran.</p>
+<section id="faq">
+  <h2>Questions fréquentes</h2>
+  <h3>J'avais des caméras enregistrées avant la 0.3.0. Sont-elles perdues ?</h3>
+  <p>Non. Les anciens identifiants (<code>blackmagic.studio6kpro</code>, <code>demo.camera</code>…) sont déclarés comme
+  <strong>alias</strong> dans la fiche du module. L'application les reconnaît et enregistre le nouvel identifiant à la
+  sauvegarde suivante. Les presets suivent.</p>
+  <h3>WebAssembly, ce n'est pas lent ?</h3>
+  <p>Un appel au module coûte environ 10 microsecondes ; le levier d'iris du panneau envoie une valeur toutes les
+  50 millisecondes. La compilation d'un module (environ 0,3 s) est faite une fois puis gardée en cache.</p>
+  <h3>Où mettre un réglage propre à une marque ?</h3>
+  <p>Dans le module ou sa base, avec un nom préfixé par la marque (<code>blackmagic.contrastPivot</code>). L'interface
+  l'affiche sans modification. Si plusieurs marques finissent par avoir le même réglage, il devient un nom standard.</p>
+  <h3>Une caméra a deux façons de régler l'iris : laquelle déclarer ?</h3>
+  <p>Celle que les gens voient (<code>iris</code>, en f-stops). Une seconde forme destinée au panneau (<code>irisNorm</code>,
+  la course de l'objectif) est déclarée <code>Hidden</code> : le panneau s'en sert, l'interface et les presets l'ignorent.</p>
+  <h3>Que se passe-t-il si un module renvoie une erreur ?</h3>
+  <p>L'application la traduit en un code stable (<code>INVALID_VALUE</code>, <code>NOT_CONNECTED</code>…) que l'interface
+  affiche et que le panneau signale par le voyant ALARM. Une erreur inattendue devient <code>INTERNAL</code>, sans détail
+  technique à l'écran.</p>
+</section>
 
-<footer>
-  RCP For All Camera, documentation des modules caméra, version 0.3.0-ALPHA.
-  Voir aussi la <a href="index.html">documentation générale</a> et les
-  <a href="go-engineering-rules.md">règles d'ingénierie Go</a>.
-</footer>
+<footer class="page">RCP For All Camera · documentation des modules caméra · 0.3.0-ALPHA ·
+<a href="index.html">vue d'ensemble</a> · <a href="go-engineering-rules.md">règles d'ingénierie Go</a></footer>
+</main>
 </div>
 </body>
 </html>
