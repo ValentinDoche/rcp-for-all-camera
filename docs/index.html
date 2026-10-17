@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RCP Documentation</title>
+<meta name="description" content="RCP For All Camera: what it does, how to start, key concepts, architecture, the control panel, the window, data and security, building and testing.">
+<link rel="stylesheet" href="assets/docs.css">
+<script src="assets/docs.js"></script>
+</head>
+<body>
+<header class="topbar" id="topbar"></header>
+<div class="layout">
+<aside class="sidebar" id="sidebar"></aside>
+<main>
+
+<div class="hero">
+  <div class="kicker">Documentation · 0.3.0-ALPHA</div>
+  <h1>RCP For All Camera</h1>
+  <p>One USB control panel and one desktop application to shade every camera of a production, whatever its brand.</p>
+</div>
+
+<section class="band" id="what">
+  <h2>What the application does</h2>
+  <p class="lead">A camera operator shades cameras (iris, gain, shutter, white balance, colour) from a remote control
+  panel, an RCP. Each brand sells its own, and Blackmagic's ATEM Micro Camera Panel normally needs an ATEM switcher.
+  RCP For All Camera drives that panel directly over USB from a Windows PC and controls the cameras over the network,
+  so one panel serves Blackmagic, Sony and Panasonic cameras side by side.</p>
+  <div class="cards">
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z"/><path d="M7 15v-4"/><path d="M12 15v-6"/><path d="M17 15v-2"/></svg>
+      <a class="title" href="#panel">A real control panel</a>
+      <p>The ATEM Micro Camera Panel's buttons, knobs, iris lever, displays and lights, with no ATEM switcher.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1z"/><path d="M7 20h10"/><path d="M9 16v4"/><path d="M15 16v4"/></svg>
+      <a class="title" href="#window">A desktop window</a>
+      <p>Eight camera strips, a details page per camera, presets and settings, in English or French, light or dark.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4a3 3 0 0 0 -3 3v2a2 2 0 0 1 -2 2a2 2 0 0 1 2 2v2a3 3 0 0 0 3 3"/><path d="M17 4a3 3 0 0 1 3 3v2a2 2 0 0 0 2 2a2 2 0 0 0 -2 2v2a3 3 0 0 1 -3 3"/><path d="M10 12h4"/></svg>
+      <a class="title" href="modules-camera.html">Camera modules</a>
+      <p>Each camera model is a module file in the <code>modules</code> folder. Add a camera by adding a file.</p>
+    </div>
+  </div>
+  <div class="note"><p><strong>Status of 0.3.0-ALPHA.</strong> The panel and the window work. The Blackmagic Studio
+  Camera 6K Pro is controlled over the network; the demo camera simulates one. The other models (Blackmagic Pocket and
+  Studio, Sony FX3, FX6, FX9, FR7, Panasonic AW-UE100/150/160) declare their controls but do not talk to the camera yet.
+  Routing a camera to a Videohub, ATEM or vMix output is not started.</p></div>
+</section>
+
+<section id="quickstart">
+  <h2>Quick start</h2>
+  <ol class="steps">
+    <li><strong>Get the application.</strong> Download the zip of the latest release from the
+    <a href="https://github.com/ValentinDoche/rcp-for-all-camera/releases">GitHub releases</a> and unzip it. It holds
+    <code>rcp.exe</code> and the <code>modules</code> folder. To build it yourself, see <a href="#build">Build from source</a>.</li>
+    <li><strong>Close ATEM Software Control</strong> if it runs: it also drives the panel and would overwrite its displays.</li>
+    <li><strong>Plug in the panel</strong> and start <code>rcp.exe</code>. The title bar says <em>Micro Camera Panel
+    active</em>. No panel at hand? Start <code>rcp.exe -sim</code>, or click the panel status and choose
+    <em>Simulator</em>: an on-screen panel replaces the real one.
+    <span class="info" tabindex="0" data-tip="The interface starts in French. Switch it to English in Settings, General, Language: the change is immediate and remembered.">i</span></li>
+    <li><strong>Assign a camera.</strong> Click <em>Assign a camera</em> on a free strip, choose the brand and model,
+    enter its address. Pick <em>Demo</em> to try everything without a camera.</li>
+    <li><strong>Shade.</strong> Press the panel's camera button, move the iris lever, turn the knobs. The window and the
+    panel follow each other.</li>
+  </ol>
+</section>
+
+<section id="concepts">
+  <h2>Key concepts</h2>
+  <dl class="glossary">
+    <div><dt>Slot</dt><dd>One of the eight camera positions, matching the panel's camera buttons 1 to 8. The
+    <strong>active</strong> slot is the one the panel controls.</dd></div>
+    <div><dt>Rig</dt><dd>The eight slots and the camera assigned to each: model, name, address. Saved in
+    <code>rig.json</code>.</dd></div>
+    <div><dt>Control</dt><dd>One adjustable setting of a camera: iris, gain, white balance, lift red... Each has an id,
+    a kind (range, choice, on/off, action, text) and limits. The panel and the window work only with controls.</dd></div>
+    <div><dt>Module</dt><dd>The program that teaches the application one camera model. It translates controls into the
+    camera's protocol. See <a href="modules-camera.html">Camera modules</a>.</dd></div>
+    <div><dt>Preset</dt><dd>A snapshot of a camera's control values, stored by the application under a number (1 to 5)
+    and written back on recall. Presets stay on the PC, never on the camera.</dd></div>
+    <div><dt>Operator lock</dt><dd>Sensitive controls (record, colour bars) ask for confirmation before they are sent.
+    On by default.</dd></div>
+    <div><dt>Soft takeover</dt><dd>After a camera switch, the iris lever and the master black ring take control only
+    once they reach the camera's current value, so the picture never jumps.</dd></div>
+  </dl>
+</section>
+
+<section id="architecture">
+  <h2>Architecture</h2>
+  <p>The application is one Go program, <code>rcp.exe</code>, plus one WebAssembly file per camera model. Inside, the
+  code is split into layers, and dependencies only point inwards: the core knows nothing of the window, the panel,
+  the disk or the network.</p>
+<figure>
+<svg viewBox="0 0 900 470" role="img" aria-labelledby="a1t">
+  <title id="a1t">The window and the panel controller call the application layer, which uses the core and reaches the disk, the modules and the panel through ports</title>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="d-head"/></marker>
+  </defs>
+  <rect x="40" y="30" width="250" height="70" rx="10" class="d-box"/>
+  <text x="165" y="60" text-anchor="middle" class="d-t">Window</text>
+  <text x="165" y="80" text-anchor="middle" class="d-s">internal/gui (Fyne)</text>
+  <rect x="325" y="30" width="250" height="70" rx="10" class="d-box"/>
+  <text x="450" y="60" text-anchor="middle" class="d-t">Panel controller</text>
+  <text x="450" y="80" text-anchor="middle" class="d-s">internal/surfaces/panel</text>
+  <rect x="610" y="30" width="250" height="70" rx="10" class="d-box"/>
+  <text x="735" y="60" text-anchor="middle" class="d-t">Program assembly</text>
+  <text x="735" y="80" text-anchor="middle" class="d-s">cmd/rcp</text>
+
+  <rect x="190" y="160" width="520" height="70" rx="10" class="d-core"/>
+  <text x="450" y="190" text-anchor="middle" class="d-t">Application</text>
+  <text x="450" y="210" text-anchor="middle" class="d-s">internal/app: slots, controls, presets, settings, events</text>
+
+  <rect x="300" y="280" width="300" height="60" rx="10" class="d-core"/>
+  <text x="450" y="306" text-anchor="middle" class="d-t">Core</text>
+  <text x="450" y="325" text-anchor="middle" class="d-s">internal/core: controls, values, pages</text>
+
+  <rect x="40" y="380" width="250" height="70" rx="10" class="d-box"/>
+  <text x="165" y="410" text-anchor="middle" class="d-t">Files</text>
+  <text x="165" y="430" text-anchor="middle" class="d-s">internal/config: rig.json, secrets</text>
+  <rect x="325" y="380" width="250" height="70" rx="10" class="d-mod"/>
+  <text x="450" y="410" text-anchor="middle" class="d-t">Module host</text>
+  <text x="450" y="430" text-anchor="middle" class="d-s">internal/plugins → modules/*.wasm</text>
+  <rect x="610" y="380" width="250" height="70" rx="10" class="d-box"/>
+  <text x="735" y="410" text-anchor="middle" class="d-t">USB panel driver</text>
+  <text x="735" y="430" text-anchor="middle" class="d-s">internal/surfaces/micropanel</text>
+
+  <path d="M165 100 L330 158" class="d-line" marker-end="url(#ah)"/>
+  <path d="M450 100 L450 158" class="d-line" marker-end="url(#ah)"/>
+  <path d="M450 230 L450 278" class="d-line" marker-end="url(#ah)"/>
+  <path d="M165 380 L300 232" class="d-line" marker-end="url(#ah)"/>
+  <path d="M450 380 L450 342" class="d-line" marker-end="url(#ah)"/>
+  <path d="M735 380 L560 102" class="d-line" marker-end="url(#ah)"/>
+</svg>
+<figcaption>Arrows point from a package to what it depends on. Files, modules and the USB driver are adapters: they
+implement ports the application or the panel controller declares.</figcaption>
+</figure>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Package</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><code>internal/core</code></td><td>The language every part shares: control descriptions, values, events, camera models, page layouts. Depends on nothing.</td></tr>
+      <tr><td><code>internal/app</code></td><td>The use cases: assign a slot, set a control, store or recall a preset, change a setting. Declares the ports it needs (storage, secrets, panel).</td></tr>
+      <tr><td><code>internal/plugins</code></td><td>Loads the modules folder and runs each module in a WebAssembly sandbox. Checks everything a module says.</td></tr>
+      <tr><td><code>internal/config</code></td><td><code>rig.json</code> and the encrypted secrets file.</td></tr>
+      <tr><td><code>internal/gui</code></td><td>The native window (Fyne).</td></tr>
+      <tr><td><code>internal/surfaces/panel</code>, <code>panelmodel</code></td><td>The panel controller and its pure model: what the panel shows, what each key and knob does.</td></tr>
+      <tr><td><code>internal/surfaces/micropanel</code></td><td>The USB HID driver of the ATEM Micro Camera Panel (Windows).</td></tr>
+      <tr><td><code>internal/surfaces/panelsim</code>, <code>panelsource</code></td><td>The on-screen panel simulator, and the choice between USB panels and the simulator.</td></tr>
+      <tr><td><code>sdk/rcpmod</code></td><td>The library a module is written with. See <a href="modules-camera.html">Camera modules</a>.</td></tr>
+      <tr><td><code>cmd/rcp</code></td><td>Builds every part and wires them together. Nothing else.</td></tr>
+    </tbody>
+  </table></div>
+  <details class="more"><summary>More info: how the rules are enforced</summary><div>
+    <p>A test, <code>internal/archtest/dependency_rules_test.go</code>, reads the imports of every package and fails
+    when one breaks the rules: <code>core</code> imports no other package of the project, nor the network or the GUI
+    toolkit; <code>app</code> imports no adapter; a module imports nothing but the SDK. The rules themselves are in
+    <a href="go-engineering-rules.md">Go engineering rules</a>.</p>
+  </div></details>
+</section>
+
+<section id="flow">
+  <h2>From the panel to the camera</h2>
+  <p>What happens when the operator pushes the iris lever:</p>
+  <ol class="steps">
+    <li>The panel sends a USB report with the lever position. The driver authenticates the panel and decodes the report.</li>
+    <li>The panel controller turns the position into an f-stop of the active camera, within the lens' limits and the
+    window set by the COARSE and SENS knobs, and checks soft takeover.</li>
+    <li>It calls the application: <em>set control <code>iris</code> of slot 2 to f/5.6</em>. The application checks the
+    value against the camera's declared limits and the operator lock.</li>
+    <li>The application hands the value to the camera's module, which sends it in the camera's own protocol (for the
+    Studio 6K Pro, an HTTP request to its REST API).</li>
+    <li>The camera confirms with an event. The application forwards it to the window and the panel, which update their
+    displays. If the command fails, the panel's ALARM light blinks and the window shows a notice.</li>
+  </ol>
+  <div class="tip"><p>Writes are throttled per control: moving the lever fast sends about 30 values per second at
+  most, and always the final one.</p></div>
+</section>
+
+<section id="panel">
+  <h2>The control panel</h2>
+  <p>The panel works like a broadcast RCP. The main controls:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Control</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td>CAMERA 1–8</td><td>Select the active camera. Blue: assigned; orange: active; red: on air (tally).</td></tr>
+      <tr><td>Iris lever</td><td>Iris, over the lens' range, with soft takeover. COARSE and SENS narrow its travel to a window of f-stops.</td></tr>
+      <tr><td>Master black ring</td><td>Master black, with a small dead zone at the centre.</td></tr>
+      <tr><td>WHITE / BLACK R G B knobs</td><td>Colour gain and lift of each channel.</td></tr>
+      <tr><td>ND, GAIN, SHUTTER ▲▼</td><td>Step the ND filter, the gain (or ISO) and the shutter.</td></tr>
+      <tr><td>W/B</td><td>Short press: white balance mode (GAIN sets tint, SHUTTER the Kelvin). Long press: auto white balance.</td></tr>
+      <tr><td>STORE, SCENE 1–5</td><td>Presets: STORE then a number stores; a number alone recalls.</td></tr>
+      <tr><td>BARS</td><td>Colour bars on or off (asks for confirmation while the operator lock is on).</td></tr>
+      <tr><td>PANEL ACTIVE</td><td>Turns panel control off and on.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The displays show the active camera's ND, gain, shutter, iris and master black: blank when the camera has no such
+  control, dashes when its value is unknown. Every key, light and display is described in the
+  <a href="https://github.com/ValentinDoche/rcp-for-all-camera/blob/main/docs/panel-mapping.md">panel mapping</a>; the
+  USB protocol in <a href="atem-micro-camera-panel-protocol.md">Panel USB protocol</a>.</p>
+</section>
+
+<section id="window">
+  <h2>The application window</h2>
+  <h3>Cameras</h3>
+  <p>One strip per slot: the colour wheel (lift, gamma, gain), the iris pad (iris up and down, master black left and
+  right), zoom and focus, the ND, gain, shutter and white balance readouts, and quick actions (auto focus, auto iris,
+  auto white balance). What a camera does not have is greyed out, so every strip looks the same. The tabs above select
+  the active camera, like the panel's buttons.</p>
+  <h3>Details</h3>
+  <p><em>Details</em> on a strip opens every control of that camera: exposure and lens cards, presets, colour wheels,
+  then every other setting. The camera's module decides the layout in its <code>ui.go</code>
+  (<a href="modules-camera.html#ui">The UI file</a>).</p>
+  <h3>Settings</h3>
+  <p>The gear at the bottom left opens Settings:</p>
+  <ul>
+    <li><strong>General</strong>: language, theme, system statistics in the bottom bar, the network adapter used to reach
+    the cameras, start with Windows, the operator lock, the log level, export and import of the configuration.</li>
+    <li><strong>Cameras</strong>: assign, edit or remove the camera of each slot.</li>
+    <li><strong>Panel</strong>: which panel to drive (first USB panel, a given one by serial number, or the simulator).</li>
+    <li><strong>About</strong>: version, author, licences.</li>
+  </ul>
+</section>
+
+<section id="data">
+  <h2>Data and security</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>What</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>The rig, presets and settings</td><td><code>%APPDATA%\RCPForAllCamera\rig.json</code></td></tr>
+      <tr><td>Camera passwords, encrypted for the Windows user (DPAPI)</td><td><code>%APPDATA%\RCPForAllCamera\secrets.dat</code></td></tr>
+      <tr><td>Logs</td><td><code>rcp.log</code>, opened from Settings › General › Logs</td></tr>
+      <tr><td>Compiled modules cache</td><td><code>%LOCALAPPDATA%\RCPForAllCamera\modules</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Passwords never reach <code>rig.json</code>, an exported file, a log or the screen. Modules run in a sandbox that
+  can reach only their own camera. Every file and every message from a module or the panel is checked before use. The
+  list of known vulnerabilities, and the test that proves each protection, is on the
+  <a href="vulnerabilities.html">Known vulnerabilities</a> page.</p>
+</section>
+
+<section id="build">
+  <h2>Build from source</h2>
+  <p>You need Go 1.27 or later and, because the window toolkit uses cgo, a C compiler (MinGW-w64 on Windows).</p>
+<pre><code>winget install BrechtSanders.WinLibs.POSIX.UCRT
+go build -ldflags "-H windowsgui" -o rcp.exe ./cmd/rcp
+go run ./cmd/buildmodules -o modules</code></pre>
+  <p>The first command installs the compiler, the second builds the application (the first build takes a few minutes),
+  the third compiles every module of <code>modules/</code> into the <code>modules</code> folder next to
+  <code>rcp.exe</code>.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Command</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td><code>rcp.exe -sim</code></td><td>Start on the panel simulator (this run only).</td></tr>
+      <tr><td><code>rcp.exe -modules &lt;folder&gt;</code></td><td>Load the modules from another folder.</td></tr>
+      <tr><td><code>go run ./cmd/buildmodules -o out demo</code></td><td>Build only the named modules.</td></tr>
+      <tr><td><code>go run ./cmd/panelcheck -t 60s</code></td><td>Show a fake rig on a real panel.</td></tr>
+      <tr><td><code>go run ./cmd/panelprobe -t 10s</code></td><td>Authenticate the panel and dump its USB reports.</td></tr>
+    </tbody>
+  </table></div>
+  <details class="more"><summary>More info: releases</summary><div>
+    <p>Pushing a tag such as <code>v0.3.0-ALPHA</code> runs the release workflow: tests, build of <code>rcp.exe</code>
+    and of every module, a zip with the README, and a GitHub release (a tag with a suffix is a pre-release).</p>
+  </div></details>
+</section>
+
+<section id="tests">
+  <h2>Tests and quality</h2>
+<pre><code>go test ./...
+go test -race ./internal/...</code></pre>
+  <p>The tests need no hardware and no network. What they cover:</p>
+  <ul>
+    <li><strong>Every package from the outside.</strong> Tests use a package's public API only, so they keep passing
+    when the inside changes.</li>
+    <li><strong>The window like a user.</strong> GUI tests find a text or a widget on screen, click it and read the
+    window again (<code>internal/gui/ui_driver_test.go</code>).</li>
+    <li><strong>The panel on a virtual clock.</strong> Blinking lights, long presses and timeouts are tested with
+    <code>testing/synctest</code>, without waiting.</li>
+    <li><strong>Every module against the same contract</strong>, offline and connected to a fake camera.</li>
+    <li><strong>The sandbox against a hostile module</strong> written to escape it.</li>
+    <li><strong>The architecture</strong>, by the dependency rules test.</li>
+  </ul>
+  <p>The CI runs <code>gofmt</code>, <code>go vet</code>, the tests with the race detector and
+  <a href="vulnerabilities.html#how">govulncheck</a> on every push to <code>main</code> and every pull request.
+  Tests against real cameras run only when asked:
+  <code>BMD_CAMERA=&lt;ip&gt; go test ./internal/plugins -run Live -v</code>.</p>
+</section>
+
+<footer class="page">RCP For All Camera · Documentation · version 0.3.0-ALPHA ·
+<a href="modules-camera.html">Camera modules guide</a> · <a href="vulnerabilities.html">Known vulnerabilities</a></footer>
+</main>
+</div>
+</body>
+</html>
