@@ -1,9 +1,10 @@
-package app
+package app_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"log/slog"
 	"strings"
 	"sync"
@@ -70,7 +71,7 @@ func (d *opsDriver) last() *opsCamera {
 	return d.cams[len(d.cams)-1]
 }
 
-func newOpsService(t *testing.T, saved SavedRig) (*Service, *memStore, *opsDriver, *slog.LevelVar) {
+func newOpsService(t *testing.T, saved app.SavedRig) (*app.Service, *memStore, *opsDriver, *slog.LevelVar) {
 	t.Helper()
 	reg := core.NewRegistry()
 	drv := &opsDriver{}
@@ -79,7 +80,7 @@ func newOpsService(t *testing.T, saved SavedRig) (*Service, *memStore, *opsDrive
 	}
 	st := &memStore{rig: saved}
 	lv := new(slog.LevelVar)
-	svc, err := NewService(Options{
+	svc, err := app.NewService(app.Options{
 		Registry: reg, Store: st, Secrets: newMemSecrets(),
 		LogLevel: lv, LogDir: `C:\logs\rcp`,
 		Go: func(f func()) { f() }, // run background work inline in tests
@@ -93,7 +94,7 @@ func newOpsService(t *testing.T, saved SavedRig) (*Service, *memStore, *opsDrive
 // --- auto-connect -------------------------------------------------------------
 
 func TestAssignedCameraConnectsAutomatically(t *testing.T) {
-	svc, _, drv, _ := newOpsService(t, SavedRig{})
+	svc, _, drv, _ := newOpsService(t, app.SavedRig{})
 	if err := svc.AssignSlot(1, validInput()); err != nil {
 		t.Fatal(err)
 	}
@@ -103,11 +104,11 @@ func TestAssignedCameraConnectsAutomatically(t *testing.T) {
 }
 
 func TestConnectAllConnectsEverySavedCamera(t *testing.T) {
-	var saved SavedRig
+	var saved app.SavedRig
 	saved.Slots[0] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.1"}
 	saved.Slots[4] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.5"}
 	svc, _, drv, _ := newOpsService(t, saved)
-	svc.connectAll()
+	svc.ConnectAll()
 	for i, c := range drv.cams {
 		if c.connectCount() != 1 {
 			t.Errorf("camera %d: Connect called %d times, want 1", i, c.connectCount())
@@ -127,16 +128,16 @@ func TestRecordAndColorBarsAreGuardedByDefault(t *testing.T) {
 }
 
 func TestOperatorLockIsOnByDefault(t *testing.T) {
-	svc, _, _, _ := newOpsService(t, SavedRig{})
+	svc, _, _, _ := newOpsService(t, app.SavedRig{})
 	if !svc.Settings().OperatorLock {
 		t.Fatal("operator lock must default to on")
 	}
 }
 
 func TestLockedGuardedControlNeedsConfirmation(t *testing.T) {
-	svc, _, drv, _ := newOpsService(t, SavedRig{})
+	svc, _, drv, _ := newOpsService(t, app.SavedRig{})
 	_ = svc.AssignSlot(1, validInput())
-	if c := code(t, svc.SetControl(1, "record", core.Bool(true))); c != CodeConfirmRequired {
+	if c := code(t, svc.SetControl(1, "record", core.Bool(true))); c != app.CodeConfirmRequired {
 		t.Fatalf("code = %s, want CONFIRM_REQUIRED", c)
 	}
 	if len(drv.last().sets) != 0 {
@@ -151,7 +152,7 @@ func TestLockedGuardedControlNeedsConfirmation(t *testing.T) {
 }
 
 func TestUnguardedControlIgnoresLock(t *testing.T) {
-	svc, _, _, _ := newOpsService(t, SavedRig{})
+	svc, _, _, _ := newOpsService(t, app.SavedRig{})
 	_ = svc.AssignSlot(1, validInput())
 	if err := svc.SetControl(1, "iris", core.Number(4)); err != nil {
 		t.Fatalf("SetControl(iris) = %v", err)
@@ -159,7 +160,7 @@ func TestUnguardedControlIgnoresLock(t *testing.T) {
 }
 
 func TestLockOffLetsGuardedControlsThroughAndPersists(t *testing.T) {
-	svc, st, _, _ := newOpsService(t, SavedRig{})
+	svc, st, _, _ := newOpsService(t, app.SavedRig{})
 	_ = svc.AssignSlot(1, validInput())
 	if err := svc.SetOperatorLock(false); err != nil {
 		t.Fatal(err)
@@ -175,17 +176,17 @@ func TestLockOffLetsGuardedControlsThroughAndPersists(t *testing.T) {
 // --- logs ---------------------------------------------------------------------------
 
 func TestLogLevelSettingDrivesTheLevelVar(t *testing.T) {
-	svc, st, _, lv := newOpsService(t, SavedRig{})
-	if svc.Settings().LogLevel != LogNormal || lv.Level() != slog.LevelInfo {
+	svc, st, _, lv := newOpsService(t, app.SavedRig{})
+	if svc.Settings().LogLevel != app.LogNormal || lv.Level() != slog.LevelInfo {
 		t.Fatalf("default level = %s / %v", svc.Settings().LogLevel, lv.Level())
 	}
-	if err := svc.SetLogLevel(LogDebug); err != nil {
+	if err := svc.SetLogLevel(app.LogDebug); err != nil {
 		t.Fatal(err)
 	}
 	if lv.Level() != slog.LevelDebug || st.rig.LogLevel != "debug" {
 		t.Fatalf("debug not applied: %v / %q", lv.Level(), st.rig.LogLevel)
 	}
-	if code(t, svc.SetLogLevel("verbose")) != CodeInvalidConfig {
+	if code(t, svc.SetLogLevel("verbose")) != app.CodeInvalidConfig {
 		t.Fatal("unknown level accepted")
 	}
 	if svc.Settings().LogDir != `C:\logs\rcp` {
@@ -194,7 +195,7 @@ func TestLogLevelSettingDrivesTheLevelVar(t *testing.T) {
 }
 
 func TestSavedLogLevelIsAppliedAtStartup(t *testing.T) {
-	_, _, _, lv := newOpsService(t, SavedRig{LogLevel: "debug"})
+	_, _, _, lv := newOpsService(t, app.SavedRig{LogLevel: "debug"})
 	if lv.Level() != slog.LevelDebug {
 		t.Fatalf("level = %v, want debug", lv.Level())
 	}
@@ -203,7 +204,7 @@ func TestSavedLogLevelIsAppliedAtStartup(t *testing.T) {
 // --- export / import ------------------------------------------------------------------
 
 func TestExportHasCamerasButNoPasswordsOrMachineSettings(t *testing.T) {
-	svc, _, _, _ := newOpsService(t, SavedRig{})
+	svc, _, _, _ := newOpsService(t, app.SavedRig{})
 	in := validInput()
 	in.Password = strPtr("s3cret")
 	_ = svc.AssignSlot(2, in)
@@ -216,17 +217,17 @@ func TestExportHasCamerasButNoPasswordsOrMachineSettings(t *testing.T) {
 		t.Fatalf("export leaks secrets or machine settings: %s", s)
 	}
 	var doc map[string]any
-	if json.Unmarshal(data, &doc) != nil || doc["format"] != ExportFormat {
+	if json.Unmarshal(data, &doc) != nil || doc["format"] != app.ExportFormat {
 		t.Fatalf("export is not a tagged JSON document: %s", s)
 	}
 }
 
 func TestImportReplacesTheRigAndConnects(t *testing.T) {
-	src, _, _, _ := newOpsService(t, SavedRig{})
+	src, _, _, _ := newOpsService(t, app.SavedRig{})
 	_ = src.AssignSlot(3, validInput())
 	data, _ := src.ExportConfig()
 
-	dst, st, drv, _ := newOpsService(t, SavedRig{})
+	dst, st, drv, _ := newOpsService(t, app.SavedRig{})
 	_ = dst.AssignSlot(1, validInput())
 	if err := dst.ImportConfig(data); err != nil {
 		t.Fatal(err)
@@ -244,19 +245,19 @@ func TestImportReplacesTheRigAndConnects(t *testing.T) {
 }
 
 func TestImportRejectsInvalidDocumentsAtomically(t *testing.T) {
-	svc, _, _, _ := newOpsService(t, SavedRig{})
+	svc, _, _, _ := newOpsService(t, app.SavedRig{})
 	_ = svc.AssignSlot(1, validInput())
 	bad := []string{
 		`not json`,
 		`{"format":"something-else","version":1,"slots":[]}`,
-		`{"format":"` + ExportFormat + `","version":99,"slots":[]}`,
-		`{"format":"` + ExportFormat + `","version":1,"slots":[{"model":"acme-cam","host":"http://x/"}]}`,
-		`{"format":"` + ExportFormat + `","version":1,"slots":[{"model":"nope.x","host":"10.0.0.1"}]}`,
-		`{"format":"` + ExportFormat + `","version":1,"slots":[null,null,null,null,null,null,null,null,{"model":"acme-cam","host":"10.0.0.1"}]}`,
-		strings.Repeat(" ", maxImportSize+1),
+		`{"format":"` + app.ExportFormat + `","version":99,"slots":[]}`,
+		`{"format":"` + app.ExportFormat + `","version":1,"slots":[{"model":"acme-cam","host":"http://x/"}]}`,
+		`{"format":"` + app.ExportFormat + `","version":1,"slots":[{"model":"nope.x","host":"10.0.0.1"}]}`,
+		`{"format":"` + app.ExportFormat + `","version":1,"slots":[null,null,null,null,null,null,null,null,{"model":"acme-cam","host":"10.0.0.1"}]}`,
+		strings.Repeat(" ", app.MaxImportSize+1),
 	}
 	for _, b := range bad {
-		if c := code(t, svc.ImportConfig([]byte(b))); c != CodeInvalidConfig {
+		if c := code(t, svc.ImportConfig([]byte(b))); c != app.CodeInvalidConfig {
 			t.Errorf("import %.40q: code %s, want INVALID_CONFIG", b, c)
 		}
 	}
@@ -266,10 +267,10 @@ func TestImportRejectsInvalidDocumentsAtomically(t *testing.T) {
 }
 
 func TestHostStartConnectsSavedCameras(t *testing.T) {
-	var saved SavedRig
+	var saved app.SavedRig
 	saved.Slots[2] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.3"}
 	svc, _, drv, _ := newOpsService(t, saved)
-	h := NewHost(svc, func() (bool, error) { return false, nil }, time.Hour)
+	h := app.NewHost(svc, func() (bool, error) { return false, nil }, time.Hour)
 	h.Start(context.Background(), nil)
 	defer h.Stop()
 	if drv.last().connectCount() != 1 {

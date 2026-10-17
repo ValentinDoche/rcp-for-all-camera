@@ -1,7 +1,8 @@
-package app
+package app_test
 
 import (
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -21,9 +22,9 @@ func (f *fakeAutoStart) SetEnabled(on bool) error {
 	return nil
 }
 
-var testNICs = []NetInterface{{Name: "Ethernet", IP: "192.168.1.110"}, {Name: "Wi-Fi", IP: "10.0.0.5"}}
+var testNICs = []app.NetInterface{{Name: "Ethernet", IP: "192.168.1.110"}, {Name: "Wi-Fi", IP: "10.0.0.5"}}
 
-func newSettingsService(t *testing.T, saved SavedRig, as AutoStarter) (*Service, *memStore, *bindRecorder) {
+func newSettingsService(t *testing.T, saved app.SavedRig, as app.AutoStarter) (*app.Service, *memStore, *bindRecorder) {
 	t.Helper()
 	reg := core.NewRegistry()
 	rec := &bindRecorder{}
@@ -31,9 +32,9 @@ func newSettingsService(t *testing.T, saved SavedRig, as AutoStarter) (*Service,
 		t.Fatal(err)
 	}
 	st := &memStore{rig: saved}
-	svc, err := NewService(Options{
+	svc, err := app.NewService(app.Options{
 		Registry: reg, Store: st, Secrets: newMemSecrets(),
-		Interfaces: func() []NetInterface { return testNICs },
+		Interfaces: func() []app.NetInterface { return testNICs },
 		AutoStart:  as,
 	})
 	if err != nil {
@@ -54,7 +55,7 @@ func (b *bindRecorder) New(cfg core.CameraConfig) (core.Camera, error) {
 }
 
 func TestSettingsDefaults(t *testing.T) {
-	svc, _, _ := newSettingsService(t, SavedRig{}, &fakeAutoStart{})
+	svc, _, _ := newSettingsService(t, app.SavedRig{}, &fakeAutoStart{})
 	st := svc.Settings()
 	if st.BindIP != "" || st.AutoStart {
 		t.Fatalf("Settings() = %+v, want defaults", st)
@@ -62,14 +63,14 @@ func TestSettingsDefaults(t *testing.T) {
 }
 
 func TestNetworkInterfacesListsLocalAddresses(t *testing.T) {
-	svc, _, _ := newSettingsService(t, SavedRig{}, nil)
+	svc, _, _ := newSettingsService(t, app.SavedRig{}, nil)
 	if got := svc.NetworkInterfaces(); len(got) != 2 || got[0].IP != "192.168.1.110" {
 		t.Fatalf("NetworkInterfaces() = %v", got)
 	}
 }
 
 func TestSetBindIPPersistsAndReachesCameras(t *testing.T) {
-	svc, st, rec := newSettingsService(t, SavedRig{}, nil)
+	svc, st, rec := newSettingsService(t, app.SavedRig{}, nil)
 	if err := svc.AssignSlot(1, validInput()); err != nil {
 		t.Fatal(err)
 	}
@@ -88,9 +89,9 @@ func TestSetBindIPPersistsAndReachesCameras(t *testing.T) {
 }
 
 func TestSetBindIPRejectsAddressesNotOnThisPC(t *testing.T) {
-	svc, st, _ := newSettingsService(t, SavedRig{}, nil)
+	svc, st, _ := newSettingsService(t, app.SavedRig{}, nil)
 	for _, ip := range []string{"192.168.9.9", "not-an-ip", "::1/64"} {
-		if c := code(t, svc.SetBindIP(ip)); c != CodeInvalidConfig {
+		if c := code(t, svc.SetBindIP(ip)); c != app.CodeInvalidConfig {
 			t.Errorf("SetBindIP(%q) code = %s, want INVALID_CONFIG", ip, c)
 		}
 	}
@@ -100,7 +101,7 @@ func TestSetBindIPRejectsAddressesNotOnThisPC(t *testing.T) {
 }
 
 func TestSavedBindIPIsRestoredEvenIfInterfaceIsDown(t *testing.T) {
-	saved := SavedRig{BindIP: "172.16.0.9"}
+	saved := app.SavedRig{BindIP: "172.16.0.9"}
 	svc, _, _ := newSettingsService(t, saved, nil)
 	st := svc.Settings()
 	if st.BindIP != "172.16.0.9" || st.BindIPAvailable {
@@ -110,7 +111,7 @@ func TestSavedBindIPIsRestoredEvenIfInterfaceIsDown(t *testing.T) {
 
 func TestAutoStartGoesThroughTheProvider(t *testing.T) {
 	as := &fakeAutoStart{}
-	svc, _, _ := newSettingsService(t, SavedRig{}, as)
+	svc, _, _ := newSettingsService(t, app.SavedRig{}, as)
 	if err := svc.SetAutoStart(true); err != nil {
 		t.Fatal(err)
 	}
@@ -120,16 +121,16 @@ func TestAutoStartGoesThroughTheProvider(t *testing.T) {
 }
 
 func TestAutoStartFailureIsInternalError(t *testing.T) {
-	svc, _, _ := newSettingsService(t, SavedRig{},
+	svc, _, _ := newSettingsService(t, app.SavedRig{},
 		&fakeAutoStart{err: errors.New(`registry: access denied HKCU\...`)})
-	if c := code(t, svc.SetAutoStart(true)); c != CodeInternal {
+	if c := code(t, svc.SetAutoStart(true)); c != app.CodeInternal {
 		t.Fatalf("code = %s, want INTERNAL", c)
 	}
 }
 
 func TestAutoStartWithoutProviderIsNotImplemented(t *testing.T) {
-	svc, _, _ := newSettingsService(t, SavedRig{}, nil)
-	if c := code(t, svc.SetAutoStart(true)); c != CodeNotImplemented {
+	svc, _, _ := newSettingsService(t, app.SavedRig{}, nil)
+	if c := code(t, svc.SetAutoStart(true)); c != app.CodeNotImplemented {
 		t.Fatalf("code = %s, want NOT_IMPLEMENTED", c)
 	}
 }

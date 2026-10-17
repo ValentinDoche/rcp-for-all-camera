@@ -1,6 +1,7 @@
-package app
+package app_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"sync"
 	"testing"
 
@@ -48,32 +49,32 @@ func (d *pushDriver) New(core.CameraConfig) (core.Camera, error) {
 
 type eventLog struct {
 	mu  sync.Mutex
-	got []CameraEvent
+	got []app.CameraEvent
 }
 
 func (l *eventLog) Emit(name string, p any) {
-	if name != EventCamera {
+	if name != app.EventCamera {
 		return
 	}
 	l.mu.Lock()
-	l.got = append(l.got, p.(CameraEvent))
+	l.got = append(l.got, p.(app.CameraEvent))
 	l.mu.Unlock()
 }
 
-func newPushService(t *testing.T) (*Service, *pushDriver, *eventLog) {
+func newPushService(t *testing.T) (*app.Service, *pushDriver, *eventLog) {
 	t.Helper()
 	reg := core.NewRegistry()
 	drv := &pushDriver{}
 	if err := reg.Register(acme(drv)...); err != nil {
 		t.Fatal(err)
 	}
-	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: SavedRig{}},
+	svc, err := app.NewService(app.Options{Registry: reg, Store: &memStore{rig: app.SavedRig{}},
 		Secrets: newMemSecrets(), Go: func(f func()) { f() }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	log := &eventLog{}
-	svc.setEmitter(log)
+	svc.SetEmitter(log)
 	return svc, drv, log
 }
 

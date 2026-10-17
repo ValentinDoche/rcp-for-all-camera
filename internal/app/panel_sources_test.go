@@ -1,7 +1,8 @@
-package app
+package app_test
 
 import (
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -12,8 +13,8 @@ type fakePanels struct {
 	fail bool
 }
 
-func (f *fakePanels) List() []PanelSource {
-	return []PanelSource{{ID: PanelSourceUSB, Kind: PanelKindUSB}, {ID: PanelSourceSim, Kind: PanelKindSim}}
+func (f *fakePanels) List() []app.PanelSource {
+	return []app.PanelSource{{ID: app.PanelSourceUSB, Kind: app.PanelKindUSB}, {ID: app.PanelSourceSim, Kind: app.PanelKindSim}}
 }
 func (f *fakePanels) Selected() string { return f.sel }
 func (f *fakePanels) Select(id string) error {
@@ -25,9 +26,9 @@ func (f *fakePanels) Select(id string) error {
 }
 
 func TestPanelSourceIsSavedAndRestored(t *testing.T) {
-	store := &memStore{rig: SavedRig{}}
-	p := &fakePanels{sel: PanelSourceUSB}
-	svc, err := NewService(Options{Registry: core.NewRegistry(), Store: store, Secrets: newMemSecrets(), Panels: p})
+	store := &memStore{rig: app.SavedRig{}}
+	p := &fakePanels{sel: app.PanelSourceUSB}
+	svc, err := app.NewService(app.Options{Registry: core.NewRegistry(), Store: store, Secrets: newMemSecrets(), Panels: p})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +45,8 @@ func TestPanelSourceIsSavedAndRestored(t *testing.T) {
 		t.Fatalf("PanelSources = %v, %q", list, sel)
 	}
 
-	p2 := &fakePanels{sel: PanelSourceUSB}
-	if _, err := NewService(Options{Registry: core.NewRegistry(), Store: store, Secrets: newMemSecrets(), Panels: p2}); err != nil {
+	p2 := &fakePanels{sel: app.PanelSourceUSB}
+	if _, err := app.NewService(app.Options{Registry: core.NewRegistry(), Store: store, Secrets: newMemSecrets(), Panels: p2}); err != nil {
 		t.Fatal(err)
 	}
 	if p2.sel != "usb:ABC" {
@@ -54,8 +55,8 @@ func TestPanelSourceIsSavedAndRestored(t *testing.T) {
 }
 
 func TestSelectPanelSourceRejectsBadIDs(t *testing.T) {
-	p := &fakePanels{sel: PanelSourceUSB}
-	svc, _ := NewService(Options{Registry: core.NewRegistry(), Store: &memStore{rig: SavedRig{}},
+	p := &fakePanels{sel: app.PanelSourceUSB}
+	svc, _ := app.NewService(app.Options{Registry: core.NewRegistry(), Store: &memStore{rig: app.SavedRig{}},
 		Secrets: newMemSecrets(), Panels: p})
 	for _, id := range []string{"", "usb:", "hdmi"} {
 		if err := svc.SelectPanelSource(id); err == nil {
@@ -63,10 +64,10 @@ func TestSelectPanelSourceRejectsBadIDs(t *testing.T) {
 		}
 	}
 	p.fail = true
-	if err := svc.SelectPanelSource(PanelSourceSim); err == nil {
+	if err := svc.SelectPanelSource(app.PanelSourceSim); err == nil {
 		t.Error("a failing selector must report an error")
 	}
-	noSel, _ := NewService(Options{Registry: core.NewRegistry(), Store: &memStore{rig: SavedRig{}},
+	noSel, _ := app.NewService(app.Options{Registry: core.NewRegistry(), Store: &memStore{rig: app.SavedRig{}},
 		Secrets: newMemSecrets()})
 	if list, sel := noSel.PanelSources(); list != nil || sel != "" {
 		t.Errorf("without selector: %v, %q", list, sel)
