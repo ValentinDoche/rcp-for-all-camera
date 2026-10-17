@@ -75,7 +75,7 @@ All Service calls run on one writer goroutine, so a slow camera never blocks the
 | STORE | Toggles the app's shared Store arming: `SetStoreArmed(!StoreArmed())`. Works with or without an active camera. |
 | SCENE 1–5 | Store armed: `StorePreset(active slot, n)` (the app disarms). Otherwise `RecallPreset(active slot, n)` if preset *n* is stored on the active slot, else nothing. No active camera: nothing. See [Presets](#presets-store-and-scene-15). |
 | BARS | Toggles `colorBars`, **only when its current value is known** (never guess what goes on air). |
-| Iris lever | `iris` with soft takeover (below). Lever back = closed. f-stops: logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when the camera reports them (`core.Lens`), so the lever never asks for an aperture the lens lacks, then to the **lever window** set by COARSE and SENS (whole range by default). Normalized iris: linear over the whole range, 1 = open (TODO(verify) per driver). Quantized to the spec step. |
+| Iris lever | **`irisNorm` when the camera offers it** (Blackmagic: `normalised` of `/lens/iris`), like ATEM Software Control: the whole travel is the mounted lens' range, back = closed (1), forward = open (0), so a f/2.8 lens tops out at 2.8 with the lever forward. COARSE/SENS then set a window over that range (COARSE fully counter-clockwise = most open; SENS from 10 % of the range to all of it). The displays and the iris scale show the f-stop (`iris`). **Otherwise `iris`**: f-stops logarithmic from Max (closed) to Min (open), narrowed to the lens' own limits when known (`core.Lens`), then to the **lever window** set by COARSE and SENS (whole range by default). Normalized iris: linear over the whole range, 1 = open (TODO(verify) per driver). Soft takeover (below), quantized to the spec step. |
 | Master black ring | `masterBlack`, linear, soft takeover. **Dead zone**: ±1 % of the travel around the centre gives exactly 0; the rest covers −limit..0 and 0..+limit, so the ends are still reached. The travel is limited to what the MB display shows as a number: −0.99..+0.99 for ranges shown ×100 (Blackmagic −2..2), −99..+99 for integer ranges, intersected with the range. A value set beyond that elsewhere (shown 99 / -99) cannot be reached, so the ring takes over at once on its next movement instead of staying stuck. |
 | WHITE R/G/B knobs | `gainR/G/B`, relative. A full knob travel (1024 counts) spans **0.5..1.5** and the value stays in it. |
 | BLACK R/G/B knobs | `liftR/G/B`, relative. A full knob travel spans **−0.5..+0.5** and the value stays in it. A gain or lift set outside its travel elsewhere is brought back into it by the next turn. |
@@ -102,6 +102,15 @@ reconnection, or a change of the value from elsewhere (GUI, camera, another even
 lever only takes control once it **reaches** the camera value (within 1 % of travel) or
 **crosses** it between two reports. Until then nothing is written. With an unknown value
 nothing is ever written.
+
+**Echoes are not changes from elsewhere.** A camera reports late (moved fast, the lever
+sends 4.0 then 3.2 and the camera reports 4.0 afterwards), snaps the iris to the lens'
+stops and stops at the lens' ends. For 800 ms after a lever/ring write, a report that lands
+within the span of the values sent (± 8 % of the travel) is taken as an echo: it neither
+releases the lever nor replaces the value sent, and the camera's last echo is shown once it
+has settled. Before this, a fast lever movement lost control mid-way (the lever then waited
+for pickup and its segment blinked). A report far from what was sent (another operator)
+still releases the lever.
 
 ### Panel control off (PANEL ACTIVE)
 

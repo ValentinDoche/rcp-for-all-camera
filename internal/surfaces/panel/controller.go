@@ -74,6 +74,8 @@ type Controller struct {
 	knobRef   [len(knobControls)]int // knob positions last applied (deadband reference)
 	iris, mb  pickup
 	written   map[core.ControlID]float64 // last lever/ring value sent
+	recent    map[core.ControlID]recentWrites
+	late      map[core.ControlID]float64 // echoed values to adopt once settled (echo.go)
 	connected bool
 
 	// knobs are COARSE and SENS (the iris lever window); coarseAt and
@@ -144,7 +146,8 @@ func New(o Options) *Controller {
 	def(&o.RetryMax, 10*time.Second)
 	def(&o.BusyEvery, 2*time.Second)
 	return &Controller{opt: o, log: o.Logger, wake: make(chan struct{}, 1), reopen: make(chan struct{}, 1),
-		held: map[string]bool{}, written: map[core.ControlID]float64{}, now: time.Now}
+		held: map[string]bool{}, written: map[core.ControlID]float64{},
+		recent: map[core.ControlID]recentWrites{}, late: map[core.ControlID]float64{}, now: time.Now}
 }
 
 // Reconnect blanks and closes the panel being driven, then opens one again
@@ -251,11 +254,14 @@ func (c *Controller) cameraEvent(e app.CameraEvent) {
 	if e.Slot != c.cam.slot || !c.cam.has(ev.Control) {
 		return
 	}
+	if (ev.Control == irisLeverID(c.cam) || ev.Control == core.MasterBlack) && c.echoLocked(ev.Control, ev.Value.Number) {
+		return
+	}
 	c.cam.values[ev.Control] = ev.Value
 	// A lever/ring value changed by someone else: pick it up again.
 	if w, ok := c.written[ev.Control]; !ok || w != ev.Value.Number {
 		switch ev.Control {
-		case core.Iris:
+		case irisLeverID(c.cam):
 			c.iris.release()
 		case core.MasterBlack:
 			c.mb.release()
@@ -267,6 +273,8 @@ func (c *Controller) releaseLocked() {
 	c.iris.release()
 	c.mb.release()
 	clear(c.written)
+	clear(c.recent)
+	clear(c.late)
 }
 
 func (c *Controller) requestRefresh() {
@@ -301,9 +309,13 @@ func (c *Controller) refresh() {
 	}
 	next := newCamState(slot, views)
 	next.lens = lens
-	for id, p := range map[core.ControlID]*pickup{core.Iris: &c.iris, core.MasterBlack: &c.mb} {
+	for id, p := range map[core.ControlID]*pickup{irisLeverID(next): &c.iris, core.MasterBlack: &c.mb} {
 		old, oldOK := c.cam.values[id]
 		nv, ok := next.values[id]
+		if ok && oldOK && old != nv && c.echoLocked(id, nv.Number) {
+			next.values[id] = old // the camera has not caught up with the lever yet
+			continue
+		}
 		if !ok || !oldOK || old != nv {
 			if w, sent := c.written[id]; !ok || !sent || w != nv.Number {
 				p.release()
@@ -408,7 +420,11 @@ func (c *Controller) onInput(s micropanel.State) {
 	}
 	c.irisKnobsLocked(s)
 	if s.Lever != c.prev.Lever {
-		c.moveLocked(&c.iris, core.Iris, leverPos(s.Lever), c.irisWindowLocked, irisAt, irisPos)
+		if irisLeverID(c.cam) == core.IrisNorm {
+			c.moveLocked(&c.iris, core.IrisNorm, leverPos(s.Lever), c.normWindowLocked, normAt, normPos)
+		} else {
+			c.moveLocked(&c.iris, core.Iris, leverPos(s.Lever), c.irisWindowLocked, irisAt, irisPos)
+		}
 	}
 	if s.Ring != c.prev.Ring {
 		c.moveLocked(&c.mb, core.MasterBlack, leverPos(s.Ring), mbWindow, mbAt, mbPos)
@@ -462,20 +478,24 @@ func (c *Controller) irisKnobsLocked(s micropanel.State) {
 // window: a camera iris left outside the window is set to the value under
 // the lever, which then drives it.
 func (c *Controller) fitIrisLocked() {
-	spec, cur, known := c.cam.number(core.Iris)
+	id := irisLeverID(c.cam)
+	spec, cur, known := c.cam.number(id)
 	slot := c.cam.slot
 	if !known || slot == 0 || slot != c.rig.Active || spec.ReadOnly || !c.iris.havePos {
 		return
 	}
-	w := c.irisWindowLocked(spec)
+	at, w := irisAt, c.irisWindowLocked(spec)
+	if id == core.IrisNorm {
+		at, w = normAt, c.normWindowLocked(spec)
+	}
 	if w.reaches(spec, cur) {
 		return
 	}
 	c.iris.picked = true
-	if nv := irisAt(spec, w, c.iris.pos); nv != cur {
-		c.cam.values[core.Iris] = core.Number(nv)
-		c.written[core.Iris] = nv
-		c.w.set(slot, core.Iris, core.Number(nv))
+	if nv := at(spec, w, c.iris.pos); nv != cur {
+		c.cam.values[id] = core.Number(nv)
+		c.noteWriteLocked(id, nv)
+		c.w.set(slot, id, core.Number(nv))
 	}
 }
 
@@ -511,6 +531,9 @@ func (c *Controller) knobsRead(pos [9]uint16) {
 // irisWindowLocked is the iris lever window for the active camera's iris.
 func (c *Controller) irisWindowLocked(s core.ControlSpec) window { return irisWindow(s, c.knobs) }
 
+// normWindowLocked is the lever window over the lens' range (IrisNorm).
+func (c *Controller) normWindowLocked(core.ControlSpec) window { return normWindow(c.knobs) }
+
 // moveLocked applies a lever/ring movement with soft takeover. A camera
 // value outside the control's window can never be reached, so the control
 // takes over at once instead of staying stuck.
@@ -537,7 +560,7 @@ func (c *Controller) moveLocked(p *pickup, id core.ControlID, pos float64, win f
 		return
 	}
 	c.cam.values[id] = core.Number(nv)
-	c.written[id] = nv
+	c.noteWriteLocked(id, nv)
 	c.w.set(slot, id, core.Number(nv))
 }
 
@@ -675,6 +698,8 @@ func (c *Controller) frame(now time.Time) frame {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.wbTickLocked(now)
+	c.settleLocked(now)
+	irisWin, irisC := irisView(c.cam, c.knobs)
 	awb := c.wbAWBLocked()
 	hint := func(p pickup, id core.ControlID) pickHint {
 		_, _, declared, known := c.cam.get(id)
@@ -682,7 +707,8 @@ func (c *Controller) frame(now time.Time) frame {
 	}
 	return render(view{
 		rig: c.rig, cam: c.cam, tally: c.tally, held: c.held,
-		iris: hint(c.iris, core.Iris), mb: hint(c.mb, core.MasterBlack),
+		iris: hint(c.iris, irisLeverID(c.cam)), mb: hint(c.mb, core.MasterBlack),
+		irisWin: irisWin, irisCentre: irisC,
 		blink:  now.UnixMilli()/250%2 == 0,
 		alarm:  now.Before(c.alarmUntil),
 		knobs:  c.knobs,

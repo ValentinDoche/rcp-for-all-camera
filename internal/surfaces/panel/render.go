@@ -42,6 +42,10 @@ type view struct {
 	blink bool // blink phase, toggles a few times a second
 	alarm bool // a command failed a moment ago
 	knobs irisKnobs
+	// irisWin and irisCentre are the iris lever window and the COARSE
+	// centre in f-stops (irisView); zero = from the knobs (irisWindow).
+	irisWin    window
+	irisCentre float64
 	// coarse and sens: the knob moved a moment ago, preview its effect.
 	coarse, sens bool
 	// wb: white balance mode, GAIN shows the tint and SHUTTER the Kelvin.
@@ -123,7 +127,7 @@ func render(v view) frame {
 		// COARSE preview: the window centre blinks on the SHUTTER display.
 		text := ""
 		if v.blink {
-			text = fstopText(irisCentre(irisSpec, v.knobs))
+			text = fstopText(v.irisCentreOf(irisSpec))
 		}
 		micropanel.EncodeText(&f.digits, micropanel.DispShutter, text)
 	} else {
@@ -173,13 +177,13 @@ func render(v view) frame {
 	switch s, iris, ok := c.number(core.Iris); {
 	case irisDeclared && v.sens && irisSpec.Kind == core.KindRange && isFStop(irisSpec):
 		// SENS preview: the window itself, every reachable segment lit.
-		reach := irisReach(irisSpec, irisWindow(irisSpec, v.knobs))
+		reach := irisReach(irisSpec, v.irisWindowOf(irisSpec))
 		for i := range micropanel.LEDIrisBarCount {
 			f.leds.Set(micropanel.LEDIrisBar0+i, reach[i])
 		}
 	case ok:
 		// The camera iris as a bar down to CLS, masked to the window.
-		w := irisWindow(s, v.knobs)
+		w := v.irisWindowOf(s)
 		reach := irisReach(s, w)
 		from := irisSegment(s, iris)
 		for i := range micropanel.LEDIrisBarCount {
@@ -192,6 +196,22 @@ func render(v view) frame {
 		}
 	}
 	return f
+}
+
+// irisWindowOf and irisCentreOf are the view's iris window and COARSE
+// centre, from the knobs when the controller gave none.
+func (v view) irisWindowOf(s core.ControlSpec) window {
+	if v.irisWin != (window{}) {
+		return v.irisWin
+	}
+	return irisWindow(s, v.knobs)
+}
+
+func (v view) irisCentreOf(s core.ControlSpec) float64 {
+	if v.irisCentre > 0 {
+		return v.irisCentre
+	}
+	return irisCentre(s, v.knobs)
 }
 
 // irisReach tells which iris scale segments the lever can reach in window
