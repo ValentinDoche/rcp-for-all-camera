@@ -27,7 +27,7 @@ Owner: Valentin (writes in French, so answer in French).
 | panel controller | **Wired in the app**: [internal/surfaces/panel](internal/surfaces/panel), mapping in [docs/panel-mapping.md](docs/panel-mapping.md). Hardware render check pending owner photo (`go run ./cmd/panelcheck -t 60s`) |
 | `core`, `config`, `app` | **Done, unit tested**: contracts, registry, rig persistence, settings (bind NIC, autostart, operator lock, logs, export/import), camera event forwarding, local camera presets (snapshots of control values kept in `rig.json`, never on the camera), `app.Service` API incl. `StorePreset`/`RecallPreset`/`DeletePreset` ([docs/app-api.md](docs/app-api.md)) |
 | cameras | **Blackmagic Studio 6K Pro: real protocol** (REST + event WebSocket, [internal/cameras/blackmagic](internal/cameras/blackmagic)), read and write verified on hardware (`BMD_CAMERA=<ip> [BMD_CAMERA_WRITE=1] go test ./internal/cameras/blackmagic -run Live -v`). Other 14 models: specs declared, `camerakit.Placeholder` returns `NOT_IMPLEMENTED`. **Demo camera** ([internal/cameras/demo](internal/cameras/demo)): simulated, no address, same controls as the Studio 6K Pro (zoom with the power zoom setting), every control answers, to try the GUI and the panel without a camera. Panasonic UE150/UE160 complete from SKAARHOJ lists |
-| `gui` | Native Fyne GUI in [internal/gui](internal/gui), FR/EN via [internal/i18n](internal/i18n) ([docs/i18n.md](docs/i18n.md)), entry point [cmd/rcp](cmd/rcp). Details page (layout "A"): exposure cards (iris in f-stops with ⅓ / 1 stop buttons, gain, shutter, ND, white balance), lens cards (focus with the lens' range, zoom only with a power zoom), presets card (1-5 recall, press Store then a number to store, no delete in the GUI), wheels, then generic rows with − / + ([internal/gui/details.go](internal/gui/details.go), [details_cards.go](internal/gui/details_cards.go)). Every value is explicit (`texts.Explicit`: f/4.0, %, °, dB, K, mm, m). Line icons: Tabler subset embedded in [internal/gui/icons](internal/gui/icons) (MIT) |
+| `gui` | Native Fyne GUI in [internal/gui](internal/gui), FR/EN via [internal/i18n](internal/i18n) ([docs/i18n.md](docs/i18n.md)), entry point [cmd/rcp](cmd/rcp). Details page (layout "A"): exposure cards (iris in f-stops with ⅓ / 1 stop buttons, gain, shutter, ND, white balance), lens cards (focus with the lens' range, zoom only with a power zoom), presets card (1-5 recall, press Store then a number to store, no delete in the GUI), wheels, then generic rows with − / + ([internal/gui/details.go](internal/gui/details.go), [details_cards.go](internal/gui/details_cards.go)). Every value is explicit (`texts.Explicit`: f/4.0, %, °, dB, K, mm, m). Line icons: Tabler subset embedded in [internal/gui/icons](internal/gui/icons) (MIT). **Custom title bar** (logo, name, panel status menu, minimize/maximize/close; [titlebar.go](internal/gui/titlebar.go), Windows subclassing in [chrome_windows.go](internal/gui/chrome_windows.go)). **Settings** is a modal with a category list (General, Cameras, Panel, About) ([config.go](internal/gui/config.go)). Logo and its construction guide: [docs/brand/logo.md](docs/brand/logo.md) |
 | routers | **Not started** |
 
 Architecture overview: [docs/architecture.md](docs/architecture.md). Security model: [docs/security.md](docs/security.md).
@@ -164,6 +164,14 @@ zips it with the README and publishes a GitHub release (a tag with a suffix such
     stroke color. The default font has no "→" glyph: write "de X à Y" instead.
 14. The username has a space (`C:\Users\VALENTIN DOCHE`), which breaks the MinGW linker.
     gcc is copied to `C:\mingw\mingw64\bin`, which is first on the user PATH.
+15. **Fyne 2.8 wraps popups** in a `*widget.OverlayContainer`: `Overlays().Top()` is never the
+    `*widget.PopUp` itself. Tests count overlays instead (`extraOverlay`, the Settings modal is one).
+16. Fyne's SVG renderer ignores `<rect rx>` (draw rounded rectangles as paths), and draws no
+    `<text>` nor `<g transform>`: check docs SVGs in a browser, not with Fyne.
+17. The OS title bar is removed by subclassing the window procedure (WM_NCCALCSIZE,
+    WM_NCHITTEST). The free area of the custom title bar answers HTCAPTION, so moving, snap and
+    double-click maximize are native; its buttons and the panel status are "holes"
+    (`captionZones`, updated on layout).
 
 ## 7. What was tried and abandoned
 
