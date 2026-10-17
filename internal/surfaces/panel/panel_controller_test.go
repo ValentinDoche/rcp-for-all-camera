@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel/panelmodel"
+
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/micropanel"
@@ -323,7 +325,7 @@ func TestControllerRendersActiveCamera(t *testing.T) {
 	// digits, matrix and LEDs are three reports: wait for the whole frame
 	waitFor(t, "rendered frame", func() bool {
 		d, m, l := h.dev.snapshot()
-		return d == want && m == micropanel.MatrixNumber(2, micropanel.PixAmber) && cameraColour(l, 2) == colourActive
+		return d == want && m == micropanel.MatrixNumber(2, micropanel.PixAmber) && cameraColour(l, 2) == panelmodel.ColourActive
 	})
 }
 
@@ -430,7 +432,7 @@ func TestControllerWhiteBalanceMode(t *testing.T) {
 	press(0x57) // W/B: mode on
 	waitFor(t, "W/B lit, 5600 shown", func() bool {
 		d, _, l := h.dev.snapshot()
-		return ledOn(&l, micropanel.LEDWB) && [4]byte(d[4:8]) == shutterOf("5600")
+		return panelmodel.LEDOn(&l, micropanel.LEDWB) && [4]byte(d[4:8]) == shutterOf("5600")
 	})
 	press(0x54) // SHUTTER up: +100 K (spec step 50)
 	h.waitCall(t, "whiteBalance", func(v core.Value) bool { return v.Number == 5700 })
@@ -442,17 +444,17 @@ func TestControllerWhiteBalanceMode(t *testing.T) {
 		}
 	}
 	press(0x57) // W/B: mode off, keys back to shutter
-	waitFor(t, "W/B off", func() bool { _, _, l := h.dev.snapshot(); return !ledOn(&l, micropanel.LEDWB) })
+	waitFor(t, "W/B off", func() bool { _, _, l := h.dev.snapshot(); return !panelmodel.LEDOn(&l, micropanel.LEDWB) })
 	press(0x54)
 	h.waitCall(t, "shutterSpeed", func(v core.Value) bool { return v.Choice == "1/60" })
 
 	// A camera switch leaves the mode.
 	press(0x57)
-	waitFor(t, "W/B lit", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDWB) })
+	waitFor(t, "W/B lit", func() bool { _, _, l := h.dev.snapshot(); return panelmodel.LEDOn(&l, micropanel.LEDWB) })
 	h.api.SelectSlot(1)
 	waitFor(t, "W/B off after a switch", func() bool {
 		_, m, l := h.dev.snapshot()
-		return m == micropanel.MatrixNumber(1, micropanel.PixAmber) && !ledOn(&l, micropanel.LEDWB)
+		return m == micropanel.MatrixNumber(1, micropanel.PixAmber) && !panelmodel.LEDOn(&l, micropanel.LEDWB)
 	})
 }
 
@@ -473,7 +475,7 @@ func TestControllerWhiteBalanceModeNeedsWBOrTint(t *testing.T) {
 	h.input(t, micropanel.State{})
 	h.input(t, micropanel.State{Keys: []micropanel.Key{0x54}}) // SHUTTER up stays shutter
 	h.waitCall(t, "shutterSpeed", func(v core.Value) bool { return v.Choice == "1/60" })
-	if _, _, l := h.dev.snapshot(); ledOn(&l, micropanel.LEDWB) {
+	if _, _, l := h.dev.snapshot(); panelmodel.LEDOn(&l, micropanel.LEDWB) {
 		t.Error("W/B lit for a camera without white balance")
 	}
 	for _, c := range api.callsCopy() {
@@ -496,7 +498,7 @@ func TestControllerStoreAndScenes(t *testing.T) {
 	}
 	waitFor(t, "SCENE 2 lit only", func() bool {
 		_, _, l := h.dev.snapshot()
-		return ledOn(&l, micropanel.LEDScene1+1) && !ledOn(&l, micropanel.LEDScene1) && !ledOn(&l, micropanel.LEDStoreRed)
+		return panelmodel.LEDOn(&l, micropanel.LEDScene1+1) && !panelmodel.LEDOn(&l, micropanel.LEDScene1) && !panelmodel.LEDOn(&l, micropanel.LEDStoreRed)
 	})
 	press(0x48) // SCENE 1: nothing stored, nothing done
 	press(0x49) // SCENE 2: recall
@@ -507,7 +509,7 @@ func TestControllerStoreAndScenes(t *testing.T) {
 
 	press(0x4D) // STORE: armed
 	waitFor(t, "armed", api.StoreArmed)
-	waitFor(t, "STORE red", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDStoreRed) })
+	waitFor(t, "STORE red", func() bool { _, _, l := h.dev.snapshot(); return panelmodel.LEDOn(&l, micropanel.LEDStoreRed) })
 	press(0x4A) // SCENE 3: store, the app disarms
 	waitFor(t, "store 3", func() bool { return len(api.presetCalls("store")) == 1 })
 	if c := api.presetCalls("store")[0]; c.slot != 2 || c.n != 3 {
@@ -515,8 +517,8 @@ func TestControllerStoreAndScenes(t *testing.T) {
 	}
 	waitFor(t, "disarmed, SCENE 2 and 3 lit", func() bool {
 		_, _, l := h.dev.snapshot()
-		return !ledOn(&l, micropanel.LEDStoreRed) && ledOn(&l, micropanel.LEDScene1+1) && ledOn(&l, micropanel.LEDScene1+2) &&
-			!ledOn(&l, micropanel.LEDScene1+3)
+		return !panelmodel.LEDOn(&l, micropanel.LEDStoreRed) && panelmodel.LEDOn(&l, micropanel.LEDScene1+1) && panelmodel.LEDOn(&l, micropanel.LEDScene1+2) &&
+			!panelmodel.LEDOn(&l, micropanel.LEDScene1+3)
 	})
 	if api.StoreArmed() {
 		t.Error("still armed after a store")
@@ -537,11 +539,11 @@ func TestControllerFollowsStoreArmingFromTheApp(t *testing.T) {
 	api.armed = true // armed before the panel starts
 	h := start(t, api, Options{})
 	<-h.status
-	waitFor(t, "STORE red at start", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDStoreRed) })
+	waitFor(t, "STORE red at start", func() bool { _, _, l := h.dev.snapshot(); return panelmodel.LEDOn(&l, micropanel.LEDStoreRed) })
 	api.SetStoreArmed(false) // the GUI's Store button
-	waitFor(t, "STORE off", func() bool { _, _, l := h.dev.snapshot(); return !ledOn(&l, micropanel.LEDStoreRed) })
+	waitFor(t, "STORE off", func() bool { _, _, l := h.dev.snapshot(); return !panelmodel.LEDOn(&l, micropanel.LEDStoreRed) })
 	api.SetStoreArmed(true)
-	waitFor(t, "STORE red", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDStoreRed) })
+	waitFor(t, "STORE red", func() bool { _, _, l := h.dev.snapshot(); return panelmodel.LEDOn(&l, micropanel.LEDStoreRed) })
 }
 
 func TestControllerSceneWithoutActiveSlotDoesNothing(t *testing.T) {
@@ -573,7 +575,7 @@ func TestControllerPanelActiveOff(t *testing.T) {
 	<-h.status
 	h.loaded(t)
 	s := sonySpecs()[0]
-	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
+	raw := func(f float64) int32 { return int32(panelmodel.IrisPos(s, whole(s), f)*8192 - 4096) }
 	var st micropanel.State
 	st.Analog[0], st.Lever = 500, raw(11)
 	h.input(t, st) // seed
@@ -584,11 +586,11 @@ func TestControllerPanelActiveOff(t *testing.T) {
 		h.input(t, st)
 	}
 	send(0x57) // W/B mode on, to check it is left
-	waitFor(t, "W/B lit", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDWB) })
+	waitFor(t, "W/B lit", func() bool { _, _, l := h.dev.snapshot(); return panelmodel.LEDOn(&l, micropanel.LEDWB) })
 	send(0x5D) // PANEL ACTIVE: off
 	waitFor(t, "PANEL ACTIVE white, W/B off", func() bool {
 		_, _, l := h.dev.snapshot()
-		return ledOn(&l, micropanel.LEDPanelWhite) && !ledOn(&l, micropanel.LEDPanelRed) && !ledOn(&l, micropanel.LEDWB)
+		return panelmodel.LEDOn(&l, micropanel.LEDPanelWhite) && !panelmodel.LEDOn(&l, micropanel.LEDPanelRed) && !panelmodel.LEDOn(&l, micropanel.LEDWB)
 	})
 	before := len(api.callsCopy())
 	for _, k := range []micropanel.Key{0x4E, 0x54, 0x52, 0x58, 0x5B, 0x57, 0x4D, 0x48, 0x40} {
@@ -608,7 +610,7 @@ func TestControllerPanelActiveOff(t *testing.T) {
 	send(0x5D) // back on: references re-taken
 	waitFor(t, "PANEL ACTIVE red", func() bool {
 		_, _, l := h.dev.snapshot()
-		return ledOn(&l, micropanel.LEDPanelRed) && !ledOn(&l, micropanel.LEDPanelWhite)
+		return panelmodel.LEDOn(&l, micropanel.LEDPanelRed) && !panelmodel.LEDOn(&l, micropanel.LEDPanelWhite)
 	})
 	time.Sleep(20 * time.Millisecond)
 	if c := api.callsCopy()[before:]; len(c) != 0 {
@@ -654,7 +656,7 @@ func TestControllerIrisPickup(t *testing.T) {
 	h := start(t, sonyAPI(), Options{}) // camera at F4
 	<-h.status
 	s := sonySpecs()[0]
-	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
+	raw := func(f float64) int32 { return int32(panelmodel.IrisPos(s, whole(s), f)*8192 - 4096) }
 	h.loaded(t)
 
 	h.input(t, lever(raw(11))) // seed far from F4
@@ -669,7 +671,7 @@ func TestControllerIrisPickup(t *testing.T) {
 	waitFor(t, "IRIS/MB white (ring not picked up)", func() bool {
 		_, _, l := h.dev.snapshot()
 		// master black is not picked up yet: still white
-		return ledOn(&l, micropanel.LEDIrisMBWhite)
+		return panelmodel.LEDOn(&l, micropanel.LEDIrisMBWhite)
 	})
 
 	// camera switch: give control back
@@ -703,7 +705,7 @@ func TestControllerExternalChangeReleasesPickup(t *testing.T) {
 	h := start(t, sonyAPI(), Options{})
 	<-h.status
 	s := sonySpecs()[0]
-	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
+	raw := func(f float64) int32 { return int32(panelmodel.IrisPos(s, whole(s), f)*8192 - 4096) }
 	h.loaded(t)
 	h.input(t, lever(raw(5.6)))
 	h.input(t, lever(raw(3.5))) // crosses F4: picked
@@ -746,7 +748,7 @@ func TestControllerThrottlesContinuousWrites(t *testing.T) {
 		st.Analog[0] = uint16(i)
 		h.input(t, st)
 	}
-	final := knobValue(sonySpecs()[9], 1, 200)
+	final := panelmodel.KnobValue(sonySpecs()[9], 1, 200)
 	h.waitCall(t, "gainR", func(v core.Value) bool { return v.Number == final })
 	n := 0
 	for _, c := range api.callsCopy() {
@@ -877,9 +879,9 @@ func TestControllerTallyFromEvents(t *testing.T) {
 	h := start(t, sonyAPI(), Options{})
 	<-h.status
 	h.ctl.Emit(app.EventCamera, app.CameraEvent{Slot: 4, Event: core.Event{Control: core.Tally, Value: core.Bool(true)}})
-	waitFor(t, "camera 4 red", func() bool { _, _, l := h.dev.snapshot(); return cameraColour(l, 4) == colourTally })
+	waitFor(t, "camera 4 red", func() bool { _, _, l := h.dev.snapshot(); return cameraColour(l, 4) == panelmodel.ColourTally })
 	h.ctl.Emit(app.EventCamera, app.CameraEvent{Slot: 2, Event: core.Event{Status: &core.Status{State: core.StateConnected}}})
-	waitFor(t, "NETWORK on", func() bool { _, _, l := h.dev.snapshot(); return ledOn(&l, micropanel.LEDNetwork) })
+	waitFor(t, "NETWORK on", func() bool { _, _, l := h.dev.snapshot(); return panelmodel.LEDOn(&l, micropanel.LEDNetwork) })
 }
 
 func TestControllerIgnoresCameraKeyOfEmptySlot(t *testing.T) {
@@ -911,7 +913,7 @@ func TestFailedCommandRaisesAlarmForAMoment(t *testing.T) {
 	c.Emit(app.EventCommandFailed, app.CommandFailed{Slot: 1, Control: core.Gain, Code: app.CodeNotConnected})
 	alarm := func(c *Controller, at time.Time) bool {
 		f := c.frame(at)
-		return ledOn(&f.leds, micropanel.LEDAlarm)
+		return panelmodel.LEDOn(&f.LEDs, micropanel.LEDAlarm)
 	}
 	if !alarm(c, t0.Add(time.Second)) && !alarm(c, t0.Add(time.Second+250*time.Millisecond)) {
 		t.Error("ALARM must blink after a failed command")
@@ -939,8 +941,8 @@ func TestControllerIrisLeverStaysInsideTheLens(t *testing.T) {
 	h := start(t, api, Options{})
 	<-h.status
 	h.loaded(t)
-	s := (camState{specs: map[core.ControlID]core.ControlSpec{core.Iris: sonySpecs()[0]}, lens: api.lens}).lensIris(sonySpecs()[0])
-	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
+	s := (panelmodel.Camera{Specs: map[core.ControlID]core.ControlSpec{core.Iris: sonySpecs()[0]}, Lens: api.lens}).LensIris(sonySpecs()[0])
+	raw := func(f float64) int32 { return int32(panelmodel.IrisPos(s, whole(s), f)*8192 - 4096) }
 	h.input(t, lever(raw(5.6)))
 	h.input(t, lever(raw(3.5))) // crosses F4: picked
 	for r := raw(3.5); r <= 4096; r += 64 {
@@ -1013,7 +1015,7 @@ func TestControllerWBLongPressRunsAWB(t *testing.T) {
 	deadline := time.Now().Add(wbLongPress - 200*time.Millisecond)
 	for time.Now().Before(deadline) {
 		_, _, l := h.dev.snapshot()
-		on, off = on || ledOn(&l, micropanel.LEDWB), off || !ledOn(&l, micropanel.LEDWB)
+		on, off = on || panelmodel.LEDOn(&l, micropanel.LEDWB), off || !panelmodel.LEDOn(&l, micropanel.LEDWB)
 		time.Sleep(20 * time.Millisecond)
 	}
 	if !on || !off {
@@ -1021,11 +1023,11 @@ func TestControllerWBLongPressRunsAWB(t *testing.T) {
 	}
 	h.waitCall(t, "autoWhiteBalance", func(v core.Value) bool { return v.Kind == core.KindAction })
 	time.Sleep(300 * time.Millisecond) // a few blink phases
-	if _, _, l := h.dev.snapshot(); !ledOn(&l, micropanel.LEDWB) {
+	if _, _, l := h.dev.snapshot(); !panelmodel.LEDOn(&l, micropanel.LEDWB) {
 		t.Error("AWB triggered: W/B must be steady on while still held")
 	}
 	h.input(t, micropanel.State{}) // release
-	waitFor(t, "W/B off, mode not toggled", func() bool { _, _, l := h.dev.snapshot(); return !ledOn(&l, micropanel.LEDWB) })
+	waitFor(t, "W/B off, mode not toggled", func() bool { _, _, l := h.dev.snapshot(); return !panelmodel.LEDOn(&l, micropanel.LEDWB) })
 	n := 0
 	for _, c := range h.api.callsCopy() {
 		if c.id == "autoWhiteBalance" {
@@ -1055,14 +1057,14 @@ func TestControllerWBLongPressWithoutAWB(t *testing.T) {
 	h.input(t, micropanel.State{Keys: []micropanel.Key{0x57}})
 	deadline := time.Now().Add(wbLongPress + 300*time.Millisecond)
 	for time.Now().Before(deadline) {
-		if _, _, l := h.dev.snapshot(); ledOn(&l, micropanel.LEDWB) {
+		if _, _, l := h.dev.snapshot(); panelmodel.LEDOn(&l, micropanel.LEDWB) {
 			t.Fatal("no AWB: the W/B LED stays off while held")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	h.input(t, micropanel.State{})
 	time.Sleep(100 * time.Millisecond)
-	if _, _, l := h.dev.snapshot(); ledOn(&l, micropanel.LEDWB) {
+	if _, _, l := h.dev.snapshot(); panelmodel.LEDOn(&l, micropanel.LEDWB) {
 		t.Error("a long press must not toggle the mode")
 	}
 	for _, c := range h.api.callsCopy() {
@@ -1080,24 +1082,24 @@ func TestColorKnobsAreRecenteredSoNegativeTurnsWork(t *testing.T) {
 	<-h.status
 	h.loaded(t)
 	st := micropanel.State{AnalogRead: true}
-	st.Analog[knobSens], st.Analog[knobCoarse] = 700, 300 // absolute: must be kept
-	h.input(t, st)                                        // connect: every color knob at 0
+	st.Analog[panelmodel.KnobSens], st.Analog[panelmodel.KnobCoarse] = 700, 300 // absolute: must be kept
+	h.input(t, st)                                                              // connect: every color knob at 0
 	waitFor(t, "recenter written", func() bool { return len(h.dev.featureWrites()) > 0 })
 	w := h.dev.featureWrites()[0]
 	pos, ok := micropanel.ParseAnalog(w)
 	if !ok || len(w) != 19 {
 		t.Fatalf("feature %x is not a 19-byte 0x0E report", w)
 	}
-	for i := range knobControls {
-		if pos[i] != knobCentre {
-			t.Errorf("knob %d set to %d, want %d", i, pos[i], knobCentre)
+	for i := range panelmodel.KnobControls {
+		if pos[i] != panelmodel.KnobCentre {
+			t.Errorf("knob %d set to %d, want %d", i, pos[i], panelmodel.KnobCentre)
 		}
 	}
-	if pos[knobSens] != 700 || pos[knobCoarse] != 300 {
-		t.Errorf("SENS/COARSE must be kept: %d/%d", pos[knobSens], pos[knobCoarse])
+	if pos[panelmodel.KnobSens] != 700 || pos[panelmodel.KnobCoarse] != 300 {
+		t.Errorf("SENS/COARSE must be kept: %d/%d", pos[panelmodel.KnobSens], pos[panelmodel.KnobCoarse])
 	}
-	time.Sleep(50 * time.Millisecond) // the read-back is taken as reference
-	st.Analog[1] = knobCentre - 100   // BLACK R turned down
+	time.Sleep(50 * time.Millisecond)          // the read-back is taken as reference
+	st.Analog[1] = panelmodel.KnobCentre - 100 // BLACK R turned down
 	h.input(t, st)
 	h.waitCall(t, "liftR", func(v core.Value) bool { return v.Number < 0 })
 }

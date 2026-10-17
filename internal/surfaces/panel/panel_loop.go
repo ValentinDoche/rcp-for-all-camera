@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel/panelmodel"
 	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
@@ -122,7 +123,7 @@ func (c *Controller) drive(ctx context.Context, dev Device) error {
 	tick := time.NewTicker(c.opt.FrameEvery)
 	defer tick.Stop()
 	nextBusy := time.Now().Add(c.opt.BusyEvery)
-	var last *frame
+	var last *panelmodel.Frame
 	for {
 		select {
 		case <-ctx.Done():
@@ -153,19 +154,19 @@ func (c *Controller) drive(ctx context.Context, dev Device) error {
 }
 
 // write sends the parts of f that differ from last (all when last is nil).
-func write(dev Device, f frame, last *frame) error {
-	if last == nil || f.digits != last.digits {
-		if err := dev.SetDigitsRaw(f.digits); err != nil {
+func write(dev Device, f panelmodel.Frame, last *panelmodel.Frame) error {
+	if last == nil || f.Digits != last.Digits {
+		if err := dev.SetDigitsRaw(f.Digits); err != nil {
 			return err
 		}
 	}
-	if last == nil || f.matrix != last.matrix {
-		if err := dev.SetMatrixRaw(f.matrix); err != nil {
+	if last == nil || f.Matrix != last.Matrix {
+		if err := dev.SetMatrixRaw(f.Matrix); err != nil {
 			return err
 		}
 	}
-	if last == nil || f.leds != last.leds {
-		if err := dev.WriteReport(f.leds.Report(0)); err != nil {
+	if last == nil || f.LEDs != last.LEDs {
+		if err := dev.WriteReport(f.LEDs.Report(0)); err != nil {
 			return err
 		}
 	}

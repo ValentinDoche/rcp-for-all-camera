@@ -1,8 +1,13 @@
+// Package panel drives the ATEM Micro Camera Panel as a control surface of
+// the app: it reads the panel, keeps its model (package panelmodel) in
+// step with the app's state, renders it on the panel and turns panel input
+// into app.Service calls. The mapping is documented in docs/panel-mapping.md.
 package panel
 
 import (
 	"context"
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel/panelmodel"
 	"log/slog"
 	"slices"
 	"strings"
@@ -66,13 +71,13 @@ type Controller struct {
 	api       app.SurfaceAPI
 	w         *writer
 	rig       app.Rig
-	cam       camState
+	cam       panelmodel.Camera
 	tally     [app.SlotCount + 1]bool
 	held      map[string]bool
 	prev      micropanel.State
 	havePrev  bool
-	knobRef   [len(knobControls)]int // knob positions last applied (deadband reference)
-	iris, mb  pickup
+	knobRef   [len(panelmodel.KnobControls)]int // knob positions last applied (deadband reference)
+	iris, mb  panelmodel.Pickup
 	written   map[core.ControlID]float64 // last lever/ring value sent
 	recent    map[core.ControlID]recentWrites
 	late      map[core.ControlID]float64 // echoed values to adopt once settled (lever_echo.go)
@@ -80,7 +85,7 @@ type Controller struct {
 
 	// knobs are COARSE and SENS (the iris lever window); coarseAt and
 	// sensAt are when they last moved (panel previews).
-	knobs            irisKnobs
+	knobs            panelmodel.IrisKnobs
 	coarseAt, sensAt time.Time
 
 	// off: PANEL ACTIVE turned panel control off. Only PANEL ACTIVE acts;
@@ -206,7 +211,7 @@ func (c *Controller) setRig(r app.Rig) {
 	c.mu.Lock()
 	if r.Active != c.rig.Active {
 		c.releaseLocked()
-		c.cam = camState{slot: r.Active}
+		c.cam = panelmodel.Camera{Slot: r.Active}
 		c.wbMode = false
 		c.wbDownAt, c.wbFired = time.Time{}, false
 	}
@@ -243,35 +248,35 @@ func (c *Controller) cameraEvent(e app.CameraEvent) {
 		return
 	}
 	if ev.Lens != nil {
-		if e.Slot == c.cam.slot {
-			c.cam.lens = *ev.Lens
+		if e.Slot == c.cam.Slot {
+			c.cam.Lens = *ev.Lens
 		}
 		return
 	}
 	if ev.Control == core.Tally {
 		c.tally[e.Slot] = ev.Value.On
 	}
-	if e.Slot != c.cam.slot || !c.cam.has(ev.Control) {
+	if e.Slot != c.cam.Slot || !c.cam.Has(ev.Control) {
 		return
 	}
-	if (ev.Control == irisLeverID(c.cam) || ev.Control == core.MasterBlack) && c.echoLocked(ev.Control, ev.Value.Number) {
+	if (ev.Control == panelmodel.IrisLeverID(c.cam) || ev.Control == core.MasterBlack) && c.echoLocked(ev.Control, ev.Value.Number) {
 		return
 	}
-	c.cam.values[ev.Control] = ev.Value
+	c.cam.Values[ev.Control] = ev.Value
 	// A lever/ring value changed by someone else: pick it up again.
 	if w, ok := c.written[ev.Control]; !ok || w != ev.Value.Number {
 		switch ev.Control {
-		case irisLeverID(c.cam):
-			c.iris.release()
+		case panelmodel.IrisLeverID(c.cam):
+			c.iris.Release()
 		case core.MasterBlack:
-			c.mb.release()
+			c.mb.Release()
 		}
 	}
 }
 
 func (c *Controller) releaseLocked() {
-	c.iris.release()
-	c.mb.release()
+	c.iris.Release()
+	c.mb.Release()
 	clear(c.written)
 	clear(c.recent)
 	clear(c.late)
@@ -307,18 +312,18 @@ func (c *Controller) refresh() {
 	if c.rig.Active != slot {
 		return // a newer refresh is queued
 	}
-	next := newCamState(slot, views)
-	next.lens = lens
-	for id, p := range map[core.ControlID]*pickup{irisLeverID(next): &c.iris, core.MasterBlack: &c.mb} {
-		old, oldOK := c.cam.values[id]
-		nv, ok := next.values[id]
+	next := panelmodel.NewCamera(slot, views)
+	next.Lens = lens
+	for id, p := range map[core.ControlID]*panelmodel.Pickup{panelmodel.IrisLeverID(next): &c.iris, core.MasterBlack: &c.mb} {
+		old, oldOK := c.cam.Values[id]
+		nv, ok := next.Values[id]
 		if ok && oldOK && old != nv && c.echoLocked(id, nv.Number) {
-			next.values[id] = old // the camera has not caught up with the lever yet
+			next.Values[id] = old // the camera has not caught up with the lever yet
 			continue
 		}
 		if !ok || !oldOK || old != nv {
 			if w, sent := c.written[id]; !ok || !sent || w != nv.Number {
-				p.release()
+				p.Release()
 			}
 		}
 	}
@@ -332,7 +337,7 @@ func (c *Controller) refresh() {
 // or a tint the white balance mode can step.
 func (c *Controller) wbAvailableLocked() bool {
 	for _, id := range []core.ControlID{core.WhiteBalance, core.Tint} {
-		if s, _, declared, _ := c.cam.get(id); declared && s.Kind == core.KindRange {
+		if s, _, declared, _ := c.cam.Get(id); declared && s.Kind == core.KindRange {
 			return true
 		}
 	}
@@ -356,10 +361,10 @@ func (c *Controller) onInput(s micropanel.State) {
 			c.knobRef[i] = int(s.Analog[i])
 		}
 		c.recenter = c.recenter || s.AnalogRead
-		c.iris.seed(leverPos(s.Lever))
-		c.mb.seed(leverPos(s.Ring))
+		c.iris.Seed(panelmodel.LeverPos(s.Lever))
+		c.mb.Seed(panelmodel.LeverPos(s.Ring))
 		// COARSE/SENS as found at connect, without preview.
-		c.knobs, c.coarseAt, c.sensAt = irisKnobs{}, time.Time{}, time.Time{}
+		c.knobs, c.coarseAt, c.sensAt = panelmodel.IrisKnobs{}, time.Time{}, time.Time{}
 		c.irisKnobsLocked(s)
 		return
 	}
@@ -399,20 +404,20 @@ func (c *Controller) onInput(s micropanel.State) {
 		return
 	}
 
-	slot := c.cam.slot
+	slot := c.cam.Slot
 	if slot != 0 && slot == c.rig.Active {
-		for i, id := range knobControls {
-			if s.AnalogRead && nearKnobEnd(int(s.Analog[i])) {
+		for i, id := range panelmodel.KnobControls {
+			if s.AnalogRead && panelmodel.NearKnobEnd(int(s.Analog[i])) {
 				c.recenter = true
 			}
 			var d int
-			d, c.knobRef[i] = knobStep(c.knobRef[i], int(s.Analog[i]))
+			d, c.knobRef[i] = panelmodel.KnobStep(c.knobRef[i], int(s.Analog[i]))
 			if d == 0 {
 				continue
 			}
-			if spec, cur, ok := c.cam.number(id); ok && !spec.ReadOnly {
-				if nv := knobValue(spec, cur, d); nv != cur {
-					c.cam.values[id] = core.Number(nv)
+			if spec, cur, ok := c.cam.Number(id); ok && !spec.ReadOnly {
+				if nv := panelmodel.KnobValue(spec, cur, d); nv != cur {
+					c.cam.Values[id] = core.Number(nv)
 					c.w.set(slot, id, core.Number(nv))
 				}
 			}
@@ -420,14 +425,14 @@ func (c *Controller) onInput(s micropanel.State) {
 	}
 	c.irisKnobsLocked(s)
 	if s.Lever != c.prev.Lever {
-		if irisLeverID(c.cam) == core.IrisNorm {
-			c.moveLocked(&c.iris, core.IrisNorm, leverPos(s.Lever), c.normWindowLocked, normAt, normPos)
+		if panelmodel.IrisLeverID(c.cam) == core.IrisNorm {
+			c.moveLocked(&c.iris, core.IrisNorm, panelmodel.LeverPos(s.Lever), c.normWindowLocked, panelmodel.NormAt, panelmodel.NormPos)
 		} else {
-			c.moveLocked(&c.iris, core.Iris, leverPos(s.Lever), c.irisWindowLocked, irisAt, irisPos)
+			c.moveLocked(&c.iris, core.Iris, panelmodel.LeverPos(s.Lever), c.irisWindowLocked, panelmodel.IrisAt, panelmodel.IrisPos)
 		}
 	}
 	if s.Ring != c.prev.Ring {
-		c.moveLocked(&c.mb, core.MasterBlack, leverPos(s.Ring), mbWindow, mbAt, mbPos)
+		c.moveLocked(&c.mb, core.MasterBlack, panelmodel.LeverPos(s.Ring), panelmodel.MBWindow, panelmodel.MBAt, panelmodel.MBPos)
 	}
 	c.prev = s
 }
@@ -439,10 +444,10 @@ func (c *Controller) retakeLocked(s micropanel.State) {
 	for i := range c.knobRef {
 		c.knobRef[i] = int(s.Analog[i])
 	}
-	c.iris.seed(leverPos(s.Lever))
-	c.mb.seed(leverPos(s.Ring))
+	c.iris.Seed(panelmodel.LeverPos(s.Lever))
+	c.mb.Seed(panelmodel.LeverPos(s.Ring))
 	if s.AnalogRead {
-		c.knobs = irisKnobs{coarse: int(s.Analog[knobCoarse]), sens: int(s.Analog[knobSens]), read: true}
+		c.knobs = panelmodel.IrisKnobs{Coarse: int(s.Analog[panelmodel.KnobCoarse]), Sens: int(s.Analog[panelmodel.KnobSens]), Read: true}
 	}
 	c.coarseAt, c.sensAt = time.Time{}, time.Time{}
 }
@@ -454,20 +459,20 @@ func (c *Controller) irisKnobsLocked(s micropanel.State) {
 	if !s.AnalogRead {
 		return
 	}
-	coarse, sens := int(s.Analog[knobCoarse]), int(s.Analog[knobSens])
-	if !c.knobs.read {
-		c.knobs = irisKnobs{coarse: coarse, sens: sens, read: true}
-		c.iris.release()
+	coarse, sens := int(s.Analog[panelmodel.KnobCoarse]), int(s.Analog[panelmodel.KnobSens])
+	if !c.knobs.Read {
+		c.knobs = panelmodel.IrisKnobs{Coarse: coarse, Sens: sens, Read: true}
+		c.iris.Release()
 		return
 	}
 	var dc, ds int
-	if dc, c.knobs.coarse = knobStep(c.knobs.coarse, coarse); dc != 0 {
+	if dc, c.knobs.Coarse = panelmodel.KnobStep(c.knobs.Coarse, coarse); dc != 0 {
 		c.coarseAt = c.now()
-		c.iris.release()
+		c.iris.Release()
 	}
-	if ds, c.knobs.sens = knobStep(c.knobs.sens, sens); ds != 0 {
+	if ds, c.knobs.Sens = panelmodel.KnobStep(c.knobs.Sens, sens); ds != 0 {
 		c.sensAt = c.now()
-		c.iris.release()
+		c.iris.Release()
 	}
 	if dc != 0 || ds != 0 {
 		c.fitIrisLocked()
@@ -478,22 +483,22 @@ func (c *Controller) irisKnobsLocked(s micropanel.State) {
 // window: a camera iris left outside the window is set to the value under
 // the lever, which then drives it.
 func (c *Controller) fitIrisLocked() {
-	id := irisLeverID(c.cam)
-	spec, cur, known := c.cam.number(id)
-	slot := c.cam.slot
-	if !known || slot == 0 || slot != c.rig.Active || spec.ReadOnly || !c.iris.havePos {
+	id := panelmodel.IrisLeverID(c.cam)
+	spec, cur, known := c.cam.Number(id)
+	slot := c.cam.Slot
+	if !known || slot == 0 || slot != c.rig.Active || spec.ReadOnly || !c.iris.HavePos {
 		return
 	}
-	at, w := irisAt, c.irisWindowLocked(spec)
+	at, w := panelmodel.IrisAt, c.irisWindowLocked(spec)
 	if id == core.IrisNorm {
-		at, w = normAt, c.normWindowLocked(spec)
+		at, w = panelmodel.NormAt, c.normWindowLocked(spec)
 	}
-	if w.reaches(spec, cur) {
+	if w.Reaches(spec, cur) {
 		return
 	}
-	c.iris.picked = true
-	if nv := at(spec, w, c.iris.pos); nv != cur {
-		c.cam.values[id] = core.Number(nv)
+	c.iris.Picked = true
+	if nv := at(spec, w, c.iris.Pos); nv != cur {
+		c.cam.Values[id] = core.Number(nv)
 		c.noteWriteLocked(id, nv)
 		c.w.set(slot, id, core.Number(nv))
 	}
@@ -510,8 +515,8 @@ func (c *Controller) takeRecenter() ([]byte, bool) {
 	}
 	c.recenter = false
 	pos := c.prev.Analog
-	for i := range knobControls {
-		pos[i] = knobCentre
+	for i := range panelmodel.KnobControls {
+		pos[i] = panelmodel.KnobCentre
 	}
 	return micropanel.AnalogReport(pos), true
 }
@@ -522,44 +527,48 @@ func (c *Controller) takeRecenter() ([]byte, bool) {
 func (c *Controller) knobsRead(pos [9]uint16) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for i := range knobControls {
+	for i := range panelmodel.KnobControls {
 		c.knobRef[i] = int(pos[i])
 	}
 	c.prev.Analog = pos
 }
 
 // irisWindowLocked is the iris lever window for the active camera's iris.
-func (c *Controller) irisWindowLocked(s core.ControlSpec) window { return irisWindow(s, c.knobs) }
+func (c *Controller) irisWindowLocked(s core.ControlSpec) panelmodel.Window {
+	return panelmodel.IrisWindow(s, c.knobs)
+}
 
 // normWindowLocked is the lever window over the lens' range (IrisNorm).
-func (c *Controller) normWindowLocked(core.ControlSpec) window { return normWindow(c.knobs) }
+func (c *Controller) normWindowLocked(core.ControlSpec) panelmodel.Window {
+	return panelmodel.NormWindow(c.knobs)
+}
 
 // moveLocked applies a lever/ring movement with soft takeover. A camera
 // value outside the control's window can never be reached, so the control
 // takes over at once instead of staying stuck.
-func (c *Controller) moveLocked(p *pickup, id core.ControlID, pos float64, win func(core.ControlSpec) window,
-	at func(core.ControlSpec, window, float64) float64, posOf func(core.ControlSpec, window, float64) float64) {
-	spec, cur, known := c.cam.number(id)
-	slot := c.cam.slot
+func (c *Controller) moveLocked(p *panelmodel.Pickup, id core.ControlID, pos float64, win func(core.ControlSpec) panelmodel.Window,
+	at func(core.ControlSpec, panelmodel.Window, float64) float64, posOf func(core.ControlSpec, panelmodel.Window, float64) float64) {
+	spec, cur, known := c.cam.Number(id)
+	slot := c.cam.Slot
 	w := win(spec)
 	if slot == 0 || slot != c.rig.Active || spec.ReadOnly {
 		known = false
 	}
-	if known && !w.reaches(spec, cur) {
-		p.picked = true
+	if known && !w.Reaches(spec, cur) {
+		p.Picked = true
 	}
 	target := 0.0
 	if known {
 		target = posOf(spec, w, cur)
 	}
-	if !p.move(pos, target, known) {
+	if !p.Move(pos, target, known) {
 		return
 	}
 	nv := at(spec, w, pos)
 	if nv == cur {
 		return
 	}
-	c.cam.values[id] = core.Number(nv)
+	c.cam.Values[id] = core.Number(nv)
 	c.noteWriteLocked(id, nv)
 	c.w.set(slot, id, core.Number(nv))
 }
@@ -578,7 +587,7 @@ func (c *Controller) pressLocked(name string) {
 		c.w.do(op{act: actStoreToggle})
 		return
 	}
-	slot := c.cam.slot
+	slot := c.cam.Slot
 	if slot == 0 || slot != c.rig.Active {
 		return
 	}
@@ -589,21 +598,21 @@ func (c *Controller) pressLocked(name string) {
 		return
 	}
 	stepKey := func(ids []core.ControlID, dir int) {
-		id, _, known := c.cam.pick(ids...)
+		id, _, known := c.cam.Pick(ids...)
 		if !known {
 			return
 		}
-		s, cur, _, _ := c.cam.get(id)
+		s, cur, _, _ := c.cam.Get(id)
 		if s.ReadOnly {
 			return
 		}
-		if nv, ok := step(s, cur, dir); ok {
-			c.cam.values[id] = nv
+		if nv, ok := panelmodel.Step(s, cur, dir); ok {
+			c.cam.Values[id] = nv
 			c.w.do(op{slot: slot, id: id, v: nv})
 		}
 	}
 	trigger := func(id core.ControlID) {
-		if c.cam.has(id) {
+		if c.cam.Has(id) {
 			c.w.do(op{slot: slot, id: id, v: core.Trigger()})
 		}
 	}
@@ -613,13 +622,13 @@ func (c *Controller) pressLocked(name string) {
 	case "ND_DOWN":
 		stepKey([]core.ControlID{core.ND}, -1)
 	case "GAIN_UP", "GAIN_DOWN":
-		ids := gainIDs
+		ids := panelmodel.GainIDs
 		if c.wbMode {
 			ids = []core.ControlID{core.Tint}
 		}
 		stepKey(ids, keyDir(name))
 	case "SHUTTER_UP", "SHUTTER_DOWN":
-		ids := shutterIDs
+		ids := panelmodel.ShutterIDs
 		if c.wbMode {
 			ids = []core.ControlID{core.WhiteBalance}
 		}
@@ -632,7 +641,7 @@ func (c *Controller) pressLocked(name string) {
 		c.wbDownAt, c.wbFired = c.now(), false
 	case "BARS":
 		// Toggle only from a known state: never guess what goes on air.
-		if s, v, _, known := c.cam.get(core.ColorBars); known && s.Kind == core.KindToggle && !s.ReadOnly {
+		if s, v, _, known := c.cam.Get(core.ColorBars); known && s.Kind == core.KindToggle && !s.ReadOnly {
 			c.w.do(op{slot: slot, id: core.ColorBars, v: core.Bool(!v.On)})
 		}
 	default:
@@ -678,8 +687,8 @@ const wbLongPress = time.Second
 
 // wbAWBLocked reports whether the active camera has the auto white balance.
 func (c *Controller) wbAWBLocked() bool {
-	s, _, declared, _ := c.cam.get(core.AutoWhiteBalance)
-	return declared && s.Kind == core.KindAction && c.cam.slot != 0 && c.cam.slot == c.rig.Active
+	s, _, declared, _ := c.cam.Get(core.AutoWhiteBalance)
+	return declared && s.Kind == core.KindAction && c.cam.Slot != 0 && c.cam.Slot == c.rig.Active
 }
 
 // wbTickLocked fires the auto white balance once W/B has been held long
@@ -690,36 +699,36 @@ func (c *Controller) wbTickLocked(now time.Time) {
 	}
 	c.wbFired = true
 	if c.wbAWBLocked() {
-		c.w.do(op{slot: c.cam.slot, id: core.AutoWhiteBalance, v: core.Trigger()})
+		c.w.do(op{slot: c.cam.Slot, id: core.AutoWhiteBalance, v: core.Trigger()})
 	}
 }
 
-func (c *Controller) frame(now time.Time) frame {
+func (c *Controller) frame(now time.Time) panelmodel.Frame {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.wbTickLocked(now)
 	c.settleLocked(now)
-	irisWin, irisC := irisView(c.cam, c.knobs)
+	irisWin, irisC := panelmodel.IrisView(c.cam, c.knobs)
 	awb := c.wbAWBLocked()
-	hint := func(p pickup, id core.ControlID) pickHint {
-		_, _, declared, known := c.cam.get(id)
-		return pickHint{declared: declared, known: known, picked: p.picked, pos: p.pos, havePos: p.havePos}
+	hint := func(p panelmodel.Pickup, id core.ControlID) panelmodel.PickHint {
+		_, _, declared, known := c.cam.Get(id)
+		return panelmodel.PickHint{Declared: declared, Known: known, Picked: p.Picked, Pos: p.Pos, HavePos: p.HavePos}
 	}
-	return render(view{
-		rig: c.rig, cam: c.cam, tally: c.tally, held: c.held,
-		iris: hint(c.iris, irisLeverID(c.cam)), mb: hint(c.mb, core.MasterBlack),
-		irisWin: irisWin, irisCentre: irisC,
-		blink:  now.UnixMilli()/250%2 == 0,
-		alarm:  now.Before(c.alarmUntil),
-		knobs:  c.knobs,
-		coarse: previewing(c.coarseAt, now),
-		sens:   previewing(c.sensAt, now),
-		wb:     c.wbMode,
+	return panelmodel.Render(panelmodel.State{
+		Rig: c.rig, Cam: c.cam, Tally: c.tally, Held: c.held,
+		Iris: hint(c.iris, panelmodel.IrisLeverID(c.cam)), MB: hint(c.mb, core.MasterBlack),
+		IrisWin: irisWin, IrisCentre: irisC,
+		Blink:  now.UnixMilli()/250%2 == 0,
+		Alarm:  now.Before(c.alarmUntil),
+		Knobs:  c.knobs,
+		Coarse: previewing(c.coarseAt, now),
+		Sens:   previewing(c.sensAt, now),
+		WB:     c.wbMode,
 		// held W/B on a camera with AWB: blink, then steady once fired
-		wbHolding: !c.wbDownAt.IsZero() && !c.wbFired && awb,
-		wbFired:   !c.wbDownAt.IsZero() && c.wbFired && awb,
-		armed:     c.storeArmed,
-		off:       c.off,
+		WBHolding: !c.wbDownAt.IsZero() && !c.wbFired && awb,
+		WBFired:   !c.wbDownAt.IsZero() && c.wbFired && awb,
+		Armed:     c.storeArmed,
+		Off:       c.off,
 	})
 }
 

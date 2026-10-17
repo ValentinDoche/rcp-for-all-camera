@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel/panelmodel"
 	"time"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -58,7 +59,7 @@ func (c *Controller) echoLocked(id core.ControlID, v float64) bool {
 	if !ok || !r.guarding(c.now()) {
 		return false
 	}
-	spec, _, declared, _ := c.cam.get(id)
+	spec, _, declared, _ := c.cam.Get(id)
 	if !declared {
 		return false
 	}
@@ -66,13 +67,13 @@ func (c *Controller) echoLocked(id core.ControlID, v float64) bool {
 	switch id {
 	case core.Iris:
 		w := c.irisWindowLocked(spec)
-		pos = func(x float64) float64 { return irisPos(spec, w, x) }
+		pos = func(x float64) float64 { return panelmodel.IrisPos(spec, w, x) }
 	case core.IrisNorm:
 		w := c.normWindowLocked(spec)
-		pos = func(x float64) float64 { return normPos(spec, w, x) }
+		pos = func(x float64) float64 { return panelmodel.NormPos(spec, w, x) }
 	case core.MasterBlack:
-		w := mbWindow(spec)
-		pos = func(x float64) float64 { return mbPos(spec, w, x) }
+		w := panelmodel.MBWindow(spec)
+		pos = func(x float64) float64 { return panelmodel.MBPos(spec, w, x) }
 	default:
 		return false
 	}
@@ -94,8 +95,8 @@ func (c *Controller) settleLocked(now time.Time) {
 			continue
 		}
 		delete(c.late, id)
-		if _, ok := c.cam.values[id]; ok {
-			c.cam.values[id] = core.Number(v)
+		if _, ok := c.cam.Values[id]; ok {
+			c.cam.Values[id] = core.Number(v)
 			c.written[id] = v
 		}
 	}

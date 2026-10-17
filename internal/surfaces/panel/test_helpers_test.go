@@ -1,8 +1,12 @@
 package panel
 
 import (
+	"math"
+
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/micropanel"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel/panelmodel"
 )
 
 func rng(id core.ControlID, lo, hi, st float64, unit string) core.ControlSpec {
@@ -57,8 +61,8 @@ func views(specs []core.ControlSpec, vals map[core.ControlID]core.Value) []app.C
 	return out
 }
 
-func cam(slot int, specs []core.ControlSpec, vals map[core.ControlID]core.Value) camState {
-	return newCamState(slot, views(specs, vals))
+func cam(slot int, specs []core.ControlSpec, vals map[core.ControlID]core.Value) panelmodel.Camera {
+	return panelmodel.NewCamera(slot, views(specs, vals))
 }
 
 func sonyValues() map[core.ControlID]core.Value {
@@ -83,4 +87,42 @@ func rigWith(active int, slots ...int) app.Rig {
 }
 
 // whole is the window covering a control's whole range.
-func whole(s core.ControlSpec) window { return window{s.Min, s.Max} }
+func whole(s core.ControlSpec) panelmodel.Window { return panelmodel.Window{Lo: s.Min, Hi: s.Max} }
+
+// coarseFor is the COARSE knob position whose window centre is f.
+func coarseFor(s core.ControlSpec, f float64) int {
+	return int(math.Round(math.Log(f/s.Min) / math.Log(s.Max/s.Min) * micropanel.AnalogMax))
+}
+
+func digitsOf(texts map[micropanel.Display]string) [14]byte {
+	var d [14]byte
+	for disp, s := range texts {
+		micropanel.EncodeText(&d, disp, s)
+	}
+	return d
+}
+
+// shutterOf is the SHUTTER display (digits 4..7) showing text.
+func shutterOf(text string) [4]byte {
+	d := digitsOf(map[micropanel.Display]string{micropanel.DispShutter: text})
+	return [4]byte(d[4:8])
+}
+
+func cameraColour(l micropanel.LEDBits, slot int) micropanel.Colour {
+	base := 16 + 3*(slot-1)
+	var c micropanel.Colour
+	for ch := 0; ch < 3; ch++ {
+		if panelmodel.LEDOn(&l, base+ch) {
+			c |= 1 << ch
+		}
+	}
+	return c
+}
+
+// sensFor is the SENS knob position giving a window of w stops.
+func sensFor(s core.ControlSpec, w float64) int {
+	full := 2 * math.Log2(s.Max/s.Min)
+	return int(math.Round((w - 1) / (full - 1) * micropanel.AnalogMax))
+}
+
+func near(a, b, tol float64) bool { return math.Abs(a-b) <= tol }

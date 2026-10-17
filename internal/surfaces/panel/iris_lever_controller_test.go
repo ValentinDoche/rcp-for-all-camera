@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panel/panelmodel"
+
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/micropanel"
@@ -16,7 +18,7 @@ func TestControllerLateEchoKeepsTheLever(t *testing.T) {
 	h := start(t, sonyAPI(), Options{}) // camera at F4
 	<-h.status
 	s := sonySpecs()[0]
-	raw := func(f float64) int32 { return int32(irisPos(s, whole(s), f)*8192 - 4096) }
+	raw := func(f float64) int32 { return int32(panelmodel.IrisPos(s, whole(s), f)*8192 - 4096) }
 	h.loaded(t)
 	h.input(t, lever(raw(5.6)))
 	h.input(t, lever(raw(3.5))) // crosses F4: picked
@@ -77,17 +79,4 @@ func TestControllerIrisNormPickup(t *testing.T) {
 	}
 	h.input(t, lever(-500)) // crosses the centre: takes over
 	h.waitCall(t, "irisNorm", func(v core.Value) bool { return v.Number > 0.5 && v.Number < 0.6 })
-}
-
-func TestNormWindow(t *testing.T) {
-	if w := normWindow(irisKnobs{}); w != (window{0, 1}) {
-		t.Fatalf("unread knobs: %v", w)
-	}
-	if w := normWindow(irisKnobs{read: true, coarse: 0, sens: micropanel.AnalogMax}); w != (window{0, 1}) {
-		t.Fatalf("SENS fully clockwise: %v", w)
-	}
-	w := normWindow(irisKnobs{read: true, coarse: 0, sens: 0})
-	if w.lo != 0 || w.hi < normMinWidth-1e-9 || w.hi > normMinWidth+1e-9 {
-		t.Fatalf("narrowest window at the open end: %v", w)
-	}
 }
