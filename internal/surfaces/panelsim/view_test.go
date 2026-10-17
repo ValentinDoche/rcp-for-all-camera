@@ -1,0 +1,95 @@
+package panelsim
+
+import (
+	"image/png"
+	"os"
+	"slices"
+	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/driver/software"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
+
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/micropanel"
+)
+
+// centre returns the view position of a drawing point.
+func centre(x, y float64) fyne.Position { return pos(x, y) }
+
+func TestMouseDrivesInputs(t *testing.T) {
+	test.NewTempApp(t)
+	s := New()
+	v := NewView(s)
+	test.NewTempWindow(t, v)
+
+	cam3 := camButtons[2]
+	at := centre(cam3.x+camW/2, cam3.y+camH/2)
+	v.MouseDown(&desktop.MouseEvent{PointEvent: fyne.PointEvent{Position: at}, Button: desktop.MouseButtonPrimary})
+	if keys := s.Input().Keys; !slices.Equal(keys, []micropanel.Key{keyCam1 + 2}) {
+		t.Fatalf("held keys = %v, want CAM3", keys)
+	}
+	v.MouseUp(&desktop.MouseEvent{})
+	if keys := s.Input().Keys; len(keys) != 0 {
+		t.Fatalf("keys after release = %v", keys)
+	}
+
+	coarse := knobs[8]
+	v.Scrolled(&fyne.ScrollEvent{PointEvent: fyne.PointEvent{Position: centre(coarse.x, coarse.y)}, Scrolled: fyne.Delta{DY: 10}})
+	if got := s.Input().Analog[8]; got != 512+8 {
+		t.Fatalf("COARSE = %d after one wheel notch", got)
+	}
+
+	v.MouseDown(&desktop.MouseEvent{PointEvent: fyne.PointEvent{Position: centre(leverX, leverTop)}, Button: desktop.MouseButtonPrimary})
+	v.Dragged(&fyne.DragEvent{Dragged: fyne.Delta{DY: -1000}})
+	v.DragEnd()
+	if got := s.Input().Lever; got != micropanel.JoystickMax {
+		t.Fatalf("lever = %d after dragging fully forward", got)
+	}
+}
+
+// TestShot renders the panel with sample output to $PANELSIM_SHOT (a PNG
+// path outside the repo) to check the drawing.
+func TestShot(t *testing.T) {
+	path := os.Getenv("PANELSIM_SHOT")
+	if path == "" {
+		t.Skip("set PANELSIM_SHOT to render the panel")
+	}
+	test.NewTempApp(t)
+	s := New()
+	var d [14]byte
+	micropanel.EncodeText(&d, micropanel.DispND, "1")
+	micropanel.EncodeText(&d, micropanel.DispGain, "06")
+	micropanel.EncodeText(&d, micropanel.DispShutter, "50")
+	micropanel.EncodeText(&d, micropanel.DispIris, "F5.6")
+	micropanel.EncodeText(&d, micropanel.DispMasterBlack, "-5")
+	_ = s.SetDigitsRaw(d)
+	_ = s.SetMatrixRaw(micropanel.MatrixNumber(1, micropanel.PixAmber))
+	var l micropanel.LEDBits
+	l.SetCamera(1, micropanel.Amber)
+	l.SetCamera(2, micropanel.Blue)
+	l.SetCamera(5, micropanel.Red)
+	l.SetIrisBar(7)
+	for _, n := range []int{micropanel.LEDScene1, micropanel.LEDScene1 + 2, micropanel.LEDNDUp, micropanel.LEDGainUp,
+		micropanel.LEDGainDown, micropanel.LEDShutterUp, micropanel.LEDPanelRed, micropanel.LEDIrisMBRed,
+		micropanel.LEDNetwork, micropanel.LEDBars, micropanel.LEDBarsInd} {
+		l.Set(n, true)
+	}
+	_ = s.WriteReport(l.Report(0))
+	s.SetLever(1500)
+	s.SetRing(-1200)
+	s.TurnKnob(0, 200)
+
+	w := test.NewTempWindow(t, NewView(s))
+	w.Resize(size(bodyW, bodyH).AddWidthHeight(16, 16))
+	img := software.RenderCanvas(w.Canvas(), theme.DarkTheme())
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		t.Fatal(err)
+	}
+}
