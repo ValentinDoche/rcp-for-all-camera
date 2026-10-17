@@ -231,7 +231,7 @@ func presetCam(t *testing.T, svc *Service, slot int) *presetCamera {
 
 func assigned(t *testing.T, f presetFixture, slot int) *presetCamera {
 	t.Helper()
-	if _, err := f.svc.AssignSlot(slot, validInput()); err != nil {
+	if err := f.svc.AssignSlot(slot, validInput()); err != nil {
 		t.Fatal(err)
 	}
 	return presetCam(t, f.svc, slot)
@@ -392,13 +392,13 @@ func TestModelChangeDropsPresetsSameModelEditKeepsThem(t *testing.T) {
 	_ = f.svc.StorePreset(1, 1)
 	in := validInput()
 	in.Name, in.Host, in.Port = "renamed", "10.0.0.9", 8080
-	if _, err := f.svc.AssignSlot(1, in); err != nil {
+	if err := f.svc.AssignSlot(1, in); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.svc.Rig().Slots[0].Presets; !reflect.DeepEqual(got, []int{1}) {
 		t.Fatalf("same-model edit: presets = %v, want [1]", got)
 	}
-	if _, err := f.svc.AssignSlot(1, SlotInput{Model: "acme-secure", Host: "10.0.0.9", Username: "admin"}); err != nil {
+	if err := f.svc.AssignSlot(1, SlotInput{Model: "acme-secure", Host: "10.0.0.9", Username: "admin"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.svc.Rig().Slots[0].Presets; len(got) != 0 {
@@ -436,7 +436,7 @@ func TestFailedSaveRollsPresetChangesBack(t *testing.T) {
 	if c := code(t, f.svc.ClearSlot(1)); c != CodeInternal {
 		t.Fatalf("clear with failing save code = %s, want INTERNAL", c)
 	}
-	if _, err := f.svc.AssignSlot(1, SlotInput{Model: "acme-secure", Host: "10.0.0.9", Username: "admin"}); err == nil {
+	if err := f.svc.AssignSlot(1, SlotInput{Model: "acme-secure", Host: "10.0.0.9", Username: "admin"}); err == nil {
 		t.Fatal("assign with failing save succeeded")
 	}
 	if c := code(t, f.svc.DeletePreset(1, 1)); c != CodeInternal {

@@ -93,7 +93,7 @@ func newOpsService(t *testing.T, saved SavedRig) (*Service, *memStore, *opsDrive
 
 func TestAssignedCameraConnectsAutomatically(t *testing.T) {
 	svc, _, drv, _ := newOpsService(t, SavedRig{})
-	if _, err := svc.AssignSlot(1, validInput()); err != nil {
+	if err := svc.AssignSlot(1, validInput()); err != nil {
 		t.Fatal(err)
 	}
 	if n := drv.last().connectCount(); n != 1 {
@@ -134,7 +134,7 @@ func TestOperatorLockIsOnByDefault(t *testing.T) {
 
 func TestLockedGuardedControlNeedsConfirmation(t *testing.T) {
 	svc, _, drv, _ := newOpsService(t, SavedRig{})
-	_, _ = svc.AssignSlot(1, validInput())
+	_ = svc.AssignSlot(1, validInput())
 	if c := code(t, svc.SetControl(1, "record", core.Bool(true))); c != CodeConfirmRequired {
 		t.Fatalf("code = %s, want CONFIRM_REQUIRED", c)
 	}
@@ -151,7 +151,7 @@ func TestLockedGuardedControlNeedsConfirmation(t *testing.T) {
 
 func TestUnguardedControlIgnoresLock(t *testing.T) {
 	svc, _, _, _ := newOpsService(t, SavedRig{})
-	_, _ = svc.AssignSlot(1, validInput())
+	_ = svc.AssignSlot(1, validInput())
 	if err := svc.SetControl(1, "iris", core.Number(4)); err != nil {
 		t.Fatalf("SetControl(iris) = %v", err)
 	}
@@ -159,7 +159,7 @@ func TestUnguardedControlIgnoresLock(t *testing.T) {
 
 func TestLockOffLetsGuardedControlsThroughAndPersists(t *testing.T) {
 	svc, st, _, _ := newOpsService(t, SavedRig{})
-	_, _ = svc.AssignSlot(1, validInput())
+	_ = svc.AssignSlot(1, validInput())
 	if err := svc.SetOperatorLock(false); err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestExportHasCamerasButNoPasswordsOrMachineSettings(t *testing.T) {
 	svc, _, _, _ := newOpsService(t, SavedRig{})
 	in := validInput()
 	in.Password = strPtr("s3cret")
-	_, _ = svc.AssignSlot(2, in)
+	_ = svc.AssignSlot(2, in)
 	data, err := svc.ExportConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -222,11 +222,11 @@ func TestExportHasCamerasButNoPasswordsOrMachineSettings(t *testing.T) {
 
 func TestImportReplacesTheRigAndConnects(t *testing.T) {
 	src, _, _, _ := newOpsService(t, SavedRig{})
-	_, _ = src.AssignSlot(3, validInput())
+	_ = src.AssignSlot(3, validInput())
 	data, _ := src.ExportConfig()
 
 	dst, st, drv, _ := newOpsService(t, SavedRig{})
-	_, _ = dst.AssignSlot(1, validInput())
+	_ = dst.AssignSlot(1, validInput())
 	if err := dst.ImportConfig(data); err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestImportReplacesTheRigAndConnects(t *testing.T) {
 
 func TestImportRejectsInvalidDocumentsAtomically(t *testing.T) {
 	svc, _, _, _ := newOpsService(t, SavedRig{})
-	_, _ = svc.AssignSlot(1, validInput())
+	_ = svc.AssignSlot(1, validInput())
 	bad := []string{
 		`not json`,
 		`{"format":"something-else","version":1,"slots":[]}`,

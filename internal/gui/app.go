@@ -30,8 +30,8 @@ const AppID = "com.valentindoche.rcpforallcamera"
 // WindowTitle is the title of the main window.
 const WindowTitle = "RCP For All Camera"
 
-// MinWindow is the smallest supported window.
-var MinWindow = fyne.NewSize(1280, 720)
+// minWidth and minHeight are the smallest supported window.
+const minWidth, minHeight = 1280, 720
 
 const (
 	themePref = "theme"
@@ -60,6 +60,7 @@ type App struct {
 	configTab int
 	lastStats sysinfo.Stats
 	openURL   func(*url.URL) error
+	version   string
 	unsub     func()
 
 	root      *fyne.Container
@@ -100,6 +101,10 @@ var _ app.Emitter = (*App)(nil)
 func New(fa fyne.App, api AppAPI, o Options) *App {
 	a := &App{fa: fa, api: api, ctl: NewController(api, o), bundle: i18n.Default(), chrome: newWindowChrome()}
 	a.openURL = fa.OpenURL
+	a.version = o.Version
+	if a.version == "" {
+		a.version = "dev"
+	}
 	a.lang = fa.Preferences().StringWithFallback(langPref, "fr")
 	if !a.bundle.Has(a.lang) {
 		a.lang = i18n.FallbackLang
@@ -222,7 +227,7 @@ func (a *App) build() {
 	// The Settings modal is a layer under the title bar (not a Fyne modal
 	// popup, which would cover the window buttons too).
 	a.modal = container.NewStack()
-	a.root = container.NewStack(bg, widgets.Sized(MinWindow.Width, MinWindow.Height, a.body),
+	a.root = container.NewStack(bg, widgets.Sized(minWidth, minHeight, a.body),
 		container.New(belowLayout{top}, a.modal))
 }
 
@@ -348,7 +353,7 @@ func (a *App) configEnv() *configEnv {
 	return &configEnv{
 		win: a.win, api: a.api, mode: a.mode, setMode: a.SetMode,
 		lang: a.lang, langs: a.bundle.Languages(), setLang: a.SetLanguage,
-		openURL: func(u *url.URL) error { return a.openURL(u) }, setTab: func(t int) { a.configTab = t },
+		openURL: func(u *url.URL) error { return a.openURL(u) }, version: a.version, setTab: func(t int) { a.configTab = t },
 		panels: panelAPIOf(a.api), panelChanged: a.syncChrome, close: a.CloseConfig,
 		showStats: a.ShowStats(), setShowStats: a.SetShowStats,
 	}

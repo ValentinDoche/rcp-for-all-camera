@@ -279,7 +279,7 @@ func seedGuarded(t *testing.T) (*App, *app.Service, *liveCam) {
 	t.Helper()
 	a, svc, cams := newTestApp(t, false)
 	sized(a)
-	if _, err := svc.AssignSlot(1, app.SlotInput{Model: "panasonic-aw-ue150", Host: "192.168.1.46"}); err != nil {
+	if err := svc.AssignSlot(1, app.SlotInput{Model: "panasonic-aw-ue150", Host: "192.168.1.46"}); err != nil {
 		t.Fatal(err)
 	}
 	a.ctl.RefreshRig()

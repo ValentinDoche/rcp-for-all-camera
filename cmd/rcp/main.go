@@ -101,9 +101,8 @@ func run() error {
 	host := appsvc.NewHost(svc, sources.Present, time.Second)
 	host.SetSurface(ctl)
 
-	gui.Version = version
 	fa := app.NewWithID(gui.AppID)
-	win := gui.New(fa, svc, gui.Options{})
+	win := gui.New(fa, svc, gui.Options{Version: version})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var simWin fyne.Window // created once the Fyne loop runs

@@ -225,7 +225,7 @@ func TestDemoCameraNeedsNoAddressAndDrivesEverything(t *testing.T) {
 
 func TestCustomBlocksComeLastWithTheirWidgets(t *testing.T) {
 	svc, _, _ := newLiveService(t)
-	if _, err := svc.AssignSlot(1, app.SlotInput{Model: "demo", Name: "Démo"}); err != nil {
+	if err := svc.AssignSlot(1, app.SlotInput{Model: "demo", Name: "Démo"}); err != nil {
 		t.Fatal(err)
 	}
 	a := New(test.NewTempApp(t), svc, syncOptions())

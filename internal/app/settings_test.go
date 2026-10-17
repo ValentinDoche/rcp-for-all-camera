@@ -70,7 +70,7 @@ func TestNetworkInterfacesListsLocalAddresses(t *testing.T) {
 
 func TestSetBindIPPersistsAndReachesCameras(t *testing.T) {
 	svc, st, rec := newSettingsService(t, SavedRig{}, nil)
-	if _, err := svc.AssignSlot(1, validInput()); err != nil {
+	if err := svc.AssignSlot(1, validInput()); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.SetBindIP("10.0.0.5"); err != nil {

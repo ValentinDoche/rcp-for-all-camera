@@ -91,7 +91,12 @@ type memStore struct {
 }
 
 func (m *memStore) Load() (app.SavedRig, error) { m.mu.Lock(); defer m.mu.Unlock(); return m.rig, nil }
-func (m *memStore) Save(r app.SavedRig) error   { m.mu.Lock(); defer m.mu.Unlock(); m.rig = r; return nil }
+func (m *memStore) Save(r app.SavedRig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.rig = r
+	return nil
+}
 
 // liveCam wraps a real driver's camera (same declared controls) but behaves
 // as a reachable camera holding values in memory, so the GUI can be exercised
@@ -323,7 +328,7 @@ func seedRig(t testing.TB, svc *app.Service) {
 		{Model: "panasonic-aw-ue150", Name: "Cyclo", Host: "192.168.1.44"},
 	} {
 		slot := i + 1
-		if _, err := svc.AssignSlot(slot, in); err != nil {
+		if err := svc.AssignSlot(slot, in); err != nil {
 			t.Fatal(err)
 		}
 	}

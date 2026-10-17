@@ -81,7 +81,7 @@ func TestHostFansEventsOutToSurfaceAndGUI(t *testing.T) {
 	defer h.Stop()
 	<-s.ran
 
-	if _, err := f.svc.AssignSlot(1, validInput()); err != nil {
+	if err := f.svc.AssignSlot(1, validInput()); err != nil {
 		t.Fatal(err)
 	}
 	if f.events.count(EventRigChanged) != 1 || s.count(EventRigChanged) != 1 {
@@ -94,8 +94,8 @@ func TestHostSubscribeAndCancel(t *testing.T) {
 	h := NewHost(f.svc, func() (bool, error) { return false, nil }, time.Hour)
 	h.Start(context.Background(), f.events)
 	defer h.Stop()
-	_, _ = f.svc.AssignSlot(2, validInput())
-	_, _ = f.svc.AssignSlot(3, validInput())
+	_ = f.svc.AssignSlot(2, validInput())
+	_ = f.svc.AssignSlot(3, validInput())
 	f.events.mu.Lock()
 	f.events.events = nil // count only the selections below
 	f.events.mu.Unlock()

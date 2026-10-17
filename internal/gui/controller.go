@@ -24,7 +24,7 @@ import (
 type API interface {
 	Rig() app.Rig
 	Models() []core.ModelInfo
-	AssignSlot(slot int, in app.SlotInput) (app.Slot, error)
+	AssignSlot(slot int, in app.SlotInput) error
 	ClearSlot(slot int) error
 	SelectSlot(slot int) error
 	Controls(slot int) ([]app.ControlView, error)
@@ -122,6 +122,8 @@ type Options struct {
 	WriteInterval time.Duration
 	// NoticeTTL is how long a notice stays (default 8 s, 0 = default).
 	NoticeTTL time.Duration
+	// Version is shown in Settings > About (default "dev").
+	Version string
 }
 
 // Controller is the UI-side model.
@@ -636,7 +638,7 @@ func (c *Controller) DeletePreset(slot, n int) {
 // Assign creates or edits a slot. The error is returned as is so the form can
 // show it inline.
 func (c *Controller) Assign(slot int, in app.SlotInput) error {
-	if _, err := c.api.AssignSlot(slot, in); err != nil {
+	if err := c.api.AssignSlot(slot, in); err != nil {
 		return err
 	}
 	c.RefreshRig()

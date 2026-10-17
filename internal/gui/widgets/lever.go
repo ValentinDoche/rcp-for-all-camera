@@ -13,12 +13,12 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/style"
 )
 
-// LeverEvery is how often a held Lever calls OnHold.
-var LeverEvery = 50 * time.Millisecond
+// leverEvery is how often a held Lever calls OnHold.
+const leverEvery = 50 * time.Millisecond
 
 // Lever is a spring-loaded control, like a zoom rocker: it follows the
 // pointer while dragged and springs back to the centre when released. While
-// it is off centre, OnHold is called every LeverEvery with the deflection,
+// it is off centre, OnHold is called every leverEvery with the deflection,
 // -1..1 (right or up is positive), so the further it is pushed, the faster
 // the control moves. A tap gives one OnHold at the tapped deflection.
 type Lever struct {
@@ -94,7 +94,7 @@ func (l *Lever) Dragged(e *fyne.DragEvent) {
 	stop := make(chan struct{})
 	l.stop = stop
 	go func() {
-		t := time.NewTicker(LeverEvery)
+		t := time.NewTicker(leverEvery)
 		defer t.Stop()
 		for {
 			select {

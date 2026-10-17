@@ -15,10 +15,6 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 )
 
-// Version is the app version shown in Settings > About. cmd/rcp sets it
-// from its build flags (release builds pass the tag).
-var Version = "dev"
-
 // Author and project page shown in Settings > About.
 const (
 	Author     = "Valentin Doche"
@@ -56,7 +52,7 @@ func newAboutTab(tx texts.Texts, env *configEnv) fyne.CanvasObject {
 	head := container.NewHBox(container.NewCenter(logo), container.New(layout.NewCustomPaddedLayout(0, 0, 12, 0),
 		container.NewVBox(layout.NewSpacer(),
 			widgets.NewText(WindowTitle, style.Text, 22).Bold(),
-			widgets.NewText(tx.T("about.version", "version", Version), style.TextMuted, 13),
+			widgets.NewText(tx.T("about.version", "version", env.version), style.TextMuted, 13),
 			layout.NewSpacer())))
 	info := widgets.NewPanel(style.Surface, style.Border, 12, container.NewVBox(
 		row(tx.T("about.author"), widgets.NewText(Author, style.Text, 13).Bold()),

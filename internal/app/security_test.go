@@ -15,7 +15,7 @@ import (
 
 func TestSetControlRejectsHostileIDWithoutEchoingIt(t *testing.T) {
 	f := newFixture(t, SavedRig{})
-	_, _ = f.svc.AssignSlot(1, validInput())
+	_ = f.svc.AssignSlot(1, validInput())
 	long := strings.Repeat("A", 10000)
 	for _, id := range []string{long, "iris\x00", "<img src=x>"} {
 		err := f.svc.SetControl(1, id, core.Number(4))
@@ -30,7 +30,7 @@ func TestSetControlRejectsHostileIDWithoutEchoingIt(t *testing.T) {
 
 func TestSetControlRejectsHostileChoice(t *testing.T) {
 	f := newFixture(t, SavedRig{})
-	_, _ = f.svc.AssignSlot(1, validInput())
+	_ = f.svc.AssignSlot(1, validInput())
 	err := f.svc.SetControl(1, "iris", core.Choice(strings.Repeat("B", 10000)))
 	if c := code(t, err); c != CodeInvalidValue {
 		t.Fatalf("code = %s, want INVALID_VALUE", c)
@@ -44,7 +44,7 @@ func TestAssignSlotRejectsHugeModelIDWithoutEchoingIt(t *testing.T) {
 	f := newFixture(t, SavedRig{})
 	in := validInput()
 	in.Model = core.ModelID(strings.Repeat("m", 10000))
-	_, err := f.svc.AssignSlot(1, in)
+	err := f.svc.AssignSlot(1, in)
 	if c := code(t, err); c != CodeUnknownModel {
 		t.Fatalf("code = %s, want UNKNOWN_MODEL", c)
 	}
@@ -81,14 +81,14 @@ func TestAssignSlotRestoresSecretWhenSaveFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := SlotInput{Model: "acme-secure", Host: "10.0.0.1", Username: "admin", Password: strPtr("new")}
-	if _, err := svc.AssignSlot(1, in); code(t, err) != CodeInternal {
+	if err := svc.AssignSlot(1, in); code(t, err) != CodeInternal {
 		t.Fatalf("AssignSlot with failing store = %v, want INTERNAL", err)
 	}
 	if v, _, _ := sec.Get(secretKey(1)); v != "old" {
 		t.Fatalf("secret after failed save = %q, want the old one restored", v)
 	}
 	// Same on an empty slot: the new secret must not linger.
-	if _, err := svc.AssignSlot(2, in); err == nil {
+	if err := svc.AssignSlot(2, in); err == nil {
 		t.Fatal("AssignSlot(2) succeeded with a failing store")
 	}
 	if _, ok, _ := sec.Get(secretKey(2)); ok {
@@ -130,17 +130,14 @@ func (slowDriver) New(core.CameraConfig) (core.Camera, error) {
 }
 
 func TestControlsIsBoundedByOneTimeoutNotOnePerControl(t *testing.T) {
-	old := commandTimeout
-	commandTimeout = 50 * time.Millisecond
-	defer func() { commandTimeout = old }()
-
+	const timeout = 50 * time.Millisecond
 	reg := core.NewRegistry()
 	_ = reg.Register(slowDriver{})
-	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: SavedRig{}}, Secrets: newMemSecrets()})
+	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: SavedRig{}}, Secrets: newMemSecrets(), CommandTimeout: timeout})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.AssignSlot(1, SlotInput{Model: "slow-cam", Host: "10.0.0.9"}); err != nil {
+	if err := svc.AssignSlot(1, SlotInput{Model: "slow-cam", Host: "10.0.0.9"}); err != nil {
 		t.Fatal(err)
 	}
 	start := time.Now()
@@ -148,7 +145,7 @@ func TestControlsIsBoundedByOneTimeoutNotOnePerControl(t *testing.T) {
 	if err != nil || len(cv) != 5 {
 		t.Fatalf("Controls = %d, %v", len(cv), err)
 	}
-	if d := time.Since(start); d > 3*commandTimeout {
-		t.Fatalf("Controls took %v for 5 slow controls, want about one timeout (%v)", d, commandTimeout)
+	if d := time.Since(start); d > 3*timeout {
+		t.Fatalf("Controls took %v for 5 slow controls, want about one timeout (%v)", d, timeout)
 	}
 }

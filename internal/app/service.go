@@ -35,11 +35,13 @@ type Options struct {
 	Go func(func())
 	// Panels switches the panel source (USB, simulator); nil = no choice.
 	Panels PanelSources
+	// CommandTimeout bounds every camera call made through the Service
+	// (default 3 s).
+	CommandTimeout time.Duration
 }
 
-// commandTimeout bounds every camera call made from the GUI (a variable only
-// so tests can shorten it).
-var commandTimeout = 3 * time.Second
+// defaultCommandTimeout bounds every camera call made through the Service.
+const defaultCommandTimeout = 3 * time.Second
 
 // Service is the GUI-facing API. Lifecycle hooks are kept off it (see Host)
 // so its method set is exactly the API. All methods are
@@ -57,7 +59,7 @@ type Service struct {
 	goFn        func(func())
 	panels      PanelSources
 	panelSource string        // saved panel choice ("" = automatic USB)
-	timeout     time.Duration // commandTimeout captured at construction
+	timeout     time.Duration // Options.CommandTimeout
 
 	mu         sync.Mutex
 	slots      [SlotCount]*slotState
@@ -91,7 +93,10 @@ func NewService(o Options) (*Service, error) {
 	s := &Service{reg: o.Registry, store: o.Store, secrets: o.Secrets, log: o.Logger, emit: nopEmitter{},
 		interfaces: o.Interfaces, autoStart: o.AutoStart, levelVar: o.LogLevel, logDir: o.LogDir, goFn: o.Go,
 		panels: o.Panels}
-	s.timeout = commandTimeout
+	s.timeout = o.CommandTimeout
+	if s.timeout <= 0 {
+		s.timeout = defaultCommandTimeout
+	}
 	if s.goFn == nil {
 		s.goFn = func(f func()) { go f() }
 	}
@@ -160,10 +165,11 @@ func (s *Service) Rig() Rig {
 	return s.rigLocked()
 }
 
-// AssignSlot creates or replaces the camera on slot.
-func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
+// AssignSlot creates or replaces the camera on slot. It is a command: the
+// new state is read back with Rig.
+func (s *Service) AssignSlot(slot int, in SlotInput) error {
 	if err := checkSlot(slot); err != nil {
-		return Slot{}, err
+		return err
 	}
 	s.mu.Lock()
 	cfg := core.CameraConfig{
@@ -179,12 +185,12 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 	st, err := s.build(cfg)
 	if err != nil {
 		s.mu.Unlock()
-		return Slot{}, toAPIError(err)
+		return toAPIError(err)
 	}
 	if err := s.storePassword(slot, cfg.Password); err != nil {
 		s.mu.Unlock()
 		st.close()
-		return Slot{}, toAPIError(err)
+		return toAPIError(err)
 	}
 	old := s.slots[slot-1]
 	oldPresets := s.presets[slot-1]
@@ -206,18 +212,17 @@ func (s *Service) AssignSlot(slot int, in SlotInput) (Slot, error) {
 		}
 		s.mu.Unlock()
 		st.close()
-		return Slot{}, toAPIError(err)
+		return toAPIError(err)
 	}
 	if old != nil {
 		old.close()
 	}
-	out := Slot{Slot: slot, Camera: viewOf(st)}
 	rig, emit := s.rigLocked(), s.emit
 	s.mu.Unlock()
 	s.connectAsync(slot, st.cam)
 	s.log.Info("camera assigned", "slot", slot, "model", cfg.Model, "host", cfg.Host)
 	emit.Emit(EventRigChanged, rig)
-	return out, nil
+	return nil
 }
 
 // ClearSlot removes the camera from slot. Clearing an empty slot succeeds.
@@ -292,7 +297,7 @@ func (s *Service) Controls(slot int) ([]ControlView, error) {
 	specs := cam.Controls()
 	out := make([]ControlView, 0, len(specs))
 	// One deadline for the whole read: a slow camera must not block the GUI
-	// for commandTimeout per control.
+	// for the command timeout per control.
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
 	for _, sp := range specs {

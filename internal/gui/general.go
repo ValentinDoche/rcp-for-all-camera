@@ -35,6 +35,7 @@ type configEnv struct {
 	langs   []i18n.Lang
 	setLang func(code string)
 	openURL func(*url.URL) error
+	version string // shown in Settings > About
 	setTab  func(tab int)
 	// panels switches the panel source (nil: not available);
 	// panelChanged runs after a switch.

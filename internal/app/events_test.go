@@ -79,7 +79,7 @@ func newPushService(t *testing.T) (*Service, *pushDriver, *eventLog) {
 
 func TestCameraEventsAreForwardedWithTheirSlot(t *testing.T) {
 	svc, drv, log := newPushService(t)
-	_, _ = svc.AssignSlot(4, validInput())
+	_ = svc.AssignSlot(4, validInput())
 	drv.cams[0].push(core.Event{Control: core.Iris, Value: core.Number(5.6)})
 	if len(log.got) != 1 || log.got[0].Slot != 4 || log.got[0].Event.Control != core.Iris {
 		t.Fatalf("camera events = %+v, want one iris event on slot 4", log.got)
@@ -88,8 +88,8 @@ func TestCameraEventsAreForwardedWithTheirSlot(t *testing.T) {
 
 func TestEventsFromAReplacedCameraAreDropped(t *testing.T) {
 	svc, drv, log := newPushService(t)
-	_, _ = svc.AssignSlot(1, validInput())
-	_, _ = svc.AssignSlot(1, validInput()) // replaces the camera
+	_ = svc.AssignSlot(1, validInput())
+	_ = svc.AssignSlot(1, validInput()) // replaces the camera
 	old := drv.cams[0]
 	if !old.cancelled {
 		t.Fatal("subscription of the replaced camera not cancelled")
@@ -102,7 +102,7 @@ func TestEventsFromAReplacedCameraAreDropped(t *testing.T) {
 
 func TestEventsAfterClearSlotAreDropped(t *testing.T) {
 	svc, drv, log := newPushService(t)
-	_, _ = svc.AssignSlot(2, validInput())
+	_ = svc.AssignSlot(2, validInput())
 	_ = svc.ClearSlot(2)
 	drv.cams[0].push(core.Event{Status: &core.Status{State: core.StateConnected}})
 	if len(log.got) != 0 {

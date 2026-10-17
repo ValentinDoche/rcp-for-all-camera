@@ -71,11 +71,9 @@ func (f *fakeAPI) Rig() app.Rig {
 	r.Slots = append([]app.Slot(nil), f.rig.Slots...)
 	return r
 }
-func (f *fakeAPI) Models() []core.ModelInfo { return nil }
-func (f *fakeAPI) AssignSlot(int, app.SlotInput) (app.Slot, error) {
-	return app.Slot{}, nil
-}
-func (f *fakeAPI) ClearSlot(int) error { return nil }
+func (f *fakeAPI) Models() []core.ModelInfo            { return nil }
+func (f *fakeAPI) AssignSlot(int, app.SlotInput) error { return nil }
+func (f *fakeAPI) ClearSlot(int) error                 { return nil }
 func (f *fakeAPI) SelectSlot(slot int) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
