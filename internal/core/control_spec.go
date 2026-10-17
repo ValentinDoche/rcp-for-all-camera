@@ -6,7 +6,7 @@ import (
 )
 
 // ControlID names a normalized camera parameter. The standard IDs are in
-// catalog.go; a driver may add its own IDs prefixed with its driver name
+// control_catalog.go; a driver may add its own IDs prefixed with its driver name
 // (for example "sony.slowShutter") when no standard ID fits.
 type ControlID string
 

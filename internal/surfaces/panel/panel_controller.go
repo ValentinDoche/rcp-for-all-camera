@@ -75,7 +75,7 @@ type Controller struct {
 	iris, mb  pickup
 	written   map[core.ControlID]float64 // last lever/ring value sent
 	recent    map[core.ControlID]recentWrites
-	late      map[core.ControlID]float64 // echoed values to adopt once settled (echo.go)
+	late      map[core.ControlID]float64 // echoed values to adopt once settled (lever_echo.go)
 	connected bool
 
 	// knobs are COARSE and SENS (the iris lever window); coarseAt and

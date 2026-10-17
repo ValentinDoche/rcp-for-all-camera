@@ -26,7 +26,7 @@ const (
 var closeHover = color.NRGBA{0xC4, 0x2B, 0x1C, 0xFF}
 
 // titleBar replaces the OS title bar: logo and app name on the left, panel
-// status (a menu, see panelmenu.go) and the window buttons on the right.
+// status (a menu, see panel_menu.go) and the window buttons on the right.
 // Its free area moves the window (Windows asks captionZones).
 type titleBar struct {
 	widget.BaseWidget

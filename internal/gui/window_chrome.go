@@ -8,7 +8,7 @@ import (
 
 // windowChrome removes the operating system's title bar so the app draws its
 // own (icon, name, panel status, minimize/maximize/close), and gives those
-// buttons and window dragging to the native window. chrome_windows.go is the
+// buttons and window dragging to the native window. window_chrome_windows.go is the
 // only implementation; elsewhere the OS title bar stays (Install = false).
 type windowChrome interface {
 	// Install hides the OS title bar of w. zones tells whether a point
