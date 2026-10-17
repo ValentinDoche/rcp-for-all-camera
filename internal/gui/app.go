@@ -84,10 +84,10 @@ type App struct {
 	strips  []*strip
 	details *detailsPage
 	config  *configPage
-	// configPop shows config as a modal over the page; backPage is the page
-	// under it, shown again when Settings closes.
-	configPop *widget.PopUp
-	backPage  pageKind
+	// modal holds the Settings window over the page (empty when closed);
+	// backPage is the page under it, shown again when Settings closes.
+	modal    *fyne.Container
+	backPage pageKind
 }
 
 var _ app.Emitter = (*App)(nil)
@@ -204,7 +204,11 @@ func (a *App) build() {
 	a.header = container.NewVBox(top, a.slotBar)
 	a.body = container.NewBorder(a.header, bottom, nil, nil,
 		container.New(layout.NewCustomPaddedLayout(0, 0, 8, 8), a.host))
-	a.root = container.NewStack(bg, widgets.Sized(MinWindow.Width, MinWindow.Height, a.body))
+	// The Settings modal is a layer under the title bar (not a Fyne modal
+	// popup, which would cover the window buttons too).
+	a.modal = container.NewStack()
+	a.root = container.NewStack(bg, widgets.Sized(MinWindow.Width, MinWindow.Height, a.body),
+		container.New(belowLayout{top}, a.modal))
 }
 
 // --- navigation -------------------------------------------------------------------------
@@ -241,9 +245,9 @@ func (a *App) closeConfigPop() {
 		a.config.Close()
 		a.config = nil
 	}
-	if a.configPop != nil {
-		a.configPop.Hide()
-		a.configPop = nil
+	if a.modal != nil && len(a.modal.Objects) > 0 {
+		a.modal.Objects = nil
+		a.modal.Refresh()
 	}
 }
 
@@ -294,9 +298,8 @@ func (a *App) ShowConfig(slot int) {
 		a.config.Edit(slot)
 	}
 	frame := widgets.NewPanel(style.Surface, style.BorderStrong, 0, a.config.obj)
-	a.configPop = widget.NewModalPopUp(frame, a.win.Canvas())
-	a.configPop.Resize(configSize(a.win.Canvas().Size()))
-	a.configPop.Show()
+	a.modal.Objects = []fyne.CanvasObject{newBlocker(), container.New(centreSizedLayout{configSize}, frame)}
+	a.modal.Refresh()
 	a.gear.Importance = widget.HighImportance
 	a.gear.Refresh()
 }

@@ -45,14 +45,16 @@ func TestSettingsIsAModalOverThePage(t *testing.T) {
 	sized(a)
 	before := pageTop(a)
 	a.ShowConfig(0)
-	if a.configPop == nil || !a.configPop.Visible() {
+	if !a.configOpen() {
 		t.Fatal("Settings not shown as a modal")
 	}
-	if n := len(a.Window().Canvas().Overlays().List()); n != 1 {
-		t.Fatalf("%d overlays, want only Settings", n)
+	// The modal starts under the title bar, whose buttons stay usable.
+	d := fyne.CurrentApp().Driver()
+	if y := d.AbsolutePositionForObject(a.modal).Y; y < a.titleBar.Size().Height {
+		t.Fatalf("modal starts at y=%v, over the title bar (height %v)", y, a.titleBar.Size().Height)
 	}
 	a.CloseConfig()
-	if a.Window().Canvas().Overlays().Top() != nil || pageTop(a) != before || !headerHas(a, a.slotBar) {
+	if a.configOpen() || pageTop(a) != before || !headerHas(a, a.slotBar) {
 		t.Fatal("page not restored after closing Settings")
 	}
 }

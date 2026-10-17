@@ -43,8 +43,8 @@ func TestSettingsCategoriesAndAbout(t *testing.T) {
 		t.Fatal("side list not on Panel")
 	}
 	a.CloseConfig()
-	if a.page != pageCameras || a.configPop != nil {
-		t.Fatalf("after close: page %v pop %v", a.page, a.configPop)
+	if a.page != pageCameras || a.configOpen() {
+		t.Fatalf("after close: page %v open %v", a.page, a.configOpen())
 	}
 }
 
@@ -433,14 +433,10 @@ func TestLanguageSurvivesRebuildOfStats(t *testing.T) {
 
 // --- helpers ----------------------------------------------------------------------
 
-// extraOverlay reports whether a dialog is shown on top of the Settings
-// window (which is itself an overlay while open).
+// extraOverlay reports whether a dialog is shown (the Settings window is a
+// layer of the window, not an overlay).
 func extraOverlay(a *App) bool {
-	n := len(a.Window().Canvas().Overlays().List())
-	if a.configPop != nil {
-		n--
-	}
-	return n > 0
+	return len(a.Window().Canvas().Overlays().List()) > 0
 }
 
 func allTextsJoined(o fyne.CanvasObject) string { return strings.Join(allTexts(o), " | ") }

@@ -29,13 +29,22 @@ var (
 	procScreenToClient    = user32.NewProc("ScreenToClient")
 	procGetSystemMetrics  = user32.NewProc("GetSystemMetrics")
 	procGetDpiForWindow   = user32.NewProc("GetDpiForWindow")
+	procGetWindowLongPtrW = user32.NewProc("GetWindowLongPtrW")
+	procAdjustRectForDpi  = user32.NewProc("AdjustWindowRectExForDpi")
+	procAdjustRect        = user32.NewProc("AdjustWindowRectEx")
 )
 
 const (
-	gwlpWndProc = ^uintptr(3) // -4
+	gwlpWndProc = ^uintptr(3)  // -4
+	gwlStyle    = ^uintptr(15) // -16
+	gwlExStyle  = ^uintptr(19) // -20
 
-	wmNCCalcSize = 0x0083
-	wmNCHitTest  = 0x0084
+	wmGetMinMaxInfo     = 0x0024
+	wmWindowPosChanging = 0x0046
+	wmEnterSizeMove     = 0x0231
+	wmExitSizeMove      = 0x0232
+	wmNCCalcSize        = 0x0083
+	wmNCHitTest         = 0x0084
 
 	htClient      = 1
 	htCaption     = 2
@@ -66,11 +75,24 @@ type rect struct{ Left, Top, Right, Bottom int32 }
 
 type point struct{ X, Y int32 }
 
+// windowPos is WINDOWPOS.
+type windowPos struct {
+	hwnd, insertAfter uintptr
+	X, Y, CX, CY      int32
+	Flags             uint32
+}
+
+// minMaxInfo is MINMAXINFO.
+type minMaxInfo struct {
+	Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize point
+}
+
 type winChrome struct {
-	mu    sync.Mutex
-	hwnd  uintptr
-	prev  uintptr
-	zones *captionZones
+	mu     sync.Mutex
+	hwnd   uintptr
+	prev   uintptr
+	zones  *captionZones
+	sizing bool // the user is moving or resizing the window (modal loop)
 }
 
 // The window procedure is a C callback: one per process, routed by hwnd.
@@ -159,6 +181,19 @@ func dpiOf(hwnd uintptr) int32 {
 	return 96
 }
 
+// frameSize is how much a captioned frame adds to the client size of hwnd.
+func frameSize(hwnd uintptr) (w, h int32) {
+	style, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlStyle)
+	ex, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlExStyle)
+	var r rect
+	if procAdjustRectForDpi.Find() == nil {
+		procAdjustRectForDpi.Call(uintptr(unsafe.Pointer(&r)), style, 0, ex, uintptr(dpiOf(hwnd)))
+	} else {
+		procAdjustRect.Call(uintptr(unsafe.Pointer(&r)), style, 0, ex)
+	}
+	return r.Right - r.Left, r.Bottom - r.Top
+}
+
 func metric(i int) int32 {
 	v, _, _ := procGetSystemMetrics.Call(uintptr(i))
 	return int32(v)
@@ -172,10 +207,47 @@ func chromeWndProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		return 0
 	}
 	c.mu.Lock()
-	prev, zones := c.prev, c.zones
+	prev, zones, sizing := c.prev, c.zones, c.sizing
 	c.mu.Unlock()
 
 	switch msg {
+	case wmEnterSizeMove, wmExitSizeMove:
+		c.mu.Lock()
+		c.sizing = msg == wmEnterSizeMove
+		c.mu.Unlock()
+	case wmWindowPosChanging:
+		// Fyne asks GLFW for the window's current size again whenever the
+		// content changes, and GLFW adds the frame of a captioned window,
+		// which this window does not have: it grew by that frame at each
+		// page change. Such a request (outside a user move or resize, not
+		// maximized) is brought back to the size the content asked for.
+		wp := *(**windowPos)(unsafe.Pointer(&lparam)) // lparam is a pointer from Windows
+		if !sizing && wp.Flags&swpNoSize == 0 {
+			if z, _, _ := procIsZoomed.Call(hwnd); z == 0 {
+				var wr rect
+				procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&wr)))
+				fw, fh := frameSize(hwnd)
+				if wp.CX == wr.Right-wr.Left+fw && wp.CY == wr.Bottom-wr.Top+fh {
+					wp.CX -= fw
+					wp.CY -= fh
+				}
+			}
+		}
+	case wmGetMinMaxInfo:
+		// GLFW turns Fyne's minimum content size into a minimum window size
+		// by adding the frame of a captioned window, but here the client
+		// area is the whole window: without taking that frame back, every
+		// content change (Fyne resets the limits) grew the window.
+		r, _, _ := procCallWindowProcW.Call(prev, hwnd, msg, wparam, lparam)
+		mmi := *(**minMaxInfo)(unsafe.Pointer(&lparam)) // lparam is a pointer from Windows
+		fw, fh := frameSize(hwnd)
+		if mmi.MinTrackSize.X > fw {
+			mmi.MinTrackSize.X -= fw
+		}
+		if mmi.MinTrackSize.Y > fh {
+			mmi.MinTrackSize.Y -= fh
+		}
+		return r
 	case wmNCCalcSize:
 		if wparam == 0 {
 			break
