@@ -171,7 +171,13 @@ zips it with the README and publishes a GitHub release (a tag with a suffix such
 17. The OS title bar is removed by subclassing the window procedure (WM_NCCALCSIZE,
     WM_NCHITTEST). The free area of the custom title bar answers HTCAPTION, so moving, snap and
     double-click maximize are native; its buttons and the panel status are "holes"
-    (`captionZones`, updated on layout).
+    (`captionZones`, updated on layout). GLFW still sizes the window as if it had a captioned
+    frame: the window procedure takes that frame back (WM_WINDOWPOSCHANGING, WM_GETMINMAXINFO),
+    otherwise every content change grew the window by 16 × 39 px.
+18. Do not use a Fyne modal popup for full-window dialogs: it covers the custom title bar (close
+    becomes unreachable). Settings is a layer under the title bar (`a.modal`, `blocker`).
+19. The main window must be Fyne's master (`SetMaster`): otherwise a hidden window (the panel
+    simulator) keeps the process alive after the main window closes.
 
 ## 7. What was tried and abandoned
 
