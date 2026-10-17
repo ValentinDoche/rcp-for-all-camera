@@ -1,110 +1,110 @@
-# Rapport — Spike USB de l'ATEM Micro Camera Panel
+# Report: ATEM Micro Camera Panel USB spike
 
-Date : 2026-10-11 · Statut : **terminé, GO** · Répond à la question ouverte n°1 de [SPEC.md](../../SPEC.md)
+Date: 2026-10-11 · Status: **done, GO** · Answers open question 1 of [SPEC.md](../../SPEC.md)
 
-## 1. Résumé
+## 1. Summary
 
-**Le panneau est entièrement pilotable depuis un PC Windows, en USB, sans mixeur ATEM ni logiciel Blackmagic.**
+**The panel can be fully driven from a Windows PC over USB, with no ATEM switcher and no Blackmagic software.**
 
-- C'est un périphérique **HID standard** (interface MI_02), sans pilote propriétaire. Le seul verrou est une **authentification défi/réponse** sur le rapport feature 0x05. On l'a cassée : c'est le même algorithme que le DaVinci Speed Editor.
-- **Toutes les entrées sont décodées et vérifiées sur le matériel** :
-  - 31 boutons ;
-  - 9 molettes en position absolue 0–1024 ;
-  - le levier iris et la bague master black, de −4096 à +4096.
-- **Toutes les sorties sont décodées et vérifiées sur le matériel** :
-  - les 14 afficheurs 7 segments ;
-  - la matrice caméra 7×10 tricolore ;
-  - les 75 LEDs : boutons caméra RGB, rétroéclairages, voyants, barre iris.
-- Le pilote est écrit en **Go pur**, sans cgo et sans dépendance externe. Il colle donc à l'hypothèse « un seul `.exe` » du SPEC.
-- Le programme de test [`paneltest`](../paneltest.md) permet d'éprouver chaque commande physique et affiche des données caméra simulées sur le panneau : ND, CC, GAIN, SHUTTER, IRIS, MASTER BLACK, numéro de caméra et tally.
+- It is a **standard HID device** (interface MI_02), with no proprietary driver. The only lock is a **challenge/response authentication** on feature report 0x05. It was broken: it is the same algorithm as the DaVinci Speed Editor's.
+- **Every input is decoded and verified on the hardware**:
+  - 31 buttons;
+  - 9 knobs, as absolute positions 0–1024;
+  - the iris lever and the master black ring, from −4096 to +4096.
+- **Every output is decoded and verified on the hardware**:
+  - the 14 seven-segment displays;
+  - the 7×10 three-colour camera matrix;
+  - the 75 LEDs: RGB camera buttons, backlights, indicators, iris bar.
+- The driver is written in **pure Go**, with no cgo and no external dependency. It fits the SPEC's "a single `.exe`" assumption.
+- The test program [`paneltest`](../paneltest.md) exercises every physical control and shows simulated camera data on the panel: ND, CC, GAIN, SHUTTER, IRIS, MASTER BLACK, camera number and tally.
 
-Conséquence pour le projet : le module `surface-micro-panel` n'est plus un risque. Le panneau n'a pas besoin de se faire passer pour un ATEM.
+Consequence for the project: the `surface-micro-panel` module is no longer a risk. The panel does not need to pose as an ATEM.
 
-## 2. Démarche (multi-agents)
+## 2. Approach (multi-agent)
 
-| Rôle | Qui / modèle | Pourquoi ce modèle | Résultat |
+| Role | Who / model | Why this model | Result |
 |---|---|---|---|
-| Orchestration, sondes USB en direct, pilote Go, intégration, docs | Agent principal (Opus) | Raisonnement protocolaire et décisions d'architecture | Descripteur HID, authentification, captures, pilote, carte des LEDs |
-| Rétro-ingénierie statique d'**ATEM Software Control.exe** (Windows) | Sous-agent Opus | Désassemblage x64 long et difficile | Codage 7 segments, police et format de la matrice, format du rapport LEDs, LEDs caméra, rôle des rapports feature |
-| Analyse du DMG **Middle Control 4.0.4** (macOS) | Sous-agent Opus | Extraction DMG et analyse de binaire Mach-O | **Piste négative** : Middle Control ne parle pas au panneau en USB (voir §6) |
-| Interface web du programme de test | Sous-agent Sonnet | Travail de front-end bien spécifié, rapide et peu coûteux | `cmd/paneltest/web/index.html` (panneau virtuel, checklist, journal) |
+| Orchestration, live USB probes, Go driver, integration, docs | Main agent (Opus) | Protocol reasoning and architecture decisions | HID descriptor, authentication, captures, driver, LED map |
+| Static reverse engineering of **ATEM Software Control.exe** (Windows) | Opus sub-agent | Long, difficult x64 disassembly | Seven-segment encoding, matrix font and format, LED report format, camera LEDs, role of the feature reports |
+| Analysis of the **Middle Control 4.0.4** DMG (macOS) | Opus sub-agent | DMG extraction and Mach-O binary analysis | **Negative lead**: Middle Control does not talk to the panel over USB (see §6) |
+| Web interface of the test program | Sonnet sub-agent | Well-specified front-end work, fast and cheap | `cmd/paneltest/web/index.html` (virtual panel, checklist, log) |
 
-Les tests sur le matériel ont été faits avec le propriétaire, qui manipulait le panneau et envoyait des photos :
-1. une capture authentifiée de toutes les commandes, dans un ordre imposé ;
-2. trois photos de validation des sorties ;
-3. sept photos à motifs binaires plus une photo de contrôle pour cartographier les 75 LEDs.
+The hardware tests were done with the owner, who handled the panel and sent photos:
+1. an authenticated capture of every control, in a set order;
+2. three validation photos of the outputs;
+3. seven binary-pattern photos plus one control photo to map the 75 LEDs.
 
-## 3. Ce qui a été trouvé
+## 3. Findings
 
-Détails octet par octet : [atem-micro-camera-panel-protocol.md](../atem-micro-camera-panel-protocol.md).
+Byte-by-byte details: [atem-micro-camera-panel-protocol.md](../atem-micro-camera-panel-protocol.md).
 
-| Sujet | Résultat | Source |
+| Topic | Result | Source |
 |---|---|---|
-| Identité USB | VID 0x1EDB / PID 0xBF01. HID sur MI_02 (page 0xFF00). MI_00 est une interface « Media » qui ne sert pas aux entrées/sorties du panneau | `Get-PnpDevice`, descripteur HID |
-| Authentification | Rapport feature 0x05 : `00` → défi, `01`, `03` + réponse → `04` + délai de 600 s. Algorithme du Speed Editor | Essai en direct (réussi du premier coup) et code d'ATEM SC |
-| Boutons | Rapport 0x03 : jusqu'à 6 codes u16 maintenus. Caméras 0x40–0x47, scènes 0x48–0x4C, STORE 0x4D, flèches 0x4E–0x55, ON/WB/BARS 0x56–0x58, bas du panneau 0x59–0x5E | Capture guidée |
-| Molettes | Rapport 0x0E : 9 valeurs u16 absolues 0–1024, lisibles aussi en feature (lues à la connexion) | Capture guidée |
-| Levier et bague | Rapport 0x0F : int32 `[1, levier, bague]`, ±4096 | Capture guidée |
-| Afficheurs | Rapport 0x10 : 14 octets, bit 7 = a … bit 1 = g, bit 0 = point. Ordre : ND, CC, GAIN×2, SHUTTER×4, IRIS×3, MB×3 | ATEM SC (« Auto » = EE 38 1E 3A) et photo |
-| Matrice | Rapport 0x11 : 7×10 pixels, 2 bits par pixel (1 rouge, 2 vert, 3 ambre), polices 1 et 2 chiffres | ATEM SC et photo |
-| LEDs | Rapport 0x02 : bitmap de 30 octets suivi d'un numéro de couche. 75 LEDs sur la couche 0 (carte complète dans la doc protocole) | ATEM SC et 8 photos |
-| Autres rapports feature | Batterie (0x06), affectation des entrées (0x09/0x0A), scene files stockés **dans le panneau** (0x12/0x13), nom (0x15) | ATEM SC (non testé) |
+| USB identity | VID 0x1EDB / PID 0xBF01. HID on MI_02 (page 0xFF00). MI_00 is a "Media" interface not used for the panel's inputs and outputs | `Get-PnpDevice`, HID descriptor |
+| Authentication | Feature report 0x05: `00` → challenge, `01`, `03` + response → `04` + a 600 s timeout. The Speed Editor algorithm | Live test (worked first time) and ATEM SC code |
+| Buttons | Report 0x03: up to 6 held u16 codes. Cameras 0x40–0x47, scenes 0x48–0x4C, STORE 0x4D, arrows 0x4E–0x55, ON/WB/BARS 0x56–0x58, bottom of the panel 0x59–0x5E | Guided capture |
+| Knobs | Report 0x0E: 9 absolute u16 values 0–1024, also readable as a feature (read at connect) | Guided capture |
+| Lever and ring | Report 0x0F: int32 `[1, lever, ring]`, ±4096 | Guided capture |
+| Displays | Report 0x10: 14 bytes, bit 7 = a … bit 1 = g, bit 0 = point. Order: ND, CC, GAIN×2, SHUTTER×4, IRIS×3, MB×3 | ATEM SC ("Auto" = EE 38 1E 3A) and photo |
+| Matrix | Report 0x11: 7×10 pixels, 2 bits per pixel (1 red, 2 green, 3 amber), one- and two-digit fonts | ATEM SC and photo |
+| LEDs | Report 0x02: a 30-byte bitmap followed by a layer number. 75 LEDs on layer 0 (full map in the protocol doc) | ATEM SC and 8 photos |
+| Other feature reports | Battery (0x06), input assignment (0x09/0x0A), scene files stored **in the panel** (0x12/0x13), name (0x15) | ATEM SC (not tested) |
 
-Piège technique : les rapports feature doivent être lus et écrits **à leur taille exacte**. Avec un tampon complété à la taille maximale, le panneau répond `ERROR_GEN_FAILURE`. Le pilote en tient compte.
+Technical trap: feature reports must be read and written **at their exact size**. With a buffer padded to the maximum size, the panel answers `ERROR_GEN_FAILURE`. The driver handles it.
 
-## 4. Ce qui a été livré
+## 4. Deliverables
 
-| Chemin | Contenu |
+| Path | Content |
 |---|---|
-| [`internal/surfaces/micropanel/`](../../internal/surfaces/micropanel) | Pilote : accès HID Windows en Go pur (`setupapi`/`hid.dll`), authentification, décodage des entrées, encodeurs des afficheurs, de la matrice et des LEDs, ré-authentification périodique |
-| [`cmd/paneltest/`](../../cmd/paneltest) | Banc de test : serveur local, caméras simulées, interface web embarquée, checklist des 42 commandes, explorateur de LEDs |
-| [`cmd/panelprobe/`](../../cmd/panelprobe/main.go) | Outil bas niveau : dump hexadécimal, écritures brutes, démo |
-| [`docs/atem-micro-camera-panel-protocol.md`](../atem-micro-camera-panel-protocol.md) | Référence du protocole |
-| [`docs/paneltest.md`](../paneltest.md) | Mode d'emploi du banc de test |
+| [`internal/surfaces/micropanel/`](../../internal/surfaces/micropanel) | Driver: pure-Go Windows HID access (`setupapi`/`hid.dll`), authentication, input decoding, display, matrix and LED encoders, periodic re-authentication |
+| [`cmd/paneltest/`](../../cmd/paneltest) | Test bench: local server, simulated cameras, embedded web interface, checklist of the 42 controls, LED explorer |
+| [`cmd/panelprobe/`](../../cmd/panelprobe/main.go) | Low-level tool: hex dump, raw writes, demo |
+| [`docs/atem-micro-camera-panel-protocol.md`](../atem-micro-camera-panel-protocol.md) | Protocol reference |
+| [`docs/paneltest.md`](../paneltest.md) | Test bench user guide |
 
-Lancer le banc :
+Start the bench:
 
 ```bash
 go run ./cmd/paneltest
 ```
 
-## 5. Vérification
+## 5. Verification
 
-| Vérification | Résultat |
+| Check | Result |
 |---|---|
 | `go vet ./...` | OK |
-| `go test ./...` | OK : réponse d'authentification testée contre 3 défis réels acceptés par le panneau, police 7 segments comparée aux octets d'ATEM SC, encodage de texte |
-| Connexion en Go pur sur le vrai panneau | OK : authentification, session de 10 min, lecture des positions initiales |
-| Afficheurs, matrice, LEDs caméra | OK, vérifiés sur photo (`2`, `A`, `12`, `50`, `F2.8`, `-05`, matrice « 1 », boutons rouge/vert/cyan/ambre) |
-| Carte des 75 LEDs | OK : 7 motifs binaires plus 1 motif de contrôle conforme à la prédiction |
-| Boutons, molettes, levier, bague | Codes vérifiés par capture. **La checklist complète dans `paneltest` reste à faire par le propriétaire** (voir §7) |
+| `go test ./...` | OK: the authentication response tested against 3 real challenges accepted by the panel, the seven-segment font compared with the bytes of ATEM SC, text encoding |
+| Pure-Go connection to the real panel | OK: authentication, 10-minute session, initial positions read |
+| Displays, matrix, camera LEDs | OK, checked on photos (`2`, `A`, `12`, `50`, `F2.8`, `-05`, matrix "1", red/green/cyan/amber buttons) |
+| Map of the 75 LEDs | OK: 7 binary patterns plus 1 control pattern matching the prediction |
+| Buttons, knobs, lever, ring | Codes checked by capture. **The full checklist in `paneltest` is still to be done by the owner** (see §7) |
 
-Ce qui n'a pas été vérifié :
-- l'écriture des positions des molettes (rapport 0x0E en feature) ;
-- les couches LEDs 1 à 5 ;
-- les rapports 0x06, 0x09–0x0B, 0x12–0x15.
+Not verified:
+- writing the knob positions (report 0x0E as a feature);
+- LED layers 1 to 5;
+- reports 0x06, 0x09–0x0B, 0x12–0x15.
 
-## 6. Pistes écartées
+## 6. Leads dropped
 
-- **Middle Control (macOS)** pilote le panneau *à travers un vrai mixeur ATEM*, via son option « ATEM Link » et le SDK `BMDSwitcherAPI` ; le panneau y est branché au mixeur. Le binaire ne contient aucun code HID pour ce panneau. Il est inutile pour notre cas sans mixeur.
-- **Se faire passer pour un mixeur ATEM** (hypothèse 3 du SPEC) : inutile, le panneau se pilote directement en HID.
+- **Middle Control (macOS)** drives the panel *through a real ATEM switcher*, with its "ATEM Link" option and the `BMDSwitcherAPI` SDK; the panel is plugged into the switcher. The binary holds no HID code for this panel. It is useless for our switcher-less case.
+- **Posing as an ATEM switcher** (SPEC assumption 3): unnecessary, the panel is driven directly over HID.
 
-## 7. Points ouverts
+## 7. Open points
 
-1. **Noms des codes 0x59–0x5E.** Ils sont déduits de l'ordre d'appui : 0x59 Black/Flare (jamais vu en capture), 0x5A IRIS/MB ACTIVE, 0x5B AUTO IRIS, 0x5C CALL, 0x5D PANEL ACTIVE, 0x5E PREVIEW. À confirmer avec le journal de `paneltest`.
-2. **Bouton carré Black/Flare** : aucun code observé et aucune LED trouvée. Est‑ce vraiment un bouton ?
-3. **Molettes** : peut‑on écrire leur position (feature 0x0E) pour les resynchroniser sur la valeur réelle d'une caméra ? C'est important pour l'UX (pas de saut de valeur au changement de caméra).
-4. **Couches LEDs 1–5** (clignotement ? luminosité ?) et **bits au‑delà de 74**, qui perturbent la matrice.
-5. Pas encore de **build tag ni de version non‑Windows** du pilote. Linux et macOS restent « nice to have » dans le SPEC.
-6. ATEM Software Control et `paneltest` ne doivent pas tourner en même temps.
+1. **Names of codes 0x59–0x5E.** Inferred from the order of presses: 0x59 Black/Flare (never seen in a capture), 0x5A IRIS/MB ACTIVE, 0x5B AUTO IRIS, 0x5C CALL, 0x5D PANEL ACTIVE, 0x5E PREVIEW. To confirm with the `paneltest` log.
+2. **Square Black/Flare button**: no code observed and no LED found. Is it really a button?
+3. **Knobs**: can their position be written (feature 0x0E) to resync them to a camera's real value? It matters for the UX (no value jump when switching cameras).
+4. **LED layers 1–5** (blinking? brightness?) and **bits beyond 74**, which disturb the matrix.
+5. No **build tag nor non-Windows version** of the driver yet. Linux and macOS remain "nice to have" in the SPEC.
+6. ATEM Software Control and `paneltest` must not run at the same time.
 
-## 8. Impact sur le SPEC et prochaines étapes
+## 8. Impact on the SPEC and next steps
 
-- La **question ouverte n°1 est résolue**. Le panneau est un périphérique HID authentifié, utilisable sans mixeur.
-- **L'hypothèse 2 est confirmée** : Go convient, sans cgo.
-- L'interface `Surface` du `core` peut s'appuyer directement sur `micropanel.State` (entrées) et sur les encodeurs d'afficheurs, de matrice et de LEDs (retour d'état).
-- Prochaines étapes proposées :
-  1. Faire la checklist complète dans `paneltest` et confirmer les points 1 et 2 du §7.
-  2. Tester l'écriture de la feature 0x0E.
-  3. Rédiger `SPEC-surface-micro-panel.md` à partir de ce rapport.
-  4. Démarrer `core`, puis `camera-blackmagic` (REST de la Studio 6K Pro).
+- **Open question 1 is resolved.** The panel is an authenticated HID device, usable without a switcher.
+- **Assumption 2 is confirmed**: Go fits, without cgo.
+- The core's `Surface` interface can build directly on `micropanel.State` (inputs) and on the display, matrix and LED encoders (feedback).
+- Proposed next steps:
+  1. Run the full checklist in `paneltest` and confirm points 1 and 2 of §7.
+  2. Test writing feature 0x0E.
+  3. Write `SPEC-surface-micro-panel.md` from this report.
+  4. Start `core`, then `camera-blackmagic` (the Studio 6K Pro REST API).
