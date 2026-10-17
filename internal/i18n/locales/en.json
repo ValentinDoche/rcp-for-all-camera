@@ -42,6 +42,7 @@
 
   "control.iris": "Iris",
   "control.autoIris": "Auto iris",
+  "control.irisNorm": "Iris (lens range)",
   "control.focus": "Focus",
   "control.autoFocus": "Auto focus",
   "control.zoom": "Zoom",

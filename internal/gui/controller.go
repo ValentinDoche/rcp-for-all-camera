@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -477,6 +478,8 @@ func (c *Controller) loadControls(slot int) {
 				c.setNotice(c.tx.NoticeFor(err))
 				return
 			}
+			// Hidden controls are for control surfaces only (core.IrisNorm).
+			views = slices.DeleteFunc(slices.Clone(views), func(v app.ControlView) bool { return v.Spec.Hidden })
 			cur.specs = make([]core.ControlSpec, len(views))
 			cur.byID = make(map[core.ControlID]int, len(views))
 			cur.values = map[core.ControlID]core.Value{}

@@ -42,6 +42,7 @@
 
   "control.iris": "Iris",
   "control.autoIris": "Iris auto",
+  "control.irisNorm": "Iris (plage de l’objectif)",
   "control.focus": "Mise au point",
   "control.autoFocus": "Mise au point auto",
   "control.zoom": "Zoom",

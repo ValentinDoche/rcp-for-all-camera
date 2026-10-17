@@ -34,7 +34,7 @@ func (p slotPresets) numbers() []int {
 // have nothing to restore, guarded ones change recording or what goes on
 // air, and PTZ controls are speeds or positions that would move the camera.
 func storable(sp core.ControlSpec) bool {
-	return !sp.ReadOnly && sp.Kind != core.KindAction && !sp.Guarded && sp.Group != core.GroupPTZ
+	return !sp.ReadOnly && !sp.Hidden && sp.Kind != core.KindAction && !sp.Guarded && sp.Group != core.GroupPTZ
 }
 
 func checkPreset(n int) error {

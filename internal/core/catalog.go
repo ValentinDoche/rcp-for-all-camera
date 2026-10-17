@@ -4,8 +4,14 @@ package core
 // where the meaning matches, so the panel and the GUI treat all cameras alike.
 const (
 	// Lens
-	Iris      ControlID = "iris"      // f-stop, or normalized 0..1 when the camera only reports that
-	AutoIris  ControlID = "autoIris"  // action: one-shot auto exposure
+	Iris     ControlID = "iris"     // f-stop, or normalized 0..1 when the camera only reports that
+	AutoIris ControlID = "autoIris" // action: one-shot auto exposure
+	// IrisNorm is the iris over the lens' own range: 0 = fully open,
+	// 1 = closed. A camera that offers it maps it to the mounted lens, so a
+	// surface driving it can never ask for a stop the lens lacks (ATEM
+	// Software Control drives the panel's lever this way). Hidden: Iris
+	// stays the control people see.
+	IrisNorm  ControlID = "irisNorm"
 	Focus     ControlID = "focus"     // normalized 0 (near) .. 1 (far)
 	AutoFocus ControlID = "autoFocus" // action: one-shot autofocus
 	Zoom      ControlID = "zoom"      // normalized 0 (wide) .. 1 (tele)
@@ -66,6 +72,7 @@ type catalogEntry struct {
 var catalog = map[ControlID]catalogEntry{
 	Iris:             {"Iris", GroupLens},
 	AutoIris:         {"Auto iris", GroupLens},
+	IrisNorm:         {"Iris (lens range)", GroupLens},
 	Focus:            {"Focus", GroupLens},
 	AutoFocus:        {"Autofocus", GroupLens},
 	Zoom:             {"Zoom", GroupLens},

@@ -63,6 +63,10 @@ type ControlSpec struct {
 	// air (record, color bars, output format...). While the operator lock is
 	// on, the app asks for confirmation before writing it.
 	Guarded bool `json:"guarded,omitempty"`
+	// Hidden marks a control meant for control surfaces only (IrisNorm):
+	// the GUI does not show it and presets do not store it, as it doubles a
+	// visible control.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // Value carries a control value. Only the field matching Kind is meaningful:
