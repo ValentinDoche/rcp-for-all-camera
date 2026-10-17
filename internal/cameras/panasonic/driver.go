@@ -8,8 +8,6 @@
 package panasonic
 
 import (
-	"strings"
-
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
@@ -33,11 +31,10 @@ func models() []core.ModelInfo {
 }
 
 // model declares a Panasonic model. id is the module id without its brand
-// ("aw-ue150"); the 0.2.x id ("panasonic.awue150") stays as an alias.
+// ("aw-ue150").
 func model(id, name, notes string) core.ModelInfo {
 	return core.ModelInfo{
 		ID: core.ModelID("panasonic-" + id), Brand: "Panasonic", Name: name,
-		Aliases:    []core.ModelID{core.ModelID("panasonic." + strings.ReplaceAll(id, "-", ""))},
 		Transports: []core.Transport{core.TransportEthernet}, DefaultPort: 80,
 		Auth: core.AuthOptional, Support: core.SupportPlanned, Notes: notes,
 	}

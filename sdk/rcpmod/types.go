@@ -26,9 +26,6 @@ type Info struct {
 	InterchangeableLens bool `json:"interchangeableLens,omitempty"`
 	// NoAddress: the camera is not on the network (the demo camera).
 	NoAddress bool `json:"noAddress,omitempty"`
-	// Aliases are former ids of this module; saved rigs using them keep
-	// their cameras.
-	Aliases []string `json:"aliases,omitempty"`
 }
 
 // Transports, authentication modes and support levels of Info.

@@ -40,11 +40,7 @@ func testModel(id core.ModelID) core.ModelInfo {
 	}
 }
 
-func module(id core.ModelID, aliases ...core.ModelID) stubModule {
-	m := testModel(id)
-	m.Aliases = aliases
-	return stubModule{m}
-}
+func module(id core.ModelID) stubModule { return stubModule{testModel(id)} }
 
 func TestRegistryListsModelsInRegistrationOrder(t *testing.T) {
 	r := core.NewRegistry()
@@ -57,21 +53,13 @@ func TestRegistryListsModelsInRegistrationOrder(t *testing.T) {
 	}
 }
 
-func TestRegistryRejectsDuplicates(t *testing.T) {
-	for name, second := range map[string]stubModule{
-		"same id":                 module("acme-a"),
-		"alias of an existing id": module("acme-b", "acme-a"),
-		"id of an existing alias": module("acme-old"),
-	} {
-		t.Run(name, func(t *testing.T) {
-			r := core.NewRegistry()
-			if err := r.Register(module("acme-a", "acme-old")); err != nil {
-				t.Fatal(err)
-			}
-			if err := r.Register(second); !errors.Is(err, core.ErrDuplicateModel) {
-				t.Fatalf("Register = %v, want ErrDuplicateModel", err)
-			}
-		})
+func TestRegistryRejectsDuplicateModel(t *testing.T) {
+	r := core.NewRegistry()
+	if err := r.Register(module("acme-a")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Register(module("acme-a")); !errors.Is(err, core.ErrDuplicateModel) {
+		t.Fatalf("second Register = %v, want ErrDuplicateModel", err)
 	}
 }
 
@@ -108,26 +96,6 @@ func TestRegistryNewBuildsCameraForValidConfig(t *testing.T) {
 	if got := cam.(*stubCamera).cfg.Port; got != 80 {
 		t.Errorf("port = %d, want the model default 80", got)
 	}
-}
-
-func TestRegistryResolvesAliases(t *testing.T) {
-	r := core.NewRegistry()
-	_ = r.Register(module("acme-a", "acme.a"))
-	t.Run("Model", func(t *testing.T) {
-		info, ok := r.Model("acme.a")
-		if !ok || info.ID != "acme-a" {
-			t.Errorf("Model(alias) = %s, %t; want acme-a", info.ID, ok)
-		}
-	})
-	t.Run("New", func(t *testing.T) {
-		cam, err := r.New(core.CameraConfig{Model: "acme.a", Host: "10.0.0.1"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := cam.(*stubCamera).cfg.Model; got != "acme-a" {
-			t.Errorf("module got model %q, want the current id acme-a", got)
-		}
-	})
 }
 
 func TestRegistryNewRejectsUnknownModel(t *testing.T) {

@@ -439,7 +439,6 @@ func (s *Service) build(cfg core.CameraConfig) (*slotState, error) {
 	if !ok {
 		return nil, fmt.Errorf("%q: %w", cfg.Model, core.ErrUnknownModel)
 	}
-	cfg.Model = info.ID // a former id (alias) is saved under the current one
 	if err := core.ValidateConfig(info, cfg); err != nil {
 		return nil, err
 	}

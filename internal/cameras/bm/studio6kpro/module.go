@@ -28,8 +28,7 @@ func (Module) Info() core.ModelInfo {
 		ID: ID, Brand: "Blackmagic Design", Name: "Studio Camera 6K Pro",
 		Transports: []core.Transport{core.TransportEthernet}, DefaultPort: bm.DefaultPort,
 		Auth: core.AuthNone, Support: core.SupportExperimental, InterchangeableLens: true,
-		Notes:   "API REST Blackmagic Camera Control et WebSocket d'événements sur le port Ethernet ; protocole testé sur une vraie caméra, plages de gain, ISO et obturateur à confirmer.",
-		Aliases: []core.ModelID{"blackmagic.studio6kpro"},
+		Notes: "API REST Blackmagic Camera Control et WebSocket d'événements sur le port Ethernet ; protocole testé sur une vraie caméra, plages de gain, ISO et obturateur à confirmer.",
 	}
 }
 

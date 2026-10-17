@@ -15,18 +15,18 @@ import (
 // Modules returns the planned Blackmagic modules, in display order.
 func Modules() []core.Module {
 	return []core.Module{
-		pocket("bm-pocket-4k", "blackmagic.pocket4k", "Pocket Cinema Camera 4K", false),
-		pocket("bm-pocket-6k-g2", "blackmagic.pocket6kg2", "Pocket Cinema Camera 6K G2", false),
-		pocket("bm-pocket-6k-pro", "blackmagic.pocket6kpro", "Pocket Cinema Camera 6K Pro", true),
-		studio("bm-studio-4k-plus-g2", "blackmagic.studio4kplusg2", "Studio Camera 4K Plus G2", false),
-		studio("bm-studio-4k-pro-g2", "blackmagic.studio4kprog2", "Studio Camera 4K Pro G2", true),
+		pocket("bm-pocket-4k", "Pocket Cinema Camera 4K", false),
+		pocket("bm-pocket-6k-g2", "Pocket Cinema Camera 6K G2", false),
+		pocket("bm-pocket-6k-pro", "Pocket Cinema Camera 6K Pro", true),
+		studio("bm-studio-4k-plus-g2", "Studio Camera 4K Plus G2", false),
+		studio("bm-studio-4k-pro-g2", "Studio Camera 4K Pro G2", true),
 	}
 }
 
-func pocket(id, alias core.ModelID, name string, hasND bool) camerakit.Planned {
+func pocket(id core.ModelID, name string, hasND bool) camerakit.Planned {
 	return camerakit.Planned{
 		Model: core.ModelInfo{
-			ID: id, Aliases: []core.ModelID{alias}, Brand: "Blackmagic Design", Name: name,
+			ID: id, Brand: "Blackmagic Design", Name: name,
 			Transports: []core.Transport{core.TransportUSBEthernet}, DefaultPort: bm.DefaultPort,
 			Auth: core.AuthNone, Support: core.SupportPlanned, InterchangeableLens: true,
 			Notes: "API REST Blackmagic Camera Control via adaptateur USB-C Ethernet ; le Bluetooth n'est pas encore pris en charge et la version de firmware minimale reste à vérifier.",
@@ -35,10 +35,10 @@ func pocket(id, alias core.ModelID, name string, hasND bool) camerakit.Planned {
 	}
 }
 
-func studio(id, alias core.ModelID, name string, hasND bool) camerakit.Planned {
+func studio(id core.ModelID, name string, hasND bool) camerakit.Planned {
 	return camerakit.Planned{
 		Model: core.ModelInfo{
-			ID: id, Aliases: []core.ModelID{alias}, Brand: "Blackmagic Design", Name: name,
+			ID: id, Brand: "Blackmagic Design", Name: name,
 			Transports: []core.Transport{core.TransportEthernet}, DefaultPort: bm.DefaultPort,
 			Auth: core.AuthNone, Support: core.SupportPlanned, InterchangeableLens: true,
 			Notes: "API REST Blackmagic Camera Control sur le port Ethernet, WebSocket pour les événements ; plages à vérifier sur la caméra réelle.",

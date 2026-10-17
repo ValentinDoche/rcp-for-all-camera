@@ -37,8 +37,7 @@ func (Module) Info() core.ModelInfo {
 		ID: ID, Brand: "Démo", Name: "Caméra de démonstration",
 		Transports: []core.Transport{core.TransportEthernet}, Auth: core.AuthNone,
 		Support: core.SupportSupported, NoAddress: true, InterchangeableLens: true,
-		Notes:   "Caméra simulée sans adresse, avec les réglages d'une caméra de studio : tout répond, pour essayer l'interface et le panneau sans caméra.",
-		Aliases: []core.ModelID{"demo.camera"},
+		Notes: "Caméra simulée sans adresse, avec les réglages d'une caméra de studio : tout répond, pour essayer l'interface et le panneau sans caméra.",
 	}
 }
 

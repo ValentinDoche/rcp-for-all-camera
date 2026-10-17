@@ -29,10 +29,10 @@ func (m acmeModule) Info() core.ModelInfo                           { return m.i
 func (m acmeModule) New(cfg core.CameraConfig) (core.Camera, error) { return m.b.New(cfg) }
 
 // acme returns the two test modules, acme-cam and acme-secure (password
-// required), whose cameras b builds. acme-cam was "acme.cam" before 0.3.0.
+// required), whose cameras b builds.
 func acme(b builder) []core.Module {
 	return []core.Module{
-		acmeModule{core.ModelInfo{ID: "acme-cam", Aliases: []core.ModelID{"acme.cam"}, Brand: "Acme", Name: "Cam",
+		acmeModule{core.ModelInfo{ID: "acme-cam", Brand: "Acme", Name: "Cam",
 			Transports: []core.Transport{core.TransportEthernet, core.TransportWiFi}, DefaultPort: 80,
 			Auth: core.AuthNone, Support: core.SupportPlanned, InterchangeableLens: true}, b},
 		acmeModule{core.ModelInfo{ID: "acme-secure", Brand: "Acme", Name: "Secure",

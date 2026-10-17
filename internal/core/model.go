@@ -11,8 +11,8 @@ import (
 
 // ModelID identifies a camera module, hence a camera model: lowercase
 // words joined by hyphens, starting with the brand ("bm-studio-6k-pro",
-// "sony-fx6", "demo"). It is saved in rig.json, so it never changes once
-// released; a renamed module keeps its former ids in ModelInfo.Aliases.
+// "sony-fx6", "demo"). It is saved in rig.json, so it should not change
+// once released: a camera saved under an unknown id is dropped at startup.
 type ModelID string
 
 // maxModelIDLen bounds model ids and aliases.
@@ -87,20 +87,12 @@ type ModelInfo struct {
 	// NoAddress: the camera is not on the network (the demo camera); the
 	// config needs no host or port.
 	NoAddress bool `json:"noAddress,omitempty"`
-	// Aliases are former ids of this module (before 0.3.0: "<driver>.<model>").
-	// The registry still accepts them, so saved rigs keep their cameras.
-	Aliases []ModelID `json:"-"`
 }
 
 // Check reports whether the model declaration is well formed.
 func (m ModelInfo) Check() error {
 	if err := CheckModelID(m.ID); err != nil {
 		return fmt.Errorf("model %q: %w", m.ID, err)
-	}
-	for _, a := range m.Aliases {
-		if a == "" || len(a) > maxModelIDLen || CheckControlID(ControlID(a)) != nil {
-			return fmt.Errorf("model %s: malformed alias", m.ID)
-		}
 	}
 	switch {
 	case m.Brand == "" || m.Name == "":

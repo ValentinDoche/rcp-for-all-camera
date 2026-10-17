@@ -76,16 +76,6 @@ func TestDemoNeedsNoAddress(t *testing.T) {
 	}
 }
 
-func TestDemoKeepsItsFormerID(t *testing.T) {
-	reg := core.NewRegistry()
-	if err := reg.Register(demo.Module{}); err != nil {
-		t.Fatal(err)
-	}
-	if info, ok := reg.Model("demo.camera"); !ok || info.ID != demo.ID {
-		t.Errorf("Model(demo.camera) = %s, %t; want the demo module", info.ID, ok)
-	}
-}
-
 func TestDemoConnectsAtOnce(t *testing.T) {
 	cam, log := connected(t)
 	if cam.Status().State != core.StateConnected {

@@ -44,7 +44,6 @@ func models() []core.ModelInfo {
 func model(id, name string, auth core.AuthMode, notes string, tr ...core.Transport) core.ModelInfo {
 	return core.ModelInfo{
 		ID: core.ModelID("sony-" + id), Brand: "Sony", Name: name,
-		Aliases:    []core.ModelID{core.ModelID("sony." + id)},
 		Transports: tr, DefaultPort: 80, // TODO(verify): default port per model
 		Auth: auth, Support: core.SupportPlanned, Notes: notes,
 	}

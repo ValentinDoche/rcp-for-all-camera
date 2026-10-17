@@ -697,30 +697,3 @@ func TestStorePresetDisarmsStore(t *testing.T) {
 		t.Fatal("a failed store must disarm")
 	}
 }
-
-func TestFormerModelIDsAreMigrated(t *testing.T) {
-	saved := config.Rig{Version: config.Version, Presets: []config.Preset{
-		{Slot: 1, Number: 2, Model: "acme.cam", Values: map[core.ControlID]core.Value{core.Iris: core.Number(4)}},
-	}}
-	saved.Slots[0] = &core.CameraConfig{Model: "acme.cam", Name: "Cam A", Host: "192.168.10.11"}
-	f := newPresetFixture(t, saved)
-	t.Run("the camera is kept under its current id", func(t *testing.T) {
-		if got := f.svc.Rig().Slots[0].Camera; got == nil || got.Model != "acme-cam" {
-			t.Fatalf("slot 1 = %+v, want an acme-cam", got)
-		}
-	})
-	t.Run("its presets follow", func(t *testing.T) {
-		if got := f.svc.Rig().Slots[0].Presets; len(got) != 1 || got[0] != 2 {
-			t.Fatalf("presets %v, want [2]", got)
-		}
-	})
-	t.Run("the next save writes the current id", func(t *testing.T) {
-		if err := f.svc.SelectSlot(1); err != nil {
-			t.Fatal(err)
-		}
-		rig, _ := f.store.Load()
-		if rig.Slots[0].Model != "acme-cam" || rig.Presets[0].Model != "acme-cam" {
-			t.Errorf("saved models %s / %s, want acme-cam", rig.Slots[0].Model, rig.Presets[0].Model)
-		}
-	})
-}

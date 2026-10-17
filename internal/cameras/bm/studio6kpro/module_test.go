@@ -35,16 +35,6 @@ func TestDeclaration(t *testing.T) {
 	}
 }
 
-func TestKeepsItsFormerID(t *testing.T) {
-	reg := core.NewRegistry()
-	if err := reg.Register(studio6kpro.Module{}); err != nil {
-		t.Fatal(err)
-	}
-	if info, ok := reg.Model("blackmagic.studio6kpro"); !ok || info.ID != studio6kpro.ID {
-		t.Errorf("Model(blackmagic.studio6kpro) = %s, %t; want %s", info.ID, ok, studio6kpro.ID)
-	}
-}
-
 func TestUsesTheBlackmagicBase(t *testing.T) {
 	cam, _ := studio6kpro.Module{}.New(core.CameraConfig{Model: studio6kpro.ID, Host: "192.0.2.1"})
 	if _, ok := cam.(*bm.Camera); !ok {

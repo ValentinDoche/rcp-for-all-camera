@@ -28,19 +28,3 @@ func TestRegisterTwiceFails(t *testing.T) {
 		t.Error("second Register must fail with duplicates")
 	}
 }
-
-func TestEveryFormerIDStillResolves(t *testing.T) {
-	r := core.NewRegistry()
-	_ = cameras.Register(r, nil)
-	for old, cur := range map[core.ModelID]core.ModelID{
-		"blackmagic.pocket4k":    "bm-pocket-4k",
-		"blackmagic.studio6kpro": "bm-studio-6k-pro",
-		"sony.fx6":               "sony-fx6",
-		"panasonic.awue150":      "panasonic-aw-ue150",
-		"demo.camera":            "demo",
-	} {
-		if info, ok := r.Model(old); !ok || info.ID != cur {
-			t.Errorf("Model(%s) = %s, %t; want %s", old, info.ID, ok, cur)
-		}
-	}
-}

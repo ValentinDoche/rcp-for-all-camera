@@ -39,7 +39,7 @@ func TestDeclarations(t *testing.T) {
 	for _, mod := range planned.Modules() {
 		m := mod.Info()
 		if m.Brand != "Blackmagic Design" || m.Auth != core.AuthNone || m.DefaultPort != 80 ||
-			m.Support != core.SupportPlanned || !m.InterchangeableLens || len(m.Aliases) != 1 {
+			m.Support != core.SupportPlanned || !m.InterchangeableLens {
 			t.Errorf("%s: unexpected declaration %+v", m.ID, m)
 		}
 	}
