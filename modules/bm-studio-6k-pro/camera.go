@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"net/http"
 	"strings"
 	"time"
 
@@ -255,7 +254,7 @@ func (c *camera) Get(id string) (rcpmod.Value, error) {
 	if !known {
 		return rcpmod.Value{}, fmt.Errorf("get %s: %w", id, rcpmod.ErrNotImplemented)
 	}
-	body, err := c.request(http.MethodGet, path, nil)
+	body, err := c.request("GET", path, nil)
 	if err != nil {
 		return rcpmod.Value{}, fmt.Errorf("get %s: %w", id, err)
 	}
@@ -294,7 +293,7 @@ func (c *camera) Set(id string, v rcpmod.Value) error {
 	if err != nil {
 		return err
 	}
-	if _, err := c.request(http.MethodPut, cmd.Path, b); err != nil {
+	if _, err := c.request("PUT", cmd.Path, b); err != nil {
 		if cmd.Composite {
 			c.resync(cmd.Path) // the merge base must be the camera's real state again
 		}
@@ -304,7 +303,7 @@ func (c *camera) Set(id string, v rcpmod.Value) error {
 }
 
 func (c *camera) resync(path string) {
-	if body, err := c.request(http.MethodGet, path, nil); err == nil {
+	if body, err := c.request("GET", path, nil); err == nil {
 		c.applyJSON(path, body)
 	}
 }

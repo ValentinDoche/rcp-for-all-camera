@@ -1,4 +1,5 @@
-# Vet and test on every push to main and every pull request.
+# Format, vet, test with the race detector, build the camera modules and
+# check known vulnerabilities on every push to main and every pull request.
 # Windows runner: the app is Windows-only (Fyne needs cgo, the panel driver
 # uses the Windows HID API).
 name: CI
@@ -31,7 +32,7 @@ jobs:
       - name: Format
         shell: bash
         run: |
-          unformatted=$(gofmt -l internal cmd)
+          unformatted=$(gofmt -l internal cmd sdk modules)
           if [ -n "$unformatted" ]; then
             echo "Not gofmt-ed:"; echo "$unformatted"; exit 1
           fi
@@ -39,5 +40,11 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test
-        run: go test ./...
+      - name: Test (race detector)
+        run: go test -race ./...
+
+      - name: Build the camera modules
+        run: go run ./cmd/buildmodules -o dist/modules
+
+      - name: Known vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...

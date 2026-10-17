@@ -1,0 +1,28 @@
+# Every Monday (and on demand): check the code and its dependencies against
+# the Go vulnerability database. A finding fails the run, which GitHub
+# reports to the repository owner. docs/vulnerabilities.html lists the known
+# vulnerabilities and the tests that guard against them.
+name: Vulnerability check
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...

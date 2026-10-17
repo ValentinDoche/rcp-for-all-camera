@@ -1,5 +1,6 @@
-# On a version tag (v*): test, build rcp.exe, zip it with the README and
-# publish a GitHub release with the zip. A tag with a suffix (v0.1.0-ALPHA)
+# On a version tag (v*): test, build rcp.exe and the camera modules, zip
+# them with the README and the documentation, and publish a GitHub release
+# with the zip. A tag with a suffix (v0.1.0-ALPHA)
 # gives a pre-release.
 name: Release
 
@@ -38,7 +39,10 @@ jobs:
         run: |
           mkdir -p "dist/RCPForAllCamera"
           go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=${{ github.ref_name }}" -o "dist/RCPForAllCamera/rcp.exe" ./cmd/rcp
+          go run ./cmd/buildmodules -o "dist/RCPForAllCamera/modules"
           cp README.md "dist/RCPForAllCamera/"
+          mkdir -p "dist/RCPForAllCamera/docs"
+          cp -r docs/assets docs/*.html "dist/RCPForAllCamera/docs/"
 
       - name: Zip
         shell: pwsh
