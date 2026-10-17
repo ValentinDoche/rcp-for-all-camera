@@ -131,16 +131,23 @@ func (f *fakeCamera) serveSocket(w http.ResponseWriter, r *http.Request) {
 			} `json:"data"`
 		}
 		_ = json.Unmarshal(msg, &req)
+		// Like a real camera, one unknown property refuses the whole request.
 		vals := map[string]any{}
+		ok := true
 		f.mu.Lock()
 		for _, p := range req.Data.Properties {
-			if o, ok := f.state[p]; ok {
+			if o, known := f.state[p]; known {
 				vals[p] = o
+			} else {
+				ok = false
 			}
 		}
 		f.mu.Unlock()
+		if !ok {
+			vals = map[string]any{}
+		}
 		b, _ := json.Marshal(map[string]any{"type": "response", "id": req.ID, "data": map[string]any{
-			"action": "subscribe", "properties": req.Data.Properties, "success": true, "values": vals,
+			"action": "subscribe", "properties": req.Data.Properties, "success": ok, "values": vals,
 		}})
 		_ = ws.writeText(b)
 	}
@@ -490,6 +497,22 @@ func TestCameraLens(t *testing.T) {
 		}
 		return false
 	})
+}
+
+// Some firmwares do not know the lens descriptions: the camera still
+// connects, with no lens limits.
+func TestCameraWithoutLensDescriptions(t *testing.T) {
+	f := newFakeCamera(t)
+	for _, p := range lensWatched {
+		delete(f.state, p)
+	}
+	cam, _ := connected(t, f)
+	if st := cam.Status().State; st != core.StateConnected {
+		t.Fatalf("status %s, want connected", st)
+	}
+	if l := cam.Lens(); l.IrisMin != 0 || l.FocalMax != 0 || l.FocalLength != 24 {
+		t.Errorf("lens = %+v, want focal length only", l)
+	}
 }
 
 func TestFocusMetres(t *testing.T) {

@@ -51,8 +51,13 @@ const (
 var watched = []string{
 	pathFormat, pathIris, pathFocus, pathZoom, pathGain, pathISO, pathShutter, pathND,
 	pathWB, pathTint, pathRecord, pathLift, pathGamma, pathGainCC, pathOffset,
-	pathContrast, pathColor, pathLuma, pathIrisDesc, pathFocDesc, pathZoomDesc,
+	pathContrast, pathColor, pathLuma,
 }
+
+// lensWatched are the lens descriptions, subscribed to apart from watched:
+// some firmwares (seen on Studio Camera 6K Pro) do not know them and
+// refuse any subscription that names them.
+var lensWatched = []string{pathIrisDesc, pathFocDesc, pathZoomDesc}
 
 // colorCtl maps one control onto one key of a color correction property.
 type colorCtl struct {

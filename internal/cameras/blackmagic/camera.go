@@ -33,6 +33,7 @@ const (
 	maxBackoff     = 10 * time.Second
 	maxBody        = 1 << 20
 	subscribeID    = 1
+	lensSubID      = 2
 )
 
 // Camera drives one camera through the Blackmagic Camera Control REST API.
@@ -381,23 +382,33 @@ func (c *Camera) session(ctx context.Context) (connected bool, err error) {
 	}()
 	go keepAlive(sctx, w)
 
-	req, _ := json.Marshal(map[string]any{
-		"type": "request", "id": subscribeID,
-		"data": map[string]any{"action": "subscribe", "properties": watched},
-	})
-	if err := w.writeText(req); err != nil {
-		return false, err
+	// The lens descriptions go in their own request: firmwares that do not
+	// know them refuse the whole subscription they are part of.
+	for _, sub := range []struct {
+		id    int
+		props []string
+	}{{subscribeID, watched}, {lensSubID, lensWatched}} {
+		req, _ := json.Marshal(map[string]any{
+			"type": "request", "id": sub.id,
+			"data": map[string]any{"action": "subscribe", "properties": sub.props},
+		})
+		if err := w.writeText(req); err != nil {
+			return false, err
+		}
 	}
+	var gotMain, gotLens bool
 	for {
 		msg, err := w.readText()
 		if err != nil {
 			return connected, err
 		}
-		ok, err := c.handle(msg)
+		id, err := c.handle(msg)
 		if err != nil {
 			return connected, err
 		}
-		if ok && !connected {
+		gotMain = gotMain || id == subscribeID
+		gotLens = gotLens || id == lensSubID
+		if gotMain && gotLens && !connected {
 			connected = true
 			c.setStatus(core.StateConnected, "")
 			c.finishFirst(nil)
@@ -436,20 +447,21 @@ type wsMessage struct {
 	} `json:"data"`
 }
 
-// handle applies one socket message. subscribed is true for the successful
-// answer to our subscription.
-func (c *Camera) handle(msg []byte) (subscribed bool, err error) {
+// handle applies one socket message. resp is the id of the subscription it
+// answers, 0 for any other message. A refused lens subscription is not an
+// error: the camera then reports no lens limits.
+func (c *Camera) handle(msg []byte) (resp int, err error) {
 	var m wsMessage
 	if err := json.Unmarshal(msg, &m); err != nil {
 		c.log.Debug("ignored socket message", "err", err)
-		return false, nil
+		return 0, nil
 	}
 	switch {
 	case m.Type == "event" && m.Data.Action == "propertyValueChanged":
 		c.applyJSON(m.Data.Property, m.Data.Value)
 	case m.Type == "response" && m.ID == subscribeID:
 		if !m.Data.Success {
-			return false, errors.New("camera refused the event subscription")
+			return 0, errors.New("camera refused the event subscription")
 		}
 		// The format first: the shutter conversion needs the frame rate.
 		if v, ok := m.Data.Values[pathFormat]; ok {
@@ -460,9 +472,17 @@ func (c *Camera) handle(msg []byte) (subscribed bool, err error) {
 				c.applyJSON(path, v)
 			}
 		}
-		return true, nil
+		return subscribeID, nil
+	case m.Type == "response" && m.ID == lensSubID:
+		if !m.Data.Success {
+			c.log.Debug("camera has no lens descriptions")
+		}
+		for path, v := range m.Data.Values {
+			c.applyJSON(path, v)
+		}
+		return lensSubID, nil
 	}
-	return false, nil
+	return 0, nil
 }
 
 // applyJSON decodes one property object, updates the cache and notifies
