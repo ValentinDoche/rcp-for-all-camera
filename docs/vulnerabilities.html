@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Known Vulnerabilities</title>
+<meta name="description" content="Every known vulnerability of RCP For All Camera, how it was fixed or why it cannot be exploited, and the test that proves it.">
+<link rel="stylesheet" href="assets/docs.css">
+<script src="assets/docs.js"></script>
+</head>
+<body>
+<header class="topbar" id="topbar"></header>
+<div class="layout">
+<aside class="sidebar" id="sidebar"></aside>
+<main>
+
+<div class="hero">
+  <div class="kicker">Security</div>
+  <h1>Known vulnerabilities</h1>
+  <p>Every vulnerability known in RCP For All Camera and its dependencies, what was done about it, and the test that proves it stays fixed.</p>
+</div>
+
+<section class="band" id="overview">
+  <h2>At a glance</h2>
+  <p class="lead">RCP For All Camera is a desktop application. It opens no network port: it drives a USB control panel and
+  reaches cameras on the production network. What it must protect is the camera passwords and the control of live
+  equipment (recording, colour bars, tally).</p>
+  <div class="cards">
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M9 12l2 2l4 -4"/></svg>
+      <a class="title" href="#dependencies">Dependencies: 0 open</a>
+      <p>14 vulnerabilities reported in the Go standard library, <code>x/net</code> and <code>x/image</code>, all fixed by upgrades.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/></svg>
+      <a class="title" href="#threats">Application threats</a>
+      <p>Each attack the design must stop, how it is stopped, and the test that tries it.</p>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12z"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M4 11h16"/></svg>
+      <a class="title" href="#how">Checked every week</a>
+      <p>The vulnerability database is checked on every change and every Monday, even when nothing changes.</p>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <h2>How vulnerabilities are found</h2>
+  <p>Two kinds of vulnerability matter: those in code the project depends on, and those in the project's own design.</p>
+  <h3>Dependencies</h3>
+  <p><a href="https://go.dev/doc/security/vuln/">govulncheck</a>, the Go team's scanner, compares the exact versions the
+  application is built with against the <a href="https://pkg.go.dev/vuln/">Go vulnerability database</a>. It reports a
+  vulnerability only when the application actually calls the affected code
+  <span class="info" tabindex="0" data-tip="govulncheck follows the call graph: a vulnerable function in a dependency that the program never calls is not reported as affecting it.">i</span>.
+  It runs:</p>
+  <ul>
+    <li>on every push to <code>main</code> and every pull request, in the CI workflow (<code>.github/workflows/ci.yml</code>);</li>
+    <li>every Monday at 06:00 UTC, in <code>.github/workflows/vulncheck.yml</code>, because new vulnerabilities are
+    published for code that has not changed. It can also be started by hand from the Actions tab.</li>
+  </ul>
+  <p>To run the same check on your machine:</p>
+<pre><code>go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...</code></pre>
+  <div class="note"><p><strong>When the weekly check fails:</strong> read the report, upgrade the module named in
+  <em>Fixed in</em> (<code>go get module@version</code>, or the <code>toolchain</code> line of <code>go.mod</code> for the
+  standard library), run the tests, then add the entry to the <a href="#dependencies">table below</a>.</p></div>
+  <h3>The application's own design</h3>
+  <p>The threats come from the <a href="https://github.com/ValentinDoche/rcp-for-all-camera/blob/main/docs/security.md">threat
+  model</a>: what crosses into the application from the disk, the USB panel, the network and the camera modules. Each
+  protection has a test that attacks it; the <a href="#threats">threats table</a> names them. They run with every
+  <code>go test ./...</code>, on every push.</p>
+</section>
+
+<section id="dependencies">
+  <h2>Dependency vulnerabilities</h2>
+  <p>Found by govulncheck on 17 October 2026, all fixed the same day in 0.3.0-ALPHA by upgrading
+  <code>golang.org/x/net</code> to v0.60.0, <code>golang.org/x/image</code> to v0.43.0 and the Go toolchain to
+  go1.27.2. Each id links to its full description.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Id</th><th>Where</th><th>Affected</th><th>Fixed in</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6617">GO-2026-6617</a></td><td>HTTP/2</td><td><code>x/net</code> v0.35.0, <code>net/http</code> go1.27</td><td>v0.60.0, go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6613">GO-2026-6613</a></td><td><code>net/http</code></td><td>go1.27</td><td>go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6612">GO-2026-6612</a></td><td>HTTP/2</td><td><code>x/net</code> v0.35.0, <code>net/http</code> go1.27</td><td>v0.60.0, go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6611">GO-2026-6611</a></td><td>HTTP/2</td><td><code>x/net</code> v0.35.0</td><td>v0.60.0</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6610">GO-2026-6610</a></td><td>HTTP/2</td><td><code>x/net</code> v0.35.0, <code>net/http</code> go1.27</td><td>v0.60.0, go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6609">GO-2026-6609</a></td><td><code>net/http</code></td><td>go1.27</td><td>go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6608">GO-2026-6608</a></td><td><code>net/textproto</code></td><td>go1.27</td><td>go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6607">GO-2026-6607</a></td><td><code>crypto/tls</code></td><td>go1.27</td><td>go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6605">GO-2026-6605</a></td><td><code>net/http</code></td><td>go1.27</td><td>go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-6603">GO-2026-6603</a></td><td>HTTP/2</td><td><code>x/net</code> v0.35.0, <code>net/http</code> go1.27</td><td>v0.60.0, go1.27.2</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-5066">GO-2026-5066</a></td><td>Image decoding</td><td><code>x/image</code> v0.24.0</td><td>v0.43.0</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-5062">GO-2026-5062</a></td><td>Image decoding</td><td><code>x/image</code> v0.24.0</td><td>v0.43.0</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-5032">GO-2026-5032</a></td><td>Image decoding</td><td><code>x/image</code> v0.24.0</td><td>v0.43.0</td><td><span class="pill ok">Fixed</span></td></tr>
+      <tr><td><a href="https://pkg.go.dev/vuln/GO-2026-4815">GO-2026-4815</a></td><td>Image decoding</td><td><code>x/image</code> v0.24.0</td><td>v0.43.0</td><td><span class="pill ok">Fixed</span></td></tr>
+    </tbody>
+  </table></div>
+  <details class="more"><summary>More info: why a desktop app cares about HTTP/2 and image bugs</summary><div>
+    <p>The application talks HTTP to the cameras, and the Go HTTP client negotiates HTTP/2 when a server offers it. A
+    device on the production network that pretends to be a camera could send crafted answers, so the client code is
+    exposed even though the application serves nothing. <code>x/image</code> comes with the Fyne interface toolkit, which
+    decodes the application's own icons and images.</p>
+    <p>The proof that these are fixed is the scan itself: govulncheck on the current <code>go.mod</code> reports no
+    vulnerability, in CI on every push to <code>main</code> and every week.</p>
+  </div></details>
+</section>
+
+<section id="threats">
+  <h2>Application threats</h2>
+  <p>What an attacker, a faulty device or a broken file could try, and the test that proves it does not work. Test
+  names are Go test functions; run one with <code>go test ./internal/&lt;package&gt; -run &lt;TestName&gt;</code>.</p>
+
+  <h3>Camera modules</h3>
+  <p>A module is code the application did not write: a downloaded module could be hostile. Every module runs in a
+  WebAssembly sandbox, and <code>internal/plugins/testdata/modules/hostile-module</code> is a module written to break
+  out of it.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Threat</th><th>Protection</th><th>Test (<code>internal/plugins</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>A module reads or writes files on the PC</td><td>No file system is mounted in the sandbox.</td><td><code>TestSandboxHasNoFileSystem</code></td></tr>
+      <tr><td>A module reads environment variables (tokens, paths)</td><td>The sandbox gets an empty environment.</td><td><code>TestSandboxHasNoEnvironment</code></td></tr>
+      <tr><td>A module scans the network or sends data elsewhere</td><td>HTTP and WebSocket only to the camera's configured address and port; nothing else can be dialled.</td><td><code>TestSandboxNetworkOnlyReachesTheCamera</code></td></tr>
+      <tr><td>A camera redirects the module to another host</td><td>Redirects are never followed.</td><td><code>TestSandboxDoesNotFollowRedirects</code></td></tr>
+      <tr><td>A camera or module sends a huge message to exhaust memory</td><td>Messages are limited to 1 MiB, module memory to 64 MiB.</td><td><code>TestSandboxRefusesOversizedAnswers</code></td></tr>
+      <tr><td>A module reports values or controls outside what it declared</td><td>The host validates every event against the declared controls and drops the rest.</td><td><code>TestSandboxDropsMalformedEvents</code>, <code>TestSetIsCheckedBeforeTheModule</code></td></tr>
+      <tr><td>A module hangs, loops or crashes</td><td>Each call is limited to 10 s; a module that fails is stopped and its camera goes offline.</td><td><code>TestSandboxStopsAMisbehavingModule</code></td></tr>
+      <tr><td>One broken module takes the others down</td><td>Each camera has its own module instance.</td><td><code>TestOtherCamerasSurviveAMisbehavingModule</code></td></tr>
+      <tr><td>A module file impersonates another model</td><td>A file must be named after the model it declares.</td><td><code>TestLoadRefusesAFileNamedAfterAnotherModule</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Camera passwords</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Threat</th><th>Protection</th><th>Test</th></tr></thead>
+    <tbody>
+      <tr><td>Passwords read from the configuration file or an export</td><td>Passwords never go into <code>rig.json</code> or an exported file.</td><td><code>config</code>: <code>TestSaveNeverWritesPasswords</code>; <code>app</code>: <code>TestExportHasCamerasButNoPasswordsOrMachineSettings</code></td></tr>
+      <tr><td>Passwords read from the secrets file</td><td>Encrypted with Windows DPAPI for the current user, with application entropy.</td><td><code>config</code>: <code>TestOSSecretsFileHasNoPlaintext</code>, <code>TestOSSecretsEntropyIsRequired</code></td></tr>
+      <tr><td>A tampered or foreign secrets file</td><td>Rejected, and never overwritten automatically.</td><td><code>config</code>: <code>TestOSSecretsRejectsTamperedOrForeignFile</code>, <code>TestOSSecretsRejectsOversizedFile</code></td></tr>
+      <tr><td>Passwords leaking into logs or error messages</td><td>Configuration types redact the password in every format and in structured logs.</td><td><code>core</code>: <code>TestCameraConfigRedactsPasswordInLogsAndFormatting</code>, <code>TestValidateConfigErrorNeverEchoesPassword</code>; <code>app</code>: <code>TestSlotInputNeverPrintsPassword</code>, <code>TestInternalErrorsDoNotLeakDetails</code></td></tr>
+      <tr><td>Passwords shown on screen</td><td>The interface only knows whether a password is stored; the field is never prefilled.</td><td><code>app</code>: <code>TestPasswordGoesToSecretsNeverToViewOrStore</code>; <code>gui</code>: <code>TestNoPasswordInVisibleText</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Files, user input and the USB panel</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Threat</th><th>Protection</th><th>Test</th></tr></thead>
+    <tbody>
+      <tr><td>A corrupt or hostile <code>rig.json</code></td><td>Read with a 1 MiB limit and a version check; invalid entries are dropped at start.</td><td><code>config</code>: <code>TestLoadRejectsOversizedFile</code>, <code>TestLoadRejectsMalformedJSON</code>, <code>TestLoadRejectsUnknownVersion</code>; <code>app</code>: <code>TestStartupRestoresSavedRigAndDropsInvalidEntries</code></td></tr>
+      <tr><td>A hostile configuration file imported by the user</td><td>1 MiB limit, the user confirms, the whole file is validated before anything changes.</td><td><code>gui</code>: <code>TestImportRejectsAFileOverOneMebibyte</code>, <code>TestImportRejectsABadFileInline</code>; <code>app</code>: <code>TestImportRejectsInvalidDocumentsAtomically</code></td></tr>
+      <tr><td>Spoofed names or commands in text fields (control characters, bidi overrides, zero-width characters, URLs as hosts)</td><td>Names, credentials and hosts are validated at the application boundary.</td><td><code>core</code>: <code>TestValidateConfigRejectsUnsafeText</code>, <code>TestValidateConfigRejectsBadHosts</code>, <code>TestValidateConfigRejectsOverlongCredentials</code></td></tr>
+      <tr><td>Hostile control ids or values sent to a camera</td><td>Ids, choices and values are checked against the declared controls before any I/O, and are never echoed back.</td><td><code>app</code>: <code>TestSetControlRejectsHostileIDWithoutEchoingIt</code>, <code>TestSetControlRejectsHostileChoice</code>; <code>core</code>: <code>TestCheckControlID</code>, <code>TestValueCheck</code>, <code>TestRangeSpecRejectsNaN</code></td></tr>
+      <tr><td>A faulty or malicious USB device</td><td>Every input report is length-checked before it is read.</td><td><code>surfaces/micropanel</code>: <code>FuzzParseReport</code> (native fuzz test)</td></tr>
+      <tr><td>Recording or colour bars changed by mistake on live gear</td><td>Guarded controls ask for confirmation while the operator lock is on (the default).</td><td><code>app</code>: <code>TestLockedGuardedControlNeedsConfirmation</code>; <code>gui</code>: <code>TestGuardedControlAsksThenSendsOnConfirm</code>, <code>TestGuardedControlCancelRestoresTheValue</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <details class="more"><summary>More info: what is out of reach</summary><div>
+    <p>Malware running as the same Windows user, and local administrators, can read the process memory and decrypt the
+    secrets file as the user: no desktop application can defend against them. On Windows, Go ignores the
+    <code>0600</code> file mode, so the files rely on the per-user <code>%APPDATA%</code> folder permissions. The full
+    list of residual risks is in the <a href="https://github.com/ValentinDoche/rcp-for-all-camera/blob/main/docs/security.md">security
+    model</a>.</p>
+  </div></details>
+</section>
+
+<section id="report">
+  <h2>Reporting a vulnerability</h2>
+  <p>Found a way around one of these protections, or a vulnerability not listed here? Please report it privately with
+  <strong>Report a vulnerability</strong> under the Security tab of the
+  <a href="https://github.com/ValentinDoche/rcp-for-all-camera">GitHub repository</a>, not in a public issue. Describe
+  what you did, what happened and the version you used.</p>
+  <div class="tip"><p>Every confirmed report gets a row in this page, with the test that proves the fix.</p></div>
+</section>
+
+<footer class="page">RCP For All Camera · Known vulnerabilities · version 0.3.0-ALPHA ·
+<a href="index.html">Documentation home</a> · <a href="modules-camera.html">Camera modules guide</a></footer>
+</main>
+</div>
+</body>
+</html>
