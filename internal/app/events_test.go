@@ -39,7 +39,7 @@ type pushDriver struct {
 	cams []*pushCamera
 }
 
-func (d *pushDriver) New(core.ModelInfo, core.CameraConfig) (core.Camera, error) {
+func (d *pushDriver) New(core.CameraConfig) (core.Camera, error) {
 	c := &pushCamera{Placeholder: camerakit.NewPlaceholder(nil)}
 	d.mu.Lock()
 	d.cams = append(d.cams, c)
@@ -65,7 +65,7 @@ func newPushService(t *testing.T) (*Service, *pushDriver, *eventLog) {
 	t.Helper()
 	reg := core.NewRegistry()
 	drv := &pushDriver{}
-	if err := reg.Register(drv); err != nil {
+	if err := reg.Register(acme(drv)...); err != nil {
 		t.Fatal(err)
 	}
 	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: config.Rig{Version: config.Version}},

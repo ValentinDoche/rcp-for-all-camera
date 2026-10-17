@@ -1,72 +1,71 @@
-// Package panasonic declares the Panasonic PTZ cameras and the controls each
-// model exposes.
+// Package panasonic declares the Panasonic PTZ camera modules and the
+// controls each model exposes.
 //
 // Intended protocol: Panasonic AW HTTP/CGI commands (port 80, optional basic
-// authentication). Until the protocol is written every model uses
-// camerakit.Placeholder.
+// authentication). Until it is written every model is a camerakit.Planned
+// module; the protocol will then go in a shared base here, with one module
+// package per model.
 package panasonic
 
 import (
-	"fmt"
+	"strings"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
-// Driver implements core.Driver for Panasonic cameras.
-type Driver struct{}
+// Modules returns the Panasonic camera modules, in display order.
+func Modules() []core.Module {
+	var out []core.Module
+	for _, m := range models() {
+		out = append(out, camerakit.Planned{Model: m, Specs: func(core.CameraConfig) []core.ControlSpec { return specsFor(m.ID) }})
+	}
+	return out
+}
 
-var _ core.Driver = Driver{}
-
-func (Driver) Name() string { return "panasonic" }
-
-func (Driver) Models() []core.ModelInfo {
+func models() []core.ModelInfo {
 	return []core.ModelInfo{
 		model("generic", "Autre modèle Panasonic", "Commandes HTTP/CGI Panasonic AW ; le modèle exact et les commandes prises en charge sont à vérifier."),
-		model("awue100", "AW-UE100", "Commandes HTTP/CGI Panasonic AW ; la présence d'un filtre ND et les plages sont à vérifier."),
-		model("awue150", "AW-UE150", "La liste des paramètres vient de la référence SKAARHOJ core-panasonic-ptz ; le protocole (Panasonic AW HTTP/CGI) reste à écrire."),
-		model("awue160", "AW-UE160", "La liste des paramètres vient de la référence SKAARHOJ core-panasonic-ptz ; le protocole (Panasonic AW HTTP/CGI) reste à écrire."),
+		model("aw-ue100", "AW-UE100", "Commandes HTTP/CGI Panasonic AW ; la présence d'un filtre ND et les plages sont à vérifier."),
+		model("aw-ue150", "AW-UE150", "La liste des paramètres vient de la référence SKAARHOJ core-panasonic-ptz ; le protocole (Panasonic AW HTTP/CGI) reste à écrire."),
+		model("aw-ue160", "AW-UE160", "La liste des paramètres vient de la référence SKAARHOJ core-panasonic-ptz ; le protocole (Panasonic AW HTTP/CGI) reste à écrire."),
 	}
 }
 
-// New builds a placeholder camera; it does no I/O.
-func (Driver) New(m core.ModelInfo, _ core.CameraConfig) (core.Camera, error) {
-	specs, err := specsFor(m.ID)
-	if err != nil {
-		return nil, err
-	}
-	return camerakit.NewPlaceholder(specs), nil
-}
-
+// model declares a Panasonic model. id is the module id without its brand
+// ("aw-ue150"); the 0.2.x id ("panasonic.awue150") stays as an alias.
 func model(id, name, notes string) core.ModelInfo {
 	return core.ModelInfo{
-		ID: core.ModelID("panasonic." + id), Brand: "Panasonic", Name: name, Driver: "panasonic",
+		ID: core.ModelID("panasonic-" + id), Brand: "Panasonic", Name: name,
+		Aliases:    []core.ModelID{core.ModelID("panasonic." + strings.ReplaceAll(id, "-", ""))},
 		Transports: []core.Transport{core.TransportEthernet}, DefaultPort: 80,
 		Auth: core.AuthOptional, Support: core.SupportPlanned, Notes: notes,
 	}
 }
 
-func specsFor(id core.ModelID) ([]core.ControlSpec, error) {
+// specsFor returns the controls of a model, guarded ones marked. The table
+// is static: an unknown id is a programming error caught by the tests.
+func specsFor(id core.ModelID) []core.ControlSpec {
 	var specs []core.ControlSpec
 	switch id {
-	case "panasonic.generic":
+	case "panasonic-generic":
 		specs = family(opts{})
-	case "panasonic.awue100":
+	case "panasonic-aw-ue100":
 		// TODO(verify): UE100 may also have a built-in ND filter.
 		specs = family(opts{ptz: true})
-	case "panasonic.awue150":
+	case "panasonic-aw-ue150":
 		specs = ue150Specs()
-	case "panasonic.awue160":
+	case "panasonic-aw-ue160":
 		specs = ue160Specs()
 	default:
-		return nil, fmt.Errorf("%q: %w", id, core.ErrUnknownModel)
+		panic("panasonic: no specs for " + string(id))
 	}
 	for i := range specs {
 		if guarded[specs[i].ID] {
 			specs[i].Guarded = true
 		}
 	}
-	return specs, nil
+	return specs
 }
 
 // guarded are the Panasonic controls that change power, the video format or

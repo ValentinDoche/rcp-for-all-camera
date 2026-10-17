@@ -36,6 +36,13 @@ func Action(id core.ControlID) core.ControlSpec {
 	return s
 }
 
+// Color labels a module-specific color correction control (no standard
+// id, so no standard label or group).
+func Color(s core.ControlSpec, label string) core.ControlSpec {
+	s.Label, s.Group = label, core.GroupColor
+	return s
+}
+
 // ReadOnly marks a spec as not writable.
 func ReadOnly(s core.ControlSpec) core.ControlSpec {
 	s.ReadOnly = true

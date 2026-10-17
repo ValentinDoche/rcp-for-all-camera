@@ -1,4 +1,4 @@
-package blackmagic
+package bm
 
 import (
 	"bufio"

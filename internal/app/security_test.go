@@ -55,7 +55,7 @@ func TestAssignSlotRejectsHugeModelIDWithoutEchoingIt(t *testing.T) {
 }
 
 func TestSlotInputNeverPrintsPassword(t *testing.T) {
-	in := SlotInput{Model: "acme.secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("hunter2")}
+	in := SlotInput{Model: "acme-secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("hunter2")}
 	var buf bytes.Buffer
 	slog.New(slog.NewJSONHandler(&buf, nil)).Info("in", "in", in, "ptr", &in)
 	for _, verb := range []string{"%v", "%+v", "%#v"} {
@@ -72,17 +72,17 @@ func (f *failingStore) Save(config.Rig) error { return errors.New("disk full") }
 
 func TestAssignSlotRestoresSecretWhenSaveFails(t *testing.T) {
 	reg := core.NewRegistry()
-	_ = reg.Register(testDriver{})
+	_ = reg.Register(acme(testDriver{})...)
 	var saved config.Rig
 	saved.Version = config.Version
-	saved.Slots[0] = &core.CameraConfig{Model: "acme.secure", Host: "10.0.0.1", Username: "admin"}
+	saved.Slots[0] = &core.CameraConfig{Model: "acme-secure", Host: "10.0.0.1", Username: "admin"}
 	sec := config.NewMemorySecrets()
 	_ = sec.Set(secretKey(1), "old")
 	svc, err := NewService(Options{Registry: reg, Store: &failingStore{memStore{rig: saved}}, Secrets: sec})
 	if err != nil {
 		t.Fatal(err)
 	}
-	in := SlotInput{Model: "acme.secure", Host: "10.0.0.1", Username: "admin", Password: strPtr("new")}
+	in := SlotInput{Model: "acme-secure", Host: "10.0.0.1", Username: "admin", Password: strPtr("new")}
 	if _, err := svc.AssignSlot(1, in); code(t, err) != CodeInternal {
 		t.Fatalf("AssignSlot with failing store = %v, want INTERNAL", err)
 	}
@@ -116,13 +116,12 @@ func (c *slowCamera) Get(ctx context.Context, _ core.ControlID) (core.Value, err
 
 type slowDriver struct{}
 
-func (slowDriver) Name() string { return "slow" }
-func (slowDriver) Models() []core.ModelInfo {
-	return []core.ModelInfo{{ID: "slow.cam", Brand: "Slow", Name: "Cam", Driver: "slow",
+func (slowDriver) Info() core.ModelInfo {
+	return core.ModelInfo{ID: "slow-cam", Brand: "Slow", Name: "Cam",
 		Transports: []core.Transport{core.TransportEthernet}, DefaultPort: 80,
-		Auth: core.AuthNone, Support: core.SupportPlanned}}
+		Auth: core.AuthNone, Support: core.SupportPlanned}
 }
-func (slowDriver) New(core.ModelInfo, core.CameraConfig) (core.Camera, error) {
+func (slowDriver) New(core.CameraConfig) (core.Camera, error) {
 	var specs []core.ControlSpec
 	for _, id := range []core.ControlID{core.Iris, core.Gain, core.Zoom, core.Focus, core.Tint} {
 		s := core.Std(id)
@@ -143,7 +142,7 @@ func TestControlsIsBoundedByOneTimeoutNotOnePerControl(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.AssignSlot(1, SlotInput{Model: "slow.cam", Host: "10.0.0.9"}); err != nil {
+	if _, err := svc.AssignSlot(1, SlotInput{Model: "slow-cam", Host: "10.0.0.9"}); err != nil {
 		t.Fatal(err)
 	}
 	start := time.Now()

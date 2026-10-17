@@ -1,4 +1,4 @@
-package blackmagic
+package studio6kpro_test
 
 import (
 	"context"
@@ -7,24 +7,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/bm"
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/bm/studio6kpro"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
 // Hardware tests against a real Studio Camera 6K Pro. They are skipped unless
 // BMD_CAMERA holds the camera's address:
 //
-//	BMD_CAMERA=192.168.10.11 go test ./internal/cameras/blackmagic -run Live -v
+//	BMD_CAMERA=192.168.10.11 go test ./internal/cameras/bm/studio6kpro -run Live -v
 //
 // TestLiveRead only reads. TestLiveWrite also needs BMD_CAMERA_WRITE=1: it
 // changes image settings (never recording) and puts each one back.
 
-func liveCamera(t *testing.T) *Camera {
+func liveCamera(t *testing.T) core.Camera {
 	t.Helper()
 	host := os.Getenv("BMD_CAMERA")
 	if host == "" {
 		t.Skip("BMD_CAMERA not set")
 	}
-	cam := newCamera(studio6kProSpecs(), core.CameraConfig{Model: "blackmagic.studio6kpro", Host: host}, 80)
+	cam, err := studio6kpro.Module{}.New(core.CameraConfig{Model: studio6kpro.ID, Host: host, Port: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = cam.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -75,7 +80,7 @@ func TestLiveWrite(t *testing.T) {
 		{core.MasterBlack, core.Number(-0.05), 0},
 		{core.GammaB, core.Number(0.1), 0},
 		{core.GainG, core.Number(1.1), 0},
-		{OffsetY, core.Number(0.1), 0},
+		{bm.OffsetY, core.Number(0.1), 0},
 		{core.Contrast, core.Number(1.2), 0},
 		{core.Saturation, core.Number(1.2), 0},
 		{core.Hue, core.Number(0.1), 0},
@@ -109,7 +114,7 @@ func near(a, b core.Value, tol float64) bool {
 }
 
 // waitValue polls the cached value for up to 2 s and returns the last one.
-func waitValue(cam *Camera, id core.ControlID, want core.Value, tol float64) core.Value {
+func waitValue(cam core.Camera, id core.ControlID, want core.Value, tol float64) core.Value {
 	var v core.Value
 	for end := time.Now().Add(2 * time.Second); time.Now().Before(end); time.Sleep(20 * time.Millisecond) {
 		v, _ = cam.Get(context.Background(), id)

@@ -1,102 +1,176 @@
-package demo
+package demo_test
 
 import (
 	"context"
-	"reflect"
-	"slices"
+	"errors"
 	"sync"
 	"testing"
 
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/blackmagic"
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/cameratest"
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/demo"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
-func TestContract(t *testing.T) { cameratest.Driver(t, Driver{}) }
+func TestContract(t *testing.T) { cameratest.Module(t, demo.Module{}) }
 
-func connected(t *testing.T) (*Camera, *[]core.Event) {
-	t.Helper()
-	c := newCamera()
-	var mu sync.Mutex
-	var events []core.Event
-	c.Subscribe(func(e core.Event) { mu.Lock(); events = append(events, e); mu.Unlock() })
-	if err := c.Connect(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	return c, &events
+func TestOnline(t *testing.T) {
+	cam, _ := connected(t)
+	cameratest.Online(t, cam)
 }
 
-func get(t *testing.T, c *Camera, id core.ControlID) core.Value {
+// eventLog records the events a camera publishes.
+type eventLog struct {
+	mu     sync.Mutex
+	events []core.Event
+}
+
+func (l *eventLog) add(e core.Event) { l.mu.Lock(); l.events = append(l.events, e); l.mu.Unlock() }
+
+func (l *eventLog) has(match func(core.Event) bool) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, e := range l.events {
+		if match(e) {
+			return true
+		}
+	}
+	return false
+}
+
+// connected builds a demo camera with a power zoom and connects it.
+func connected(t *testing.T) (core.Camera, *eventLog) {
 	t.Helper()
-	v, err := c.Get(context.Background(), id)
+	cam, err := demo.Module{}.New(core.CameraConfig{Model: demo.ID, PowerZoom: true})
 	if err != nil {
 		t.Fatal(err)
+	}
+	log := &eventLog{}
+	cam.Subscribe(log.add)
+	if err := cam.Connect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cam.Close() })
+	return cam, log
+}
+
+func set(t *testing.T, cam core.Camera, id core.ControlID, v core.Value) {
+	t.Helper()
+	if err := cam.Set(context.Background(), id, v); err != nil {
+		t.Fatalf("Set(%s) = %v", id, err)
+	}
+}
+
+func get(t *testing.T, cam core.Camera, id core.ControlID) core.Value {
+	t.Helper()
+	v, err := cam.Get(context.Background(), id)
+	if err != nil {
+		t.Fatalf("Get(%s) = %v", id, err)
 	}
 	return v
 }
 
 func TestDemoNeedsNoAddress(t *testing.T) {
-	m := Driver{}.Models()[0]
-	if !m.NoAddress {
-		t.Fatal("the demo camera has no address")
-	}
+	m := demo.Module{}.Info()
 	if err := core.ValidateConfig(m, core.CameraConfig{Model: m.ID}); err != nil {
 		t.Errorf("a config without host must be valid: %v", err)
 	}
 }
 
-func TestDemoAnswersLikeACamera(t *testing.T) {
-	c, events := connected(t)
-	ctx := context.Background()
-	if c.Status().State != core.StateConnected {
-		t.Fatal("the demo connects at once")
+func TestDemoKeepsItsFormerID(t *testing.T) {
+	reg := core.NewRegistry()
+	if err := reg.Register(demo.Module{}); err != nil {
+		t.Fatal(err)
 	}
-	_ = c.Set(ctx, core.Iris, core.Number(1.4))
-	if v := get(t, c, core.Iris); v.Number != 2.8 {
-		t.Errorf("iris stays inside the lens: %v", v.Number)
-	}
-	_ = c.Set(ctx, core.ShutterSpeed, core.Choice("1/50"))
-	if v := get(t, c, core.ShutterAngle); v.Number != 360 {
-		t.Errorf("1/50 at 50 fps is 360°, got %v", v.Number)
-	}
-	_ = c.Set(ctx, core.ShutterAngle, core.Number(90))
-	if v := get(t, c, core.ShutterSpeed); v.Choice != "1/200" {
-		t.Errorf("90° at 50 fps is 1/200, got %v", v.Choice)
-	}
-	_ = c.Set(ctx, core.MasterBlack, core.Number(0.1))
-	if v := get(t, c, core.LiftY); v.Number != 0.1 {
-		t.Errorf("master black is the lift luma: %v", v.Number)
-	}
-	_ = c.Set(ctx, core.AutoWhiteBalance, core.Trigger())
-	if v := get(t, c, core.WhiteBalance); v.Number != 5600 {
-		t.Errorf("AWB settles on 5600 K: %v", v.Number)
-	}
-	_ = c.Set(ctx, core.Zoom, core.Number(1))
-	if l := c.Lens(); l.FocalLength != 70 {
-		t.Errorf("full zoom is 70 mm: %v", l.FocalLength)
-	}
-	var lensEvent bool
-	for _, e := range *events {
-		lensEvent = lensEvent || (e.Lens != nil && e.Lens.FocalLength == 70)
-	}
-	if !lensEvent {
-		t.Error("a zoom move announces the new focal length")
+	if info, ok := reg.Model("demo.camera"); !ok || info.ID != demo.ID {
+		t.Errorf("Model(demo.camera) = %s, %t; want the demo module", info.ID, ok)
 	}
 }
 
-func TestDemoLooksLikeAStudio6kPro(t *testing.T) {
-	m := Driver{}.Models()[0]
+func TestDemoConnectsAtOnce(t *testing.T) {
+	cam, log := connected(t)
+	if cam.Status().State != core.StateConnected {
+		t.Fatalf("Status() = %s, want connected", cam.Status().State)
+	}
+	if !log.has(func(e core.Event) bool { return e.Status != nil && e.Status.State == core.StateConnected }) {
+		t.Error("no connected event")
+	}
+}
+
+func TestDemoAnswersLikeACamera(t *testing.T) {
+	t.Run("the iris stays inside the lens", func(t *testing.T) {
+		cam, _ := connected(t)
+		set(t, cam, core.Iris, core.Number(1.4))
+		if v := get(t, cam, core.Iris); v.Number != 2.8 {
+			t.Errorf("iris = f/%g, want f/2.8", v.Number)
+		}
+	})
+	t.Run("the lever position follows the f-stop", func(t *testing.T) {
+		cam, _ := connected(t)
+		set(t, cam, core.IrisNorm, core.Number(1))
+		if v := get(t, cam, core.Iris); v.Number != 22 {
+			t.Errorf("iris at the closed end = f/%g, want f/22", v.Number)
+		}
+	})
+	t.Run("a shutter speed sets the angle", func(t *testing.T) {
+		cam, _ := connected(t)
+		set(t, cam, core.ShutterSpeed, core.Choice("1/50"))
+		if v := get(t, cam, core.ShutterAngle); v.Number != 360 {
+			t.Errorf("1/50 at 50 fps = %g°, want 360°", v.Number)
+		}
+	})
+	t.Run("a shutter angle sets the speed", func(t *testing.T) {
+		cam, _ := connected(t)
+		set(t, cam, core.ShutterAngle, core.Number(90))
+		if v := get(t, cam, core.ShutterSpeed); v.Choice != "1/200" {
+			t.Errorf("90° at 50 fps = %s, want 1/200", v.Choice)
+		}
+	})
+	t.Run("the master black is the lift luma", func(t *testing.T) {
+		cam, _ := connected(t)
+		set(t, cam, core.MasterBlack, core.Number(0.1))
+		if v := get(t, cam, core.LiftY); v.Number != 0.1 {
+			t.Errorf("lift Y = %g, want 0.1", v.Number)
+		}
+	})
+	t.Run("auto white balance settles on 5600 K", func(t *testing.T) {
+		cam, _ := connected(t)
+		set(t, cam, core.AutoWhiteBalance, core.Trigger())
+		if v := get(t, cam, core.WhiteBalance); v.Number != 5600 {
+			t.Errorf("white balance = %g K, want 5600 K", v.Number)
+		}
+	})
+}
+
+func TestDemoZoomMovesTheFocalLength(t *testing.T) {
+	cam, log := connected(t)
+	set(t, cam, core.Zoom, core.Number(1))
+	if l := cam.(core.LensReporter).Lens(); l.FocalLength != 70 {
+		t.Errorf("focal length at full zoom = %g mm, want 70 mm", l.FocalLength)
+	}
+	if !log.has(func(e core.Event) bool { return e.Lens != nil && e.Lens.FocalLength == 70 }) {
+		t.Error("a zoom move must announce the new focal length")
+	}
+}
+
+func TestDemoHasAZoomOnlyWithAPowerZoom(t *testing.T) {
 	for _, pz := range []bool{false, true} {
-		cam, err := Driver{}.New(m, core.CameraConfig{Model: m.ID, PowerZoom: pz})
+		cam, err := demo.Module{}.New(core.CameraConfig{Model: demo.ID, PowerZoom: pz})
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := blackmagic.Studio6kProSpecs()
-		if !pz {
-			want = slices.DeleteFunc(want, func(s core.ControlSpec) bool { return s.ID == core.Zoom })
+		has := false
+		for _, s := range cam.Controls() {
+			has = has || s.ID == core.Zoom
 		}
-		if got := cam.Controls(); !reflect.DeepEqual(got, want) {
-			t.Errorf("power zoom %v: the demo must declare the Studio 6K Pro controls", pz)
+		if has != pz {
+			t.Errorf("power zoom %t: zoom declared = %t", pz, has)
 		}
+	}
+}
+
+func TestDemoRejectsWritesWhileDisconnected(t *testing.T) {
+	cam, _ := demo.Module{}.New(core.CameraConfig{Model: demo.ID})
+	if err := cam.Set(context.Background(), core.Gain, core.Number(6)); !errors.Is(err, core.ErrNotConnected) {
+		t.Errorf("Set before Connect = %v, want ErrNotConnected", err)
 	}
 }

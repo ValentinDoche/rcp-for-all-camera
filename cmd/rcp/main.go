@@ -58,7 +58,7 @@ func run() error {
 	log := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: level}))
 
 	reg := core.NewRegistry()
-	if err := cameras.Register(reg); err != nil {
+	if err := cameras.Register(reg, log); err != nil {
 		return err
 	}
 	secrets, err := config.NewOSSecrets(dir)

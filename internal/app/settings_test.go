@@ -28,7 +28,7 @@ func newSettingsService(t *testing.T, saved config.Rig, as AutoStarter) (*Servic
 	t.Helper()
 	reg := core.NewRegistry()
 	rec := &bindRecorder{}
-	if err := reg.Register(rec); err != nil {
+	if err := reg.Register(acme(rec)...); err != nil {
 		t.Fatal(err)
 	}
 	st := &memStore{rig: saved}
@@ -49,9 +49,9 @@ type bindRecorder struct {
 	last string
 }
 
-func (b *bindRecorder) New(m core.ModelInfo, cfg core.CameraConfig) (core.Camera, error) {
+func (b *bindRecorder) New(cfg core.CameraConfig) (core.Camera, error) {
 	b.last = cfg.BindIP
-	return b.testDriver.New(m, cfg)
+	return b.testDriver.New(cfg)
 }
 
 func TestSettingsDefaults(t *testing.T) {

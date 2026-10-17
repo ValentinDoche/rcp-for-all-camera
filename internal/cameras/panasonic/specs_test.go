@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	ue150 core.ModelID = "panasonic.awue150"
-	ue160 core.ModelID = "panasonic.awue160"
+	ue150 core.ModelID = "panasonic-aw-ue150"
+	ue160 core.ModelID = "panasonic-aw-ue160"
 )
 
 func wantRange(t *testing.T, id core.ModelID, cid core.ControlID, min, max float64) {
@@ -173,20 +173,17 @@ func TestModelSpecificParameters(t *testing.T) {
 }
 
 func TestOlderModelsUnchanged(t *testing.T) {
-	if n := len(controls(t, "panasonic.generic")); n == 0 {
+	if n := len(controls(t, "panasonic-generic")); n == 0 {
 		t.Error("generic model has no controls")
 	}
-	if _, ok := controls(t, "panasonic.awue100")[core.Pan]; !ok {
+	if _, ok := controls(t, "panasonic-aw-ue100")[core.Pan]; !ok {
 		t.Error("UE100 lacks pan")
 	}
 }
 
 func TestOnAirAndPowerControlsAreGuarded(t *testing.T) {
-	for _, id := range []core.ModelID{"panasonic.awue150", "panasonic.awue160"} {
-		specs, err := specsFor(id)
-		if err != nil {
-			t.Fatal(err)
-		}
+	for _, id := range []core.ModelID{"panasonic-aw-ue150", "panasonic-aw-ue160"} {
+		specs := specsFor(id)
 		byID := map[core.ControlID]core.ControlSpec{}
 		for _, s := range specs {
 			byID[s.ID] = s

@@ -136,7 +136,7 @@ func (c *presetCamera) setState(s core.ConnState) {
 
 type presetDriver struct{ testDriver }
 
-func (presetDriver) New(core.ModelInfo, core.CameraConfig) (core.Camera, error) {
+func (presetDriver) New(core.CameraConfig) (core.Camera, error) {
 	return newPresetCamera(), nil
 }
 
@@ -201,7 +201,7 @@ func (l *rigLog) count() int {
 func newPresetFixture(t *testing.T, saved config.Rig) presetFixture {
 	t.Helper()
 	reg := core.NewRegistry()
-	if err := reg.Register(presetDriver{}); err != nil {
+	if err := reg.Register(acme(presetDriver{})...); err != nil {
 		t.Fatal(err)
 	}
 	f := presetFixture{reg: reg, store: &flakyStore{memStore: memStore{rig: saved}}, events: &rigLog{}}
@@ -278,7 +278,7 @@ func TestStorePresetKeepsOnlyStorableControls(t *testing.T) {
 		t.Fatalf("stored presets = %+v", f.store.rig.Presets)
 	}
 	p := f.store.rig.Presets[0]
-	if p.Slot != 1 || p.Number != 1 || p.Model != "acme.cam" {
+	if p.Slot != 1 || p.Number != 1 || p.Model != "acme-cam" {
 		t.Fatalf("preset = %+v", p)
 	}
 	for _, id := range []core.ControlID{core.Tally, core.Record, core.AutoFocus, core.Pan, core.PresetRecall} {
@@ -399,7 +399,7 @@ func TestModelChangeDropsPresetsSameModelEditKeepsThem(t *testing.T) {
 	if got := f.svc.Rig().Slots[0].Presets; !reflect.DeepEqual(got, []int{1}) {
 		t.Fatalf("same-model edit: presets = %v, want [1]", got)
 	}
-	if _, err := f.svc.AssignSlot(1, SlotInput{Model: "acme.secure", Host: "10.0.0.9", Username: "admin"}); err != nil {
+	if _, err := f.svc.AssignSlot(1, SlotInput{Model: "acme-secure", Host: "10.0.0.9", Username: "admin"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.svc.Rig().Slots[0].Presets; len(got) != 0 {
@@ -437,7 +437,7 @@ func TestFailedSaveRollsPresetChangesBack(t *testing.T) {
 	if c := code(t, f.svc.ClearSlot(1)); c != CodeInternal {
 		t.Fatalf("clear with failing save code = %s, want INTERNAL", c)
 	}
-	if _, err := f.svc.AssignSlot(1, SlotInput{Model: "acme.secure", Host: "10.0.0.9", Username: "admin"}); err == nil {
+	if _, err := f.svc.AssignSlot(1, SlotInput{Model: "acme-secure", Host: "10.0.0.9", Username: "admin"}); err == nil {
 		t.Fatal("assign with failing save succeeded")
 	}
 	if c := code(t, f.svc.DeletePreset(1, 1)); c != CodeInternal {
@@ -486,7 +486,7 @@ func TestRecallRefusesAPresetOfAnotherModel(t *testing.T) {
 	cam := assigned(t, f, 1)
 	_ = f.svc.StorePreset(1, 1)
 	f.svc.mu.Lock()
-	f.svc.presets[0][0].Model = "acme.secure"
+	f.svc.presets[0][0].Model = "acme-secure"
 	f.svc.mu.Unlock()
 	if c := code(t, f.svc.RecallPreset(1, 1)); c != CodeInvalidPreset {
 		t.Fatalf("code = %s, want INVALID_PRESET", c)
@@ -551,24 +551,24 @@ func TestPresetsNeedAConnectedCamera(t *testing.T) {
 
 func TestInvalidSavedPresetsAreDroppedAtLoad(t *testing.T) {
 	saved := config.Rig{Version: config.Version}
-	saved.Slots[0] = &core.CameraConfig{Model: "acme.cam", Host: "10.0.0.1"}
-	saved.Slots[1] = &core.CameraConfig{Model: "acme.cam", Host: "10.0.0.2"}
+	saved.Slots[0] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.1"}
+	saved.Slots[1] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.2"}
 	saved.Slots[3] = &core.CameraConfig{Model: "gone.model", Host: "10.0.0.4"}
 	vals := func(iris float64) map[core.ControlID]core.Value {
 		return map[core.ControlID]core.Value{core.Iris: core.Number(iris)}
 	}
 	saved.Presets = []config.Preset{
-		{Slot: 1, Number: 1, Model: "acme.cam", Values: vals(4)},
-		{Slot: 1, Number: 1, Model: "acme.cam", Values: vals(8)}, // duplicate: the last wins
-		{Slot: 1, Number: 2, Model: "acme.cam", Values: map[core.ControlID]core.Value{
+		{Slot: 1, Number: 1, Model: "acme-cam", Values: vals(4)},
+		{Slot: 1, Number: 1, Model: "acme-cam", Values: vals(8)}, // duplicate: the last wins
+		{Slot: 1, Number: 2, Model: "acme-cam", Values: map[core.ControlID]core.Value{
 			core.Iris: core.Number(5.6), "bad id!": core.Number(1), core.ND: {Kind: "weird"},
 		}},
-		{Slot: 1, Number: 0, Model: "acme.cam", Values: vals(4)},               // number out of range
-		{Slot: 1, Number: PresetCount + 1, Model: "acme.cam", Values: vals(4)}, // number out of range
-		{Slot: 0, Number: 1, Model: "acme.cam", Values: vals(4)},               // slot out of range
-		{Slot: 9, Number: 1, Model: "acme.cam", Values: vals(4)},               // slot out of range
-		{Slot: 2, Number: 1, Model: "acme.secure", Values: vals(4)},            // other model
-		{Slot: 3, Number: 1, Model: "acme.cam", Values: vals(4)},               // empty slot
+		{Slot: 1, Number: 0, Model: "acme-cam", Values: vals(4)},               // number out of range
+		{Slot: 1, Number: PresetCount + 1, Model: "acme-cam", Values: vals(4)}, // number out of range
+		{Slot: 0, Number: 1, Model: "acme-cam", Values: vals(4)},               // slot out of range
+		{Slot: 9, Number: 1, Model: "acme-cam", Values: vals(4)},               // slot out of range
+		{Slot: 2, Number: 1, Model: "acme-secure", Values: vals(4)},            // other model
+		{Slot: 3, Number: 1, Model: "acme-cam", Values: vals(4)},               // empty slot
 		{Slot: 4, Number: 1, Model: "gone.model", Values: vals(4)},             // slot dropped at load
 	}
 	f := newPresetFixture(t, saved)
@@ -634,8 +634,8 @@ func TestImportKeepsPresetsOnlyWhereTheModelStays(t *testing.T) {
 		}
 	}
 	doc := exportDoc{Format: ExportFormat, Version: config.Version, Slots: []*core.CameraConfig{
-		{Model: "acme.cam", Host: "10.0.0.1"},
-		{Model: "acme.secure", Host: "10.0.0.2", Username: "admin"},
+		{Model: "acme-cam", Host: "10.0.0.1"},
+		{Model: "acme-secure", Host: "10.0.0.2", Username: "admin"},
 		nil,
 	}}
 	b, _ := json.Marshal(doc)
@@ -696,4 +696,31 @@ func TestStorePresetDisarmsStore(t *testing.T) {
 	if f.svc.StoreArmed() {
 		t.Fatal("a failed store must disarm")
 	}
+}
+
+func TestFormerModelIDsAreMigrated(t *testing.T) {
+	saved := config.Rig{Version: config.Version, Presets: []config.Preset{
+		{Slot: 1, Number: 2, Model: "acme.cam", Values: map[core.ControlID]core.Value{core.Iris: core.Number(4)}},
+	}}
+	saved.Slots[0] = &core.CameraConfig{Model: "acme.cam", Name: "Cam A", Host: "192.168.10.11"}
+	f := newPresetFixture(t, saved)
+	t.Run("the camera is kept under its current id", func(t *testing.T) {
+		if got := f.svc.Rig().Slots[0].Camera; got == nil || got.Model != "acme-cam" {
+			t.Fatalf("slot 1 = %+v, want an acme-cam", got)
+		}
+	})
+	t.Run("its presets follow", func(t *testing.T) {
+		if got := f.svc.Rig().Slots[0].Presets; len(got) != 1 || got[0] != 2 {
+			t.Fatalf("presets %v, want [2]", got)
+		}
+	})
+	t.Run("the next save writes the current id", func(t *testing.T) {
+		if err := f.svc.SelectSlot(1); err != nil {
+			t.Fatal(err)
+		}
+		rig, _ := f.store.Load()
+		if rig.Slots[0].Model != "acme-cam" || rig.Presets[0].Model != "acme-cam" {
+			t.Errorf("saved models %s / %s, want acme-cam", rig.Slots[0].Model, rig.Presets[0].Model)
+		}
+	})
 }

@@ -155,7 +155,7 @@ func (r *recorder) count(k ChangeKind) int {
 func TestLoadReadsRigControlsAndValues(t *testing.T) {
 	f := newFakeAPI()
 	iris := rangeSpec(core.Iris, 0, 1, 0.01)
-	f.assign(1, "acme.cam", core.StateConnected, numView(iris, 0.4), app.ControlView{Spec: rangeSpec(core.Zoom, 0, 1, 0.01)})
+	f.assign(1, "acme-cam", core.StateConnected, numView(iris, 0.4), app.ControlView{Spec: rangeSpec(core.Zoom, 0, 1, 0.01)})
 	c := newCtl(f)
 	if c.Camera(1) == nil || c.Camera(2) != nil {
 		t.Fatal("camera presence")
@@ -176,7 +176,7 @@ func TestLoadReadsRigControlsAndValues(t *testing.T) {
 
 func TestWriteSuccessUpdatesCacheAndNotifies(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.01), 0.4))
+	f.assign(1, "acme-cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.01), 0.4))
 	c := newCtl(f)
 	var rec recorder
 	c.Subscribe(rec.fn)
@@ -195,7 +195,7 @@ func TestWriteSuccessUpdatesCacheAndNotifies(t *testing.T) {
 
 func TestWriteNotImplementedKeepsLastKnownAndShowsDiscreetNotice(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.01), 0.4))
+	f.assign(1, "acme-cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.01), 0.4))
 	f.setErr = &app.Error{Code: app.CodeNotImplemented, Message: "x"}
 	c := newCtl(f)
 	var rec recorder
@@ -216,7 +216,7 @@ func TestWriteNotImplementedKeepsLastKnownAndShowsDiscreetNotice(t *testing.T) {
 
 func TestWriteInvalidValueIsAnError(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.01), 0.4))
+	f.assign(1, "acme-cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.01), 0.4))
 	f.setErr = &app.Error{Code: app.CodeInvalidValue, Message: "x"}
 	c := newCtl(f)
 	c.Write(1, core.Iris, core.Number(5))
@@ -234,7 +234,7 @@ func TestWriteInvalidValueIsAnError(t *testing.T) {
 
 func TestWriteIsThrottledAndFinalValueAlwaysSent(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.001), 0))
+	f.assign(1, "acme-cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.001), 0))
 	o := syncOptions()
 	o.WriteInterval = 20 * time.Millisecond
 	c := NewController(f, o)
@@ -261,7 +261,7 @@ func TestActionWriteDoesNotStoreAValue(t *testing.T) {
 	f := newFakeAPI()
 	ai := core.Std(core.AutoIris)
 	ai.Kind = core.KindAction
-	f.assign(1, "acme.cam", core.StateConnected, app.ControlView{Spec: ai})
+	f.assign(1, "acme-cam", core.StateConnected, app.ControlView{Spec: ai})
 	c := newCtl(f)
 	c.Write(1, core.AutoIris, core.Trigger())
 	waitWrites(c)
@@ -275,8 +275,8 @@ func TestActionWriteDoesNotStoreAValue(t *testing.T) {
 
 func TestSelectIsOptimisticAndRevertsOnError(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateConnected)
-	f.assign(2, "acme.cam", core.StateConnected)
+	f.assign(1, "acme-cam", core.StateConnected)
+	f.assign(2, "acme-cam", core.StateConnected)
 	c := newCtl(f)
 	c.Select(2)
 	if c.Active() != 2 || len(f.selects) != 1 || f.selects[0] != 2 {
@@ -295,7 +295,7 @@ func TestSelectIsOptimisticAndRevertsOnError(t *testing.T) {
 func TestServiceEventsUpdateState(t *testing.T) {
 	f := newFakeAPI()
 	iris := rangeSpec(core.Iris, 0, 1, 0.01)
-	f.assign(1, "acme.cam", core.StateConnected, numView(iris, 0.1))
+	f.assign(1, "acme-cam", core.StateConnected, numView(iris, 0.1))
 	c := newCtl(f)
 	var rec recorder
 	c.Subscribe(rec.fn)
@@ -330,7 +330,7 @@ func TestServiceEventsUpdateState(t *testing.T) {
 
 func TestRigChangeReloadsOnNewCameraAndOnConnect(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateDisconnected, app.ControlView{Spec: rangeSpec(core.Iris, 0, 1, 0.01)})
+	f.assign(1, "acme-cam", core.StateDisconnected, app.ControlView{Spec: rangeSpec(core.Iris, 0, 1, 0.01)})
 	c := newCtl(f)
 	if c.Value(1, core.Iris) != nil {
 		t.Fatal("offline camera has no values")
@@ -375,7 +375,7 @@ func TestRigChangeReloadsOnNewCameraAndOnConnect(t *testing.T) {
 
 func TestStaleControlLoadIsDropped(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.01), 0.5))
+	f.assign(1, "acme-cam", core.StateConnected, numView(rangeSpec(core.Iris, 0, 1, 0.01), 0.5))
 	var pending []func()
 	o := syncOptions()
 	o.Go = func(fn func()) { pending = append(pending, fn) }
@@ -411,7 +411,7 @@ func TestNoticeExpires(t *testing.T) {
 
 func TestPollRefreshesRig(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateDisconnected)
+	f.assign(1, "acme-cam", core.StateDisconnected)
 	var mu sync.Mutex
 	o := Options{}
 	o.UI = func(fn func()) { mu.Lock(); defer mu.Unlock(); fn() }
@@ -444,7 +444,7 @@ func TestIsAPIError(t *testing.T) {
 func TestConfirmRequiredAsksAndNeverAutoConfirms(t *testing.T) {
 	f := newFakeAPI()
 	bars := rangeSpec(core.ColorBars, 0, 1, 1)
-	f.assign(1, "acme.cam", core.StateConnected, numView(bars, 0))
+	f.assign(1, "acme-cam", core.StateConnected, numView(bars, 0))
 	f.setErr = &app.Error{Code: app.CodeConfirmRequired}
 	c := newCtl(f)
 	rec := &recorder{}
@@ -494,7 +494,7 @@ func TestConfirmRequiredAsksAndNeverAutoConfirms(t *testing.T) {
 // "reading controls".
 func TestStatusChangeDuringTheFirstLoadDoesNotLoseTheControls(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateConnecting, app.ControlView{Spec: rangeSpec(core.Gain, 0, 36, 1)})
+	f.assign(1, "acme-cam", core.StateConnecting, app.ControlView{Spec: rangeSpec(core.Gain, 0, 36, 1)})
 	var pending []func()
 	o := syncOptions()
 	o.Go = func(fn func()) { pending = append(pending, fn) }

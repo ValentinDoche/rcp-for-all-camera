@@ -1,4 +1,4 @@
-package blackmagic
+package bm
 
 import (
 	"bytes"
@@ -36,17 +36,61 @@ const (
 	lensSubID      = 2
 )
 
+// DefaultPort is the port of the REST API.
+const DefaultPort = 80
+
+// Model is what a Blackmagic camera module gives the base: the controls its
+// camera declares and the hooks that change how the base talks to it.
+type Model struct {
+	Specs []core.ControlSpec
+	Hooks Hooks
+}
+
+// Hooks let a module change one precise behaviour of the base. A nil hook
+// keeps the base behaviour.
+type Hooks struct {
+	// Encode builds the REST write for a validated value. It returns
+	// ok=false to let the base encode it.
+	Encode func(id core.ControlID, v core.Value) (cmd Command, ok bool, err error)
+	// Decode reads one property object the camera reported. Its values
+	// replace the base's for the same controls. Like every decoder it reads
+	// data from the network: it must check what it reads (the base drops
+	// undeclared controls and malformed values).
+	Decode func(path string, o map[string]any) map[core.ControlID]core.Value
+	// Watch adds properties to the event subscription.
+	Watch []string
+}
+
+// Command is one write to the camera: a PUT of Body to Path under
+// /control/api/v1.
+type Command struct {
+	Path string
+	Body map[string]any
+	// Composite marks a property whose body must carry every key (color
+	// correction): the base merges the other keys from the last known state.
+	Composite bool
+}
+
+// Options are the base's dependencies.
+type Options struct {
+	// Logger receives the commands sent (debug) and connection changes.
+	// nil discards them.
+	Logger *slog.Logger
+}
+
 // Camera drives one camera through the Blackmagic Camera Control REST API.
 // Writes are REST PUTs; state comes from the event WebSocket, whose
 // subscription answer carries the current value of every watched property.
 // Values are cached and every change is pushed to subscribers.
 type Camera struct {
-	specs    []core.ControlSpec
-	byID     map[core.ControlID]core.ControlSpec
+	specs    camerakit.Specs
+	hooks    Hooks
+	watched  []string
 	hostport string
 	dial     dialFunc
 	hc       *http.Client
 	log      *slog.Logger
+	subs     camerakit.Subscribers
 
 	mu     sync.Mutex
 	status core.Status
@@ -57,8 +101,6 @@ type Camera struct {
 	// learnIrisEnds.
 	irisDesc bool
 	fps      float64
-	subs     map[int]func(core.Event)
-	nextSub  int
 	started  bool
 	closed   bool
 	cancel   context.CancelFunc
@@ -75,19 +117,24 @@ var (
 	_ core.LensReporter = (*Camera)(nil)
 )
 
-// newCamera builds a camera; it does no I/O.
-func newCamera(specs []core.ControlSpec, cfg core.CameraConfig, port int) *Camera {
+// New builds a camera for cfg (Port 0 = DefaultPort); it does no I/O.
+func New(cfg core.CameraConfig, m Model, o Options) *Camera {
 	d := &net.Dialer{Timeout: dialTimeout}
 	if ip := net.ParseIP(cfg.BindIP); ip != nil {
 		d.LocalAddr = &net.TCPAddr{IP: ip}
 	}
-	byID := make(map[core.ControlID]core.ControlSpec, len(specs))
-	for _, s := range specs {
-		byID[s.ID] = s
+	port := cfg.Port
+	if port == 0 {
+		port = DefaultPort
+	}
+	log := o.Logger
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
 	}
 	return &Camera{
-		specs:    slices.Clone(specs),
-		byID:     byID,
+		specs:    camerakit.NewSpecs(m.Specs),
+		hooks:    m.Hooks,
+		watched:  append(slices.Clone(watched), m.Hooks.Watch...),
 		hostport: net.JoinHostPort(cfg.Host, strconv.Itoa(port)),
 		dial:     d.DialContext,
 		hc: &http.Client{
@@ -97,24 +144,16 @@ func newCamera(specs []core.ControlSpec, cfg core.CameraConfig, port int) *Camer
 				return http.ErrUseLastResponse
 			},
 		},
-		log:       slog.Default().With("driver", "blackmagic", "host", cfg.Host),
+		log:       log.With("module", string(cfg.Model), "host", cfg.Host),
 		status:    core.Status{State: core.StateDisconnected},
 		vals:      map[core.ControlID]core.Value{},
 		raw:       map[string]map[string]any{},
-		subs:      map[int]func(core.Event){},
 		done:      make(chan struct{}),
 		firstDone: make(chan struct{}),
 	}
 }
 
-func (c *Camera) Controls() []core.ControlSpec {
-	out := make([]core.ControlSpec, len(c.specs))
-	for i, s := range c.specs {
-		s.Options = slices.Clone(s.Options)
-		out[i] = s
-	}
-	return out
-}
+func (c *Camera) Controls() []core.ControlSpec { return c.specs.All() }
 
 // Lens is what the camera last reported about its lens.
 func (c *Camera) Lens() core.Lens {
@@ -129,18 +168,7 @@ func (c *Camera) Status() core.Status {
 	return c.status
 }
 
-func (c *Camera) Subscribe(fn func(core.Event)) (cancel func()) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	id := c.nextSub
-	c.nextSub++
-	c.subs[id] = fn
-	return func() {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		delete(c.subs, id)
-	}
-}
+func (c *Camera) Subscribe(fn func(core.Event)) (cancel func()) { return c.subs.Add(fn) }
 
 // Connect starts the connection loop and waits for the first attempt. The
 // loop keeps reconnecting until Close, whatever the first attempt returned.
@@ -182,14 +210,12 @@ func (c *Camera) Close() error {
 		<-c.done
 	}
 	c.hc.CloseIdleConnections()
-	c.mu.Lock()
-	clear(c.subs)
-	c.mu.Unlock()
+	c.subs.Clear()
 	return nil
 }
 
 func (c *Camera) Get(ctx context.Context, id core.ControlID) (core.Value, error) {
-	s, err := camerakit.FindSpec(c.specs, id)
+	s, err := c.specs.Find(id)
 	if err != nil {
 		return core.Value{}, err
 	}
@@ -228,14 +254,10 @@ func (c *Camera) Get(ctx context.Context, id core.ControlID) (core.Value, error)
 // Set validates, then sends one PUT. The new value comes back as an event
 // on the socket, which updates the cache and notifies subscribers.
 func (c *Camera) Set(ctx context.Context, id core.ControlID, v core.Value) error {
-	s, err := camerakit.FindSpec(c.specs, id)
-	if err != nil {
+	if _, err := c.specs.Validate(id, v); err != nil {
 		return err
 	}
-	if err := s.Validate(v); err != nil {
-		return err
-	}
-	cmd, err := commandFor(id, v)
+	cmd, err := c.encode(id, v)
 	if err != nil {
 		return err
 	}
@@ -244,26 +266,37 @@ func (c *Camera) Set(ctx context.Context, id core.ControlID, v core.Value) error
 		c.mu.Unlock()
 		return fmt.Errorf("set %s: %w", id, core.ErrNotConnected)
 	}
-	if cmd.composite {
+	if cmd.Composite {
 		// Send every key of the property, starting from the latest state we
 		// know, and keep the merge so a quick second write builds on it.
-		merged := maps.Clone(c.raw[cmd.path])
+		merged := maps.Clone(c.raw[cmd.Path])
 		if merged == nil {
 			merged = map[string]any{}
 		}
-		maps.Copy(merged, cmd.body)
-		c.raw[cmd.path] = merged
-		cmd.body = maps.Clone(merged)
+		maps.Copy(merged, cmd.Body)
+		c.raw[cmd.Path] = merged
+		cmd.Body = maps.Clone(merged)
 	}
 	c.mu.Unlock()
 
-	if _, err := c.request(ctx, http.MethodPut, cmd.path, cmd.body); err != nil {
-		if cmd.composite {
-			c.resync(cmd.path)
+	if _, err := c.request(ctx, http.MethodPut, cmd.Path, cmd.Body); err != nil {
+		if cmd.Composite {
+			c.resync(cmd.Path)
 		}
 		return fmt.Errorf("set %s: %w", id, err)
 	}
 	return nil
+}
+
+// encode asks the module's Encode hook first, then the base.
+func (c *Camera) encode(id core.ControlID, v core.Value) (Command, error) {
+	if c.hooks.Encode != nil {
+		cmd, ok, err := c.hooks.Encode(id, v)
+		if err != nil || ok {
+			return cmd, err
+		}
+	}
+	return commandFor(id, v)
 }
 
 // resync re-reads a property after a failed write, so the merge base is the
@@ -390,7 +423,7 @@ func (c *Camera) session(ctx context.Context) (connected bool, err error) {
 	for _, sub := range []struct {
 		id    int
 		props []string
-	}{{subscribeID, watched}, {lensSubID, lensWatched}} {
+	}{{subscribeID, c.watched}, {lensSubID, lensWatched}} {
 		req, _ := json.Marshal(map[string]any{
 			"type": "request", "id": sub.id,
 			"data": map[string]any{"action": "subscribe", "properties": sub.props},
@@ -492,7 +525,7 @@ func (c *Camera) handle(msg []byte) (resp int, err error) {
 // subscribers of the controls that changed.
 func (c *Camera) applyJSON(path string, raw json.RawMessage) {
 	dec, lensDec := decoders[path], lensDecoders[path]
-	if dec == nil && lensDec == nil {
+	if dec == nil && lensDec == nil && c.hooks.Decode == nil {
 		return
 	}
 	var o map[string]any
@@ -518,11 +551,15 @@ func (c *Camera) applyJSON(path string, raw json.RawMessage) {
 			events = append(events, core.Event{Lens: &l})
 		}
 	}
-	if dec == nil {
-		dec = func(*Camera, map[string]any) map[core.ControlID]core.Value { return nil }
+	vals := map[core.ControlID]core.Value{}
+	if dec != nil {
+		maps.Copy(vals, dec(c, o))
 	}
-	for id, v := range dec(c, o) {
-		if _, declared := c.byID[id]; !declared {
+	if c.hooks.Decode != nil {
+		maps.Copy(vals, c.hooks.Decode(path, o))
+	}
+	for id, v := range vals {
+		if !c.specs.Has(id) || v.Check() != nil {
 			continue
 		}
 		if old, ok := c.vals[id]; ok && old == v {
@@ -531,13 +568,8 @@ func (c *Camera) applyJSON(path string, raw json.RawMessage) {
 		c.vals[id] = v
 		events = append(events, core.Event{Control: id, Value: v})
 	}
-	subs := slices.Collect(maps.Values(c.subs))
 	c.mu.Unlock()
-	for _, e := range events {
-		for _, fn := range subs {
-			fn(e)
-		}
-	}
+	c.subs.Publish(events...)
 }
 
 func (c *Camera) setStatus(state core.ConnState, detail string) {
@@ -552,9 +584,6 @@ func (c *Camera) setStatus(state core.ConnState, detail string) {
 		clear(c.vals) // stale once the link is gone
 		c.lens = core.Lens{}
 	}
-	subs := slices.Collect(maps.Values(c.subs))
 	c.mu.Unlock()
-	for _, fn := range subs {
-		fn(core.Event{Status: &st})
-	}
+	c.subs.Publish(core.Event{Status: &st})
 }

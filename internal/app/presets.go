@@ -250,7 +250,7 @@ func (s *Service) loadPresets(saved []config.Preset) {
 			drop("slot has no camera")
 			continue
 		}
-		if p.Model != st.info.ID {
+		if info, ok := s.reg.Model(p.Model); !ok || info.ID != st.info.ID {
 			drop("taken on another camera model")
 			continue
 		}
@@ -265,6 +265,6 @@ func (s *Service) loadPresets(saved []config.Preset) {
 			}
 			values[id] = v
 		}
-		s.presets[p.Slot-1][p.Number-1] = &config.Preset{Slot: p.Slot, Number: p.Number, Model: p.Model, Values: values}
+		s.presets[p.Slot-1][p.Number-1] = &config.Preset{Slot: p.Slot, Number: p.Number, Model: st.info.ID, Values: values}
 	}
 }

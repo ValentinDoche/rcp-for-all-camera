@@ -1,4 +1,4 @@
-package blackmagic
+package bm
 
 import (
 	"context"
@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/cameratest"
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/speckit"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
@@ -193,12 +195,31 @@ func (f *fakeCamera) putCount() int {
 
 func snapshot[T any](s []T) []T { return append([]T(nil), s...) }
 
-// connected builds a 6K Pro camera on the fake and connects it.
+// connected builds a camera without hooks on the fake and connects it.
 func connected(t *testing.T, f *fakeCamera) (*Camera, *recorder) {
+	t.Helper()
+	return connectedWith(t, f, Hooks{})
+}
+
+// testSpecs are the controls of a camera that has every control the base
+// knows (those of a Studio Camera 6K Pro).
+func testSpecs() []core.ControlSpec {
+	s := LensSpecs()
+	s = append(s, GainSpec(), ISOSpec())
+	s = append(s, ShutterSpecs("1/24", "1/25", "1/30", "1/48", "1/50", "1/60", "1/100", "1/120", "1/125", "1/200", "1/250", "1/500", "1/1000", "1/2000")...)
+	s = append(s, NDSpec())
+	s = append(s, WhiteSpecs()...)
+	s = append(s, ColorCorrectionSpecs()...)
+	return append(s, speckit.Toggle(core.Record))
+}
+
+// connectedWith builds a camera with the given hooks on the fake and
+// connects it.
+func connectedWith(t *testing.T, f *fakeCamera, hooks Hooks) (*Camera, *recorder) {
 	t.Helper()
 	host, port, _ := net.SplitHostPort(strings.TrimPrefix(f.srv.URL, "http://"))
 	p, _ := strconv.Atoi(port)
-	cam := newCamera(studio6kProSpecs(), core.CameraConfig{Model: "blackmagic.studio6kpro", Host: host}, p)
+	cam := New(core.CameraConfig{Model: "bm-test", Host: host, Port: p}, Model{Specs: testSpecs(), Hooks: hooks}, Options{})
 	t.Cleanup(func() { _ = cam.Close() })
 	rec := &recorder{}
 	cam.Subscribe(rec.add)
@@ -366,7 +387,7 @@ func TestCameraShutterAngleFromCamera(t *testing.T) {
 
 func TestCameraRejectsBeforeIO(t *testing.T) {
 	f := newFakeCamera(t)
-	cam := newCamera(studio6kProSpecs(), core.CameraConfig{Host: "127.0.0.1"}, 1)
+	cam := New(core.CameraConfig{Host: "127.0.0.1", Port: 1}, Model{Specs: testSpecs()}, Options{})
 	ctx := context.Background()
 	if err := cam.Set(ctx, core.Iris, core.Number(5.6)); !errors.Is(err, core.ErrNotConnected) {
 		t.Errorf("Set before Connect = %v, want ErrNotConnected", err)
@@ -437,7 +458,7 @@ func TestCameraFirstAttemptFails(t *testing.T) {
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	port := l.Addr().(*net.TCPAddr).Port
 	_ = l.Close() // nothing listens there now
-	cam := newCamera(studio6kProSpecs(), core.CameraConfig{Host: "127.0.0.1"}, port)
+	cam := New(core.CameraConfig{Host: "127.0.0.1", Port: port}, Model{Specs: testSpecs()}, Options{})
 	defer cam.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -458,7 +479,7 @@ func TestCameraThatRefusesUsIsInError(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler()) // answers, but no event socket
 	defer srv.Close()
 	port := srv.Listener.Addr().(*net.TCPAddr).Port
-	cam := newCamera(studio6kProSpecs(), core.CameraConfig{Host: "127.0.0.1"}, port)
+	cam := New(core.CameraConfig{Host: "127.0.0.1", Port: port}, Model{Specs: testSpecs()}, Options{})
 	defer cam.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -565,5 +586,53 @@ func TestFocusMetres(t *testing.T) {
 		if got := focusMetres(mm); got != want {
 			t.Errorf("focusMetres(%v) = %v, want %v", mm, got, want)
 		}
+	}
+}
+
+func TestOnline(t *testing.T) {
+	cam, _ := connected(t, newFakeCamera(t))
+	cameratest.Online(t, cam)
+}
+
+func TestEncodeHookReplacesTheBaseCommand(t *testing.T) {
+	f := newFakeCamera(t)
+	cam, _ := connectedWith(t, f, Hooks{
+		Encode: func(id core.ControlID, v core.Value) (Command, bool, error) {
+			if id != core.Gain {
+				return Command{}, false, nil
+			}
+			return Command{Path: pathGain, Body: map[string]any{"gain": 99}}, true, nil
+		},
+	})
+	t.Run("hooked control", func(t *testing.T) {
+		if err := cam.Set(context.Background(), core.Gain, core.Number(6)); err != nil {
+			t.Fatal(err)
+		}
+		if p := f.lastPut(); p.body["gain"] != 99.0 {
+			t.Errorf("PUT %+v, want the hook's body", p)
+		}
+	})
+	t.Run("other controls keep the base encoding", func(t *testing.T) {
+		if err := cam.Set(context.Background(), core.Iris, core.Number(5.6)); err != nil {
+			t.Fatal(err)
+		}
+		if p := f.lastPut(); p.path != pathIris || p.body["apertureStop"] != 5.6 {
+			t.Errorf("PUT %+v, want the base iris command", p)
+		}
+	})
+}
+
+func TestDecodeHookOverridesTheBaseValue(t *testing.T) {
+	f := newFakeCamera(t)
+	cam, _ := connectedWith(t, f, Hooks{
+		Decode: func(path string, o map[string]any) map[core.ControlID]core.Value {
+			if path != pathWB {
+				return nil
+			}
+			return map[core.ControlID]core.Value{core.WhiteBalance: core.Number(3200)}
+		},
+	})
+	if got := get(t, cam, core.WhiteBalance); got != core.Number(3200) {
+		t.Errorf("white balance = %+v, want the hook's 3200", got)
 	}
 }

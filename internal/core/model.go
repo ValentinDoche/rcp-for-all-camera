@@ -9,8 +9,38 @@ import (
 	"unicode/utf8"
 )
 
-// ModelID identifies a camera model: "<driver>.<model>", e.g. "sony.fx6".
+// ModelID identifies a camera module, hence a camera model: lowercase
+// words joined by hyphens, starting with the brand ("bm-studio-6k-pro",
+// "sony-fx6", "demo"). It is saved in rig.json, so it never changes once
+// released; a renamed module keeps its former ids in ModelInfo.Aliases.
 type ModelID string
+
+// maxModelIDLen bounds model ids and aliases.
+const maxModelIDLen = 64
+
+// CheckModelID reports whether id is a well-formed module id. The error
+// never echoes the id.
+func CheckModelID(id ModelID) error {
+	if id == "" || len(id) > maxModelIDLen {
+		return fmt.Errorf("model id must be 1 to %d characters: %w", maxModelIDLen, ErrUnknownModel)
+	}
+	prevHyphen := true // no leading hyphen
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		switch {
+		case c >= 'a' && c <= 'z' || c >= '0' && c <= '9':
+			prevHyphen = false
+		case c == '-' && !prevHyphen:
+			prevHyphen = true
+		default:
+			return fmt.Errorf("model id must be lowercase words joined by single hyphens: %w", ErrUnknownModel)
+		}
+	}
+	if prevHyphen {
+		return fmt.Errorf("model id must not end with a hyphen: %w", ErrUnknownModel)
+	}
+	return nil
+}
 
 // Transport is a physical link the camera supports. It is informational
 // (shown to the user); control always goes over IP, whatever the link.
@@ -45,7 +75,6 @@ type ModelInfo struct {
 	ID          ModelID      `json:"id"`
 	Brand       string       `json:"brand"`
 	Name        string       `json:"name"`
-	Driver      string       `json:"driver"`
 	Transports  []Transport  `json:"transports"`
 	DefaultPort int          `json:"defaultPort"`
 	Auth        AuthMode     `json:"auth"`
@@ -58,13 +87,22 @@ type ModelInfo struct {
 	// NoAddress: the camera is not on the network (the demo camera); the
 	// config needs no host or port.
 	NoAddress bool `json:"noAddress,omitempty"`
+	// Aliases are former ids of this module (before 0.3.0: "<driver>.<model>").
+	// The registry still accepts them, so saved rigs keep their cameras.
+	Aliases []ModelID `json:"-"`
 }
 
 // Check reports whether the model declaration is well formed.
 func (m ModelInfo) Check() error {
+	if err := CheckModelID(m.ID); err != nil {
+		return fmt.Errorf("model %q: %w", m.ID, err)
+	}
+	for _, a := range m.Aliases {
+		if a == "" || len(a) > maxModelIDLen || CheckControlID(ControlID(a)) != nil {
+			return fmt.Errorf("model %s: malformed alias", m.ID)
+		}
+	}
 	switch {
-	case m.Driver == "" || !strings.HasPrefix(string(m.ID), m.Driver+".") || len(m.ID) <= len(m.Driver)+1:
-		return fmt.Errorf("model %q: id must be %q + name", m.ID, m.Driver+".")
 	case m.Brand == "" || m.Name == "":
 		return fmt.Errorf("model %s: brand and name are required", m.ID)
 	case len(m.Transports) == 0:

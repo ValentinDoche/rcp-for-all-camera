@@ -77,7 +77,7 @@ func rigWith(active int, slots ...int) app.Rig {
 		r.Slots[i].Slot = i + 1
 	}
 	for _, s := range slots {
-		r.Slots[s-1].Camera = &app.CameraView{Model: "sony.fx6", Name: "Cam", Status: core.Status{State: core.StateDisconnected}}
+		r.Slots[s-1].Camera = &app.CameraView{Model: "sony-fx6", Name: "Cam", Status: core.Status{State: core.StateDisconnected}}
 	}
 	return r
 }

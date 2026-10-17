@@ -16,10 +16,8 @@ import (
 	"fyne.io/fyne/v2/test"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/blackmagic"
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras"
 	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/demo"
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/panasonic"
-	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/sony"
 	"github.com/valentindoche/rcp-for-all-camera/internal/config"
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
@@ -216,15 +214,16 @@ func widgetsNeutral(sp core.ControlSpec) float64 {
 	return v
 }
 
-// liveDriver wraps a real driver so that its cameras become liveCams. The
+// liveDriver wraps a real module so that its cameras become liveCams. The
 // host's last octet picks the state: ...44 offline, ...45 error, else connected.
 type liveDriver struct {
-	core.Driver
+	core.Module
 	cams *[]*liveCam
 }
 
-func (d liveDriver) New(m core.ModelInfo, cfg core.CameraConfig) (core.Camera, error) {
-	inner, err := d.Driver.New(m, cfg)
+func (d liveDriver) New(cfg core.CameraConfig) (core.Camera, error) {
+	m := d.Module.Info()
+	inner, err := d.Module.New(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -287,20 +286,20 @@ var (
 	testIfaces *ifaceList
 )
 
-// newLiveService builds a Service whose three real drivers are wrapped.
+// newLiveService builds a Service whose real modules are wrapped (except the demo).
 func newLiveService(t testing.TB) (*app.Service, *memStore, *[]*liveCam) {
 	t.Helper()
 	cams := &[]*liveCam{}
 	testAuto = &fakeAuto{}
 	testIfaces = &ifaceList{nic: []app.NetInterface{{Name: "Ethernet", IP: "192.168.1.110"}, {Name: "Wi-Fi", IP: "10.0.0.5"}}}
 	reg := core.NewRegistry()
-	for _, d := range []core.Driver{blackmagic.Driver{}, sony.Driver{}, panasonic.Driver{}} {
-		if err := reg.Register(liveDriver{Driver: d, cams: cams}); err != nil {
+	for _, m := range cameras.All(nil) {
+		if m.Info().ID != demo.ID { // the demo camera stays the real one
+			m = liveDriver{Module: m, cams: cams}
+		}
+		if err := reg.Register(m); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if err := reg.Register(demo.Driver{}); err != nil { // the real demo camera
-		t.Fatal(err)
 	}
 	st := &memStore{}
 	svc, err := app.NewService(app.Options{
@@ -320,9 +319,9 @@ func seedRig(t testing.TB, svc *app.Service) {
 	t.Helper()
 	pw := "secret"
 	for i, in := range []app.SlotInput{
-		{Model: "blackmagic.studio6kpro", Name: "Plateau", Host: "192.168.1.41", PowerZoom: true},
-		{Model: "sony.fx6", Name: "Régie", Host: "192.168.1.42", Username: "admin", Password: &pw},
-		{Model: "panasonic.awue150", Name: "Cyclo", Host: "192.168.1.44"},
+		{Model: "bm-studio-6k-pro", Name: "Plateau", Host: "192.168.1.41", PowerZoom: true},
+		{Model: "sony-fx6", Name: "Régie", Host: "192.168.1.42", Username: "admin", Password: &pw},
+		{Model: "panasonic-aw-ue150", Name: "Cyclo", Host: "192.168.1.44"},
 	} {
 		slot := i + 1
 		if _, err := svc.AssignSlot(slot, in); err != nil {

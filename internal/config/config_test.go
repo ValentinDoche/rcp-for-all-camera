@@ -25,7 +25,7 @@ func TestLoadMissingFileReturnsEmptyRig(t *testing.T) {
 func TestSaveThenLoadRoundTrips(t *testing.T) {
 	s := FileStore{Path: filepath.Join(t.TempDir(), "sub", "rig.json")}
 	in := Rig{Version: Version, Active: 2}
-	in.Slots[1] = &core.CameraConfig{Model: "sony.fx6", Name: "A", Host: "10.0.0.6", Username: "admin"}
+	in.Slots[1] = &core.CameraConfig{Model: "sony-fx6", Name: "A", Host: "10.0.0.6", Username: "admin"}
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 func TestPresetsRoundTrip(t *testing.T) {
 	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
 	in := Rig{Version: Version, Presets: []Preset{{
-		Slot: 1, Number: 3, Model: "blackmagic.studio6kpro",
+		Slot: 1, Number: 3, Model: "bm-studio-6k-pro",
 		Values: map[core.ControlID]core.Value{
 			core.Saturation: core.Number(1.34),
 			core.ISO:        core.Choice("800"),
@@ -59,7 +59,7 @@ func TestPresetsRoundTrip(t *testing.T) {
 		t.Fatalf("presets = %+v", out.Presets)
 	}
 	p := out.Presets[0]
-	if p.Slot != 1 || p.Number != 3 || p.Model != "blackmagic.studio6kpro" ||
+	if p.Slot != 1 || p.Number != 3 || p.Model != "bm-studio-6k-pro" ||
 		p.Values[core.Saturation] != core.Number(1.34) || p.Values[core.ISO] != core.Choice("800") {
 		t.Errorf("preset = %+v", p)
 	}
@@ -79,7 +79,7 @@ func TestRigWithoutPresetsHasNoPresetsKey(t *testing.T) {
 func TestSaveNeverWritesPasswords(t *testing.T) {
 	s := FileStore{Path: filepath.Join(t.TempDir(), "rig.json")}
 	in := Rig{Version: Version}
-	in.Slots[0] = &core.CameraConfig{Model: "sony.fx6", Host: "10.0.0.6", Password: "hunter2"}
+	in.Slots[0] = &core.CameraConfig{Model: "sony-fx6", Host: "10.0.0.6", Password: "hunter2"}
 	if err := s.Save(in); err != nil {
 		t.Fatal(err)
 	}

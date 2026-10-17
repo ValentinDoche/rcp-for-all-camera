@@ -117,7 +117,7 @@ func TestArmedStoreReplacesWithoutDialogAndCanBeCancelled(t *testing.T) {
 
 func TestPresetErrorsBecomeNotices(t *testing.T) {
 	f := newFakeAPI()
-	f.assign(1, "acme.cam", core.StateConnected, app.ControlView{Spec: rangeSpec(core.Gain, 0, 36, 1)})
+	f.assign(1, "acme-cam", core.StateConnected, app.ControlView{Spec: rangeSpec(core.Gain, 0, 36, 1)})
 	c := NewController(f, syncOptions())
 	c.Load()
 	c.RecallPreset(1, 3) // the fake answers nil: success notice

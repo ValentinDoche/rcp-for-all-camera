@@ -1,8 +1,9 @@
-package camerakit
+package camerakit_test
 
 import (
 	"context"
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/cameras/camerakit"
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -15,7 +16,7 @@ func irisSpec() core.ControlSpec {
 }
 
 func TestPlaceholderExposesItsControlsOffline(t *testing.T) {
-	c := NewPlaceholder([]core.ControlSpec{irisSpec()})
+	c := camerakit.NewPlaceholder([]core.ControlSpec{irisSpec()})
 	if got := c.Controls(); len(got) != 1 || got[0].ID != core.Iris {
 		t.Fatalf("Controls() = %v, want [iris]", got)
 	}
@@ -25,7 +26,7 @@ func TestPlaceholderExposesItsControlsOffline(t *testing.T) {
 }
 
 func TestPlaceholderControlsReturnsACopy(t *testing.T) {
-	c := NewPlaceholder([]core.ControlSpec{irisSpec()})
+	c := camerakit.NewPlaceholder([]core.ControlSpec{irisSpec()})
 	c.Controls()[0].Max = 99
 	if c.Controls()[0].Max != 22 {
 		t.Fatal("caller mutated the placeholder's specs")
@@ -33,14 +34,14 @@ func TestPlaceholderControlsReturnsACopy(t *testing.T) {
 }
 
 func TestPlaceholderConnectIsNotImplemented(t *testing.T) {
-	c := NewPlaceholder(nil)
+	c := camerakit.NewPlaceholder(nil)
 	if err := c.Connect(context.Background()); !errors.Is(err, core.ErrNotImplemented) {
 		t.Fatalf("Connect = %v, want ErrNotImplemented", err)
 	}
 }
 
 func TestPlaceholderSetValidatesBeforeAnything(t *testing.T) {
-	c := NewPlaceholder([]core.ControlSpec{irisSpec()})
+	c := camerakit.NewPlaceholder([]core.ControlSpec{irisSpec()})
 	ctx := context.Background()
 	if err := c.Set(ctx, core.Iris, core.Number(99)); !errors.Is(err, core.ErrInvalidValue) {
 		t.Errorf("Set(out of range) = %v, want ErrInvalidValue", err)
@@ -54,18 +55,22 @@ func TestPlaceholderSetValidatesBeforeAnything(t *testing.T) {
 }
 
 func TestPlaceholderGetIsNotConnected(t *testing.T) {
-	c := NewPlaceholder([]core.ControlSpec{irisSpec()})
+	c := camerakit.NewPlaceholder([]core.ControlSpec{irisSpec()})
 	if _, err := c.Get(context.Background(), core.Iris); !errors.Is(err, core.ErrNotConnected) {
 		t.Fatalf("Get = %v, want ErrNotConnected", err)
 	}
 }
 
-func TestFindSpec(t *testing.T) {
-	specs := []core.ControlSpec{irisSpec()}
-	if _, err := FindSpec(specs, core.Iris); err != nil {
-		t.Errorf("FindSpec(iris) = %v", err)
+func TestPlannedBuildsPlaceholders(t *testing.T) {
+	m := camerakit.Planned{
+		Model: core.ModelInfo{ID: "acme-cam"},
+		Specs: func(cfg core.CameraConfig) []core.ControlSpec { return []core.ControlSpec{irisSpec()} },
 	}
-	if _, err := FindSpec(specs, core.Zoom); !errors.Is(err, core.ErrUnknownControl) {
-		t.Errorf("FindSpec(zoom) = %v, want ErrUnknownControl", err)
+	cam, err := m.New(core.CameraConfig{Model: "acme-cam"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cam.Set(context.Background(), core.Iris, core.Number(4)); !errors.Is(err, core.ErrNotImplemented) {
+		t.Errorf("Set on a planned model = %v, want ErrNotImplemented", err)
 	}
 }

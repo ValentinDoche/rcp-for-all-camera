@@ -57,13 +57,14 @@ type Camera interface {
 	Subscribe(fn func(Event)) (cancel func())
 }
 
-// Driver builds cameras for the models it declares. One driver per camera
-// protocol family (blackmagic, sony, panasonic...).
-type Driver interface {
-	// Name is the driver id, also the prefix of its model ids ("sony").
-	Name() string
-	Models() []ModelInfo
-	// New builds a camera for an already validated config. It must not do
-	// any I/O; connecting is Camera.Connect's job.
-	New(m ModelInfo, cfg CameraConfig) (Camera, error)
+// Module is a camera module: the code that controls one camera model.
+// Modules live in internal/cameras and are listed explicitly in
+// cameras.All; a module never imports another module.
+type Module interface {
+	// Info describes the model. It is static: the registry reads it once.
+	Info() ModelInfo
+	// New builds a camera for a config the registry already validated
+	// (Model is Info().ID, Port is filled). It must not do any I/O;
+	// connecting is Camera.Connect's job.
+	New(cfg CameraConfig) (Camera, error)
 }

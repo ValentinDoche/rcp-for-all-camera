@@ -2,50 +2,64 @@ package core
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 )
 
-// Registry maps model ids to the driver that handles them. The app builds
-// one at startup and registers every driver explicitly (no init() magic).
+// Registry is the directory of camera modules. The app builds one at
+// startup and registers every module explicitly (cameras.Register, no
+// init() magic), then asks it to build cameras by model id.
 type Registry struct {
-	mu     sync.RWMutex
-	models map[ModelID]registered
-	order  []ModelID
+	mu      sync.RWMutex
+	modules map[ModelID]registered
+	aliases map[ModelID]ModelID // former id -> current id
+	order   []ModelID
 }
 
 type registered struct {
 	info   ModelInfo
-	driver Driver
+	module Module
 }
 
+// NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
-	return &Registry{models: make(map[ModelID]registered)}
+	return &Registry{modules: map[ModelID]registered{}, aliases: map[ModelID]ModelID{}}
 }
 
-// Register adds all models of d. It fails, registering nothing, if any model
-// is malformed, belongs to another driver or is already registered.
-func (r *Registry) Register(d Driver) error {
+// Register adds modules, in order. It registers nothing if any of them is
+// malformed or reuses an id or an alias already taken.
+func (r *Registry) Register(mods ...Module) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	models := d.Models()
-	seen := make(map[ModelID]bool, len(models))
-	for _, m := range models {
-		if m.Driver != d.Name() {
-			return fmt.Errorf("driver %q declares model %s of driver %q", d.Name(), m.ID, m.Driver)
-		}
-		if err := m.Check(); err != nil {
+	infos := make([]ModelInfo, len(mods))
+	taken := map[ModelID]bool{}
+	for i, m := range mods {
+		info := cloneInfo(m.Info())
+		if err := info.Check(); err != nil {
 			return err
 		}
-		if _, dup := r.models[m.ID]; dup || seen[m.ID] {
-			return fmt.Errorf("%s: %w", m.ID, ErrDuplicateModel)
+		for _, id := range append([]ModelID{info.ID}, info.Aliases...) {
+			if r.knownLocked(id) || taken[id] {
+				return fmt.Errorf("%s: %w", id, ErrDuplicateModel)
+			}
+			taken[id] = true
 		}
-		seen[m.ID] = true
+		infos[i] = info
 	}
-	for _, m := range models {
-		r.models[m.ID] = registered{info: m, driver: d}
-		r.order = append(r.order, m.ID)
+	for i, info := range infos {
+		r.modules[info.ID] = registered{info: info, module: mods[i]}
+		for _, a := range info.Aliases {
+			r.aliases[a] = info.ID
+		}
+		r.order = append(r.order, info.ID)
 	}
 	return nil
+}
+
+func (r *Registry) knownLocked(id ModelID) bool {
+	_, isModule := r.modules[id]
+	_, isAlias := r.aliases[id]
+	return isModule || isAlias
 }
 
 // Models returns every registered model in registration order.
@@ -54,33 +68,50 @@ func (r *Registry) Models() []ModelInfo {
 	defer r.mu.RUnlock()
 	out := make([]ModelInfo, 0, len(r.order))
 	for _, id := range r.order {
-		out = append(out, r.models[id].info)
+		out = append(out, cloneInfo(r.modules[id].info))
 	}
 	return out
 }
 
-// Model returns one model's info.
+// Model returns one model's info. id may be a former id (alias): the info
+// returned then carries the current id.
 func (r *Registry) Model(id ModelID) (ModelInfo, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	e, ok := r.models[id]
-	return e.info, ok
+	e, ok := r.lookupLocked(id)
+	return cloneInfo(e.info), ok
 }
 
-// New validates cfg and builds a camera with the model's driver. Empty Port
-// is filled with the model default.
+func (r *Registry) lookupLocked(id ModelID) (registered, bool) {
+	if cur, ok := r.aliases[id]; ok {
+		id = cur
+	}
+	e, ok := r.modules[id]
+	return e, ok
+}
+
+// New validates cfg and builds a camera with the model's module. cfg.Model
+// may be an alias; the module receives the current id. An empty Port is
+// filled with the model default.
 func (r *Registry) New(cfg CameraConfig) (Camera, error) {
 	r.mu.RLock()
-	e, ok := r.models[cfg.Model]
+	e, ok := r.lookupLocked(cfg.Model)
 	r.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("%q: %w", cfg.Model, ErrUnknownModel)
+		return nil, fmt.Errorf("model id: %w", ErrUnknownModel)
 	}
+	cfg.Model = e.info.ID
 	if err := ValidateConfig(e.info, cfg); err != nil {
 		return nil, err
 	}
 	if cfg.Port == 0 {
 		cfg.Port = e.info.DefaultPort
 	}
-	return e.driver.New(e.info, cfg)
+	return e.module.New(cfg)
+}
+
+func cloneInfo(m ModelInfo) ModelInfo {
+	m.Transports = slices.Clone(m.Transports)
+	m.Aliases = slices.Clone(m.Aliases)
+	return m
 }

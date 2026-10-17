@@ -429,7 +429,7 @@ func TestConfigAssignFlow(t *testing.T) {
 		t.Fatalf("unexpected error %q", f.errTxt.Text())
 	}
 	cam := svc.Rig().Slots[4].Camera
-	if cam == nil || cam.Model != "sony.fx6" || cam.Host != "192.168.1.50" || !cam.HasPassword || cam.Port != 80 {
+	if cam == nil || cam.Model != "sony-fx6" || cam.Host != "192.168.1.50" || !cam.HasPassword || cam.Port != 80 {
 		t.Fatalf("slot 5 = %+v", cam)
 	}
 	if a.config.editSlot != 0 {

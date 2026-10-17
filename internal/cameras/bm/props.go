@@ -1,4 +1,4 @@
-package blackmagic
+package bm
 
 import (
 	"fmt"
@@ -9,7 +9,8 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
 )
 
-// Driver-specific control ids: the camera exposes them, no standard id fits.
+// Blackmagic-specific control ids: the cameras expose them, no standard id
+// fits. Their "blackmagic." prefix is kept from 0.2.x: presets store them.
 const (
 	OffsetR          core.ControlID = "blackmagic.offsetR"
 	OffsetG          core.ControlID = "blackmagic.offsetG"
@@ -279,15 +280,6 @@ func decodeShutter(c *Camera, o map[string]any) map[core.ControlID]core.Value {
 	return out
 }
 
-// command is one write to the camera.
-type command struct {
-	path string
-	body map[string]any
-	// composite marks a property whose body must carry every key (color
-	// correction); the camera merges the other keys from its cached state.
-	composite bool
-}
-
 func kv(pairs ...any) map[string]any {
 	m := make(map[string]any, len(pairs)/2)
 	for i := 0; i+1 < len(pairs); i += 2 {
@@ -297,57 +289,57 @@ func kv(pairs ...any) map[string]any {
 }
 
 // commandFor builds the REST call for a validated value.
-func commandFor(id core.ControlID, v core.Value) (command, error) {
+func commandFor(id core.ControlID, v core.Value) (Command, error) {
 	switch id {
 	case core.Iris:
-		return command{path: pathIris, body: kv("apertureStop", v.Number)}, nil
+		return Command{Path: pathIris, Body: kv("apertureStop", v.Number)}, nil
 	case core.IrisNorm:
-		return command{path: pathIris, body: kv("normalised", v.Number)}, nil
+		return Command{Path: pathIris, Body: kv("normalised", v.Number)}, nil
 	case core.AutoIris:
-		return command{path: pathAutoExp, body: kv("mode", "OneShot", "type", "Iris")}, nil
+		return Command{Path: pathAutoExp, Body: kv("mode", "OneShot", "type", "Iris")}, nil
 	case core.Focus:
-		return command{path: pathFocus, body: kv("normalised", v.Number)}, nil
+		return Command{Path: pathFocus, Body: kv("normalised", v.Number)}, nil
 	case core.AutoFocus:
-		return command{path: pathAutoFoc, body: kv()}, nil
+		return Command{Path: pathAutoFoc, Body: kv()}, nil
 	case core.Zoom:
-		return command{path: pathZoom, body: kv("normalised", v.Number)}, nil
+		return Command{Path: pathZoom, Body: kv("normalised", v.Number)}, nil
 	case core.Gain:
-		return command{path: pathGain, body: kv("gain", int(math.Round(v.Number)))}, nil
+		return Command{Path: pathGain, Body: kv("gain", int(math.Round(v.Number)))}, nil
 	case core.ISO:
 		n, err := strconv.Atoi(v.Choice)
 		if err != nil {
-			return command{}, fmt.Errorf("%s: bad ISO: %w", id, core.ErrInvalidValue)
+			return Command{}, fmt.Errorf("%s: bad ISO: %w", id, core.ErrInvalidValue)
 		}
-		return command{path: pathISO, body: kv("iso", n)}, nil
+		return Command{Path: pathISO, Body: kv("iso", n)}, nil
 	case core.ShutterSpeed:
 		n, err := strconv.Atoi(strings.TrimPrefix(v.Choice, "1/"))
 		if err != nil || n <= 0 {
-			return command{}, fmt.Errorf("%s: bad shutter speed: %w", id, core.ErrInvalidValue)
+			return Command{}, fmt.Errorf("%s: bad shutter speed: %w", id, core.ErrInvalidValue)
 		}
-		return command{path: pathShutter, body: kv("shutterSpeed", n)}, nil
+		return Command{Path: pathShutter, Body: kv("shutterSpeed", n)}, nil
 	case core.ShutterAngle:
-		return command{path: pathShutter, body: kv("shutterAngle", int(math.Round(v.Number*100)))}, nil
+		return Command{Path: pathShutter, Body: kv("shutterAngle", int(math.Round(v.Number*100)))}, nil
 	case core.ND:
 		f, err := strconv.ParseFloat(v.Choice, 64)
 		if err != nil {
-			return command{}, fmt.Errorf("%s: bad ND stop: %w", id, core.ErrInvalidValue)
+			return Command{}, fmt.Errorf("%s: bad ND stop: %w", id, core.ErrInvalidValue)
 		}
-		return command{path: pathND, body: kv("stop", f)}, nil
+		return Command{Path: pathND, Body: kv("stop", f)}, nil
 	case core.WhiteBalance:
-		return command{path: pathWB, body: kv("whiteBalance", int(math.Round(v.Number)))}, nil
+		return Command{Path: pathWB, Body: kv("whiteBalance", int(math.Round(v.Number)))}, nil
 	case core.Tint:
-		return command{path: pathTint, body: kv("whiteBalanceTint", int(math.Round(v.Number)))}, nil
+		return Command{Path: pathTint, Body: kv("whiteBalanceTint", int(math.Round(v.Number)))}, nil
 	case core.AutoWhiteBalance:
-		return command{path: pathAutoWB, body: kv()}, nil
+		return Command{Path: pathAutoWB, Body: kv()}, nil
 	case core.Record:
-		return command{path: pathRecord, body: kv("recording", v.On)}, nil
+		return Command{Path: pathRecord, Body: kv("recording", v.On)}, nil
 	}
 	for _, cc := range colorCtls {
 		if cc.id == id {
-			return command{path: cc.path, body: kv(cc.key, v.Number), composite: true}, nil
+			return Command{Path: cc.path, Body: kv(cc.key, v.Number), Composite: true}, nil
 		}
 	}
-	return command{}, fmt.Errorf("%s: %w", id, core.ErrUnknownControl)
+	return Command{}, fmt.Errorf("%s: %w", id, core.ErrUnknownControl)
 }
 
 // lensDecoders update the lens information from the lens properties. They run

@@ -52,7 +52,7 @@ type opsDriver struct {
 	cams []*opsCamera
 }
 
-func (d *opsDriver) New(core.ModelInfo, core.CameraConfig) (core.Camera, error) {
+func (d *opsDriver) New(core.CameraConfig) (core.Camera, error) {
 	iris := core.Std(core.Iris)
 	iris.Kind, iris.Min, iris.Max = core.KindRange, 1.8, 22
 	rec := core.Std(core.Record)
@@ -74,7 +74,7 @@ func newOpsService(t *testing.T, saved config.Rig) (*Service, *memStore, *opsDri
 	t.Helper()
 	reg := core.NewRegistry()
 	drv := &opsDriver{}
-	if err := reg.Register(drv); err != nil {
+	if err := reg.Register(acme(drv)...); err != nil {
 		t.Fatal(err)
 	}
 	st := &memStore{rig: saved}
@@ -105,8 +105,8 @@ func TestAssignedCameraConnectsAutomatically(t *testing.T) {
 func TestConnectAllConnectsEverySavedCamera(t *testing.T) {
 	var saved config.Rig
 	saved.Version = config.Version
-	saved.Slots[0] = &core.CameraConfig{Model: "acme.cam", Host: "10.0.0.1"}
-	saved.Slots[4] = &core.CameraConfig{Model: "acme.cam", Host: "10.0.0.5"}
+	saved.Slots[0] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.1"}
+	saved.Slots[4] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.5"}
 	svc, _, drv, _ := newOpsService(t, saved)
 	svc.connectAll()
 	for i, c := range drv.cams {
@@ -251,9 +251,9 @@ func TestImportRejectsInvalidDocumentsAtomically(t *testing.T) {
 		`not json`,
 		`{"format":"something-else","version":1,"slots":[]}`,
 		`{"format":"` + ExportFormat + `","version":99,"slots":[]}`,
-		`{"format":"` + ExportFormat + `","version":1,"slots":[{"model":"acme.cam","host":"http://x/"}]}`,
+		`{"format":"` + ExportFormat + `","version":1,"slots":[{"model":"acme-cam","host":"http://x/"}]}`,
 		`{"format":"` + ExportFormat + `","version":1,"slots":[{"model":"nope.x","host":"10.0.0.1"}]}`,
-		`{"format":"` + ExportFormat + `","version":1,"slots":[null,null,null,null,null,null,null,null,{"model":"acme.cam","host":"10.0.0.1"}]}`,
+		`{"format":"` + ExportFormat + `","version":1,"slots":[null,null,null,null,null,null,null,null,{"model":"acme-cam","host":"10.0.0.1"}]}`,
 		strings.Repeat(" ", config.MaxFileSize+1),
 	}
 	for _, b := range bad {
@@ -269,7 +269,7 @@ func TestImportRejectsInvalidDocumentsAtomically(t *testing.T) {
 func TestHostStartConnectsSavedCameras(t *testing.T) {
 	var saved config.Rig
 	saved.Version = config.Version
-	saved.Slots[2] = &core.CameraConfig{Model: "acme.cam", Host: "10.0.0.3"}
+	saved.Slots[2] = &core.CameraConfig{Model: "acme-cam", Host: "10.0.0.3"}
 	svc, _, drv, _ := newOpsService(t, saved)
 	h := NewHost(svc, func() (bool, error) { return false, nil }, time.Hour)
 	h.Start(context.Background(), nil)

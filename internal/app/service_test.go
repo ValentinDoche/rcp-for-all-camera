@@ -14,20 +14,37 @@ import (
 
 // --- fakes ---------------------------------------------------------------
 
-type testDriver struct{}
+// builder builds the cameras of the test modules.
+type builder interface {
+	New(core.CameraConfig) (core.Camera, error)
+}
 
-func (testDriver) Name() string { return "acme" }
-func (testDriver) Models() []core.ModelInfo {
-	return []core.ModelInfo{
-		{ID: "acme.cam", Brand: "Acme", Name: "Cam", Driver: "acme",
+// acmeModule is a test module: a model declaration and a builder.
+type acmeModule struct {
+	info core.ModelInfo
+	b    builder
+}
+
+func (m acmeModule) Info() core.ModelInfo                           { return m.info }
+func (m acmeModule) New(cfg core.CameraConfig) (core.Camera, error) { return m.b.New(cfg) }
+
+// acme returns the two test modules, acme-cam and acme-secure (password
+// required), whose cameras b builds. acme-cam was "acme.cam" before 0.3.0.
+func acme(b builder) []core.Module {
+	return []core.Module{
+		acmeModule{core.ModelInfo{ID: "acme-cam", Aliases: []core.ModelID{"acme.cam"}, Brand: "Acme", Name: "Cam",
 			Transports: []core.Transport{core.TransportEthernet, core.TransportWiFi}, DefaultPort: 80,
-			Auth: core.AuthNone, Support: core.SupportPlanned, InterchangeableLens: true},
-		{ID: "acme.secure", Brand: "Acme", Name: "Secure", Driver: "acme",
+			Auth: core.AuthNone, Support: core.SupportPlanned, InterchangeableLens: true}, b},
+		acmeModule{core.ModelInfo{ID: "acme-secure", Brand: "Acme", Name: "Secure",
 			Transports: []core.Transport{core.TransportEthernet}, DefaultPort: 443,
-			Auth: core.AuthRequired, Support: core.SupportPlanned},
+			Auth: core.AuthRequired, Support: core.SupportPlanned}, b},
 	}
 }
-func (testDriver) New(core.ModelInfo, core.CameraConfig) (core.Camera, error) {
+
+// testDriver builds placeholder cameras with an iris.
+type testDriver struct{}
+
+func (testDriver) New(core.CameraConfig) (core.Camera, error) {
 	iris := core.Std(core.Iris)
 	iris.Kind, iris.Min, iris.Max = core.KindRange, 1.8, 22
 	return camerakit.NewPlaceholder([]core.ControlSpec{iris}), nil
@@ -84,7 +101,7 @@ type fixture struct {
 func newFixture(t *testing.T, initial config.Rig) fixture {
 	t.Helper()
 	reg := core.NewRegistry()
-	if err := reg.Register(testDriver{}); err != nil {
+	if err := reg.Register(acme(testDriver{})...); err != nil {
 		t.Fatal(err)
 	}
 	f := fixture{store: &memStore{rig: initial}, secrets: config.NewMemorySecrets(), events: &recorder{}}
@@ -98,7 +115,7 @@ func newFixture(t *testing.T, initial config.Rig) fixture {
 }
 
 func validInput() SlotInput {
-	return SlotInput{Model: "acme.cam", Name: "Cam A", Host: "192.168.10.11"}
+	return SlotInput{Model: "acme-cam", Name: "Cam A", Host: "192.168.10.11"}
 }
 
 func strPtr(s string) *string { return &s }
@@ -133,7 +150,7 @@ func TestFreshRigHasEightEmptySlots(t *testing.T) {
 
 func TestModelsListsRegisteredModels(t *testing.T) {
 	f := newFixture(t, config.Rig{Version: config.Version})
-	if got := f.svc.Models(); len(got) != 2 || got[0].ID != "acme.cam" {
+	if got := f.svc.Models(); len(got) != 2 || got[0].ID != "acme-cam" {
 		t.Fatalf("Models() = %v", got)
 	}
 }
@@ -201,7 +218,7 @@ func TestAssignSlotPersistsAndEmits(t *testing.T) {
 
 func TestPasswordGoesToSecretsNeverToViewOrStore(t *testing.T) {
 	f := newFixture(t, config.Rig{Version: config.Version})
-	in := SlotInput{Model: "acme.secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("s3cret")}
+	in := SlotInput{Model: "acme-secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("s3cret")}
 	s, err := f.svc.AssignSlot(1, in)
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +240,7 @@ func TestPasswordGoesToSecretsNeverToViewOrStore(t *testing.T) {
 
 func TestNilPasswordKeepsStoredOneEmptyClearsIt(t *testing.T) {
 	f := newFixture(t, config.Rig{Version: config.Version})
-	in := SlotInput{Model: "acme.secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("s3cret")}
+	in := SlotInput{Model: "acme-secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("s3cret")}
 	_, _ = f.svc.AssignSlot(1, in)
 
 	in.Password = nil
@@ -241,7 +258,7 @@ func TestNilPasswordKeepsStoredOneEmptyClearsIt(t *testing.T) {
 
 func TestRequiredAuthNeedsUsername(t *testing.T) {
 	f := newFixture(t, config.Rig{Version: config.Version})
-	_, err := f.svc.AssignSlot(1, SlotInput{Model: "acme.secure", Host: "10.0.0.2"})
+	_, err := f.svc.AssignSlot(1, SlotInput{Model: "acme-secure", Host: "10.0.0.2"})
 	if code(t, err) != CodeInvalidConfig {
 		t.Fatalf("code = %s, want INVALID_CONFIG", code(t, err))
 	}
@@ -249,7 +266,7 @@ func TestRequiredAuthNeedsUsername(t *testing.T) {
 
 func TestClearSlotIsIdempotentAndDropsSecretAndSelection(t *testing.T) {
 	f := newFixture(t, config.Rig{Version: config.Version})
-	in := SlotInput{Model: "acme.secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("pw")}
+	in := SlotInput{Model: "acme-secure", Host: "10.0.0.2", Username: "admin", Password: strPtr("pw")}
 	_, _ = f.svc.AssignSlot(4, in)
 	_ = f.svc.SelectSlot(4)
 	if err := f.svc.ClearSlot(4); err != nil {
@@ -330,9 +347,9 @@ func TestStartupRestoresSavedRigAndDropsInvalidEntries(t *testing.T) {
 	var saved config.Rig
 	saved.Version = config.Version
 	saved.Active = 2
-	saved.Slots[1] = &core.CameraConfig{Model: "acme.cam", Name: "kept", Host: "10.0.0.1"}
+	saved.Slots[1] = &core.CameraConfig{Model: "acme-cam", Name: "kept", Host: "10.0.0.1"}
 	saved.Slots[2] = &core.CameraConfig{Model: "gone.model", Host: "10.0.0.2"}
-	saved.Slots[3] = &core.CameraConfig{Model: "acme.cam", Host: "bad host"}
+	saved.Slots[3] = &core.CameraConfig{Model: "acme-cam", Host: "bad host"}
 	f := newFixture(t, saved)
 	rig := f.svc.Rig()
 	if rig.Active != 2 || rig.Slots[1].Camera == nil || rig.Slots[1].Camera.Name != "kept" {
@@ -346,9 +363,9 @@ func TestStartupRestoresSavedRigAndDropsInvalidEntries(t *testing.T) {
 func TestStartupRestoresPasswordFromSecrets(t *testing.T) {
 	var saved config.Rig
 	saved.Version = config.Version
-	saved.Slots[0] = &core.CameraConfig{Model: "acme.secure", Host: "10.0.0.1", Username: "admin"}
+	saved.Slots[0] = &core.CameraConfig{Model: "acme-secure", Host: "10.0.0.1", Username: "admin"}
 	reg := core.NewRegistry()
-	_ = reg.Register(testDriver{})
+	_ = reg.Register(acme(testDriver{})...)
 	sec := config.NewMemorySecrets()
 	_ = sec.Set(secretKey(1), "pw")
 	svc, err := NewService(Options{Registry: reg, Store: &memStore{rig: saved}, Secrets: sec})
@@ -411,7 +428,7 @@ func TestPowerZoomIsStoredOnlyForInterchangeableLenses(t *testing.T) {
 	if !sl.Camera.PowerZoom || !sl.Camera.InterchangeableLens || !f.store.rig.Slots[0].PowerZoom {
 		t.Errorf("view %+v, stored %+v", sl.Camera, f.store.rig.Slots[0])
 	}
-	sec := SlotInput{Model: "acme.secure", Host: "192.168.10.12", Username: "op", PowerZoom: true}
+	sec := SlotInput{Model: "acme-secure", Host: "192.168.10.12", Username: "op", PowerZoom: true}
 	sl, err = f.svc.AssignSlot(2, sec)
 	if err != nil {
 		t.Fatal(err)
