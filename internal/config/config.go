@@ -39,6 +39,9 @@ type Rig struct {
 	BindIP string `json:"bindIp,omitempty"`
 	// OperatorLock: nil means on (the default).
 	OperatorLock *bool `json:"operatorLock,omitempty"`
+	// Panel is the panel source chosen in the app: "" or "usb" = the first
+	// USB panel, "usb:<serial>" = that panel, "sim" = the simulator.
+	Panel string `json:"panel,omitempty"`
 	// LogLevel is "normal" (default) or "debug".
 	LogLevel string `json:"logLevel,omitempty"`
 	// Presets are the stored camera presets. They live here, never on the

@@ -15,6 +15,8 @@ JSON tags are kept on every type so the API can be exported or logged in a stabl
 | Method | Returns | Notes |
 |---|---|---|
 | `PanelStatus()` | `PanelStatus` | Panel state: `connected` (plugged in), `active` (driven by the app), `serial`, `detail` (see below) |
+| `PanelSources()` | `[]PanelSource`, selected id | Where the panel comes from: `usb` (first USB panel, default), `usb:<serial>` (one panel among several), `sim` (simulator window). Lists automatic USB, every plugged-in panel and the simulator. Empty without a selector |
+| `SelectPanelSource(id)` | error | Switches the panel at once (the current one is blanked) and saves the choice in `rig.json` (`panel`). A serial not plugged in is accepted: it is driven when it appears |
 | `Models()` | `[]core.ModelInfo` | Every known camera model, in display order |
 | `Rig()` | `Rig` | Always 8 slots, numbered 1 to 8, and the active slot (0 = none). Each `Slot` has `presets`: the stored preset numbers, sorted (`[]` when none) |
 | `AssignSlot(slot, SlotInput)` | `Slot` | Create or replace the camera on a slot |

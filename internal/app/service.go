@@ -40,6 +40,8 @@ type Options struct {
 	LogDir string
 	// Go runs background work (default: a new goroutine). Tests run it inline.
 	Go func(func())
+	// Panels switches the panel source (USB, simulator); nil = no choice.
+	Panels PanelSources
 }
 
 // commandTimeout bounds every camera call made from the GUI (a variable only
@@ -55,12 +57,14 @@ type Service struct {
 	secrets config.Secrets
 	log     *slog.Logger
 
-	interfaces func() []NetInterface
-	autoStart  AutoStarter
-	levelVar   *slog.LevelVar
-	logDir     string
-	goFn       func(func())
-	timeout    time.Duration // commandTimeout captured at construction
+	interfaces  func() []NetInterface
+	autoStart   AutoStarter
+	levelVar    *slog.LevelVar
+	logDir      string
+	goFn        func(func())
+	panels      PanelSources
+	panelSource string        // saved panel choice ("" = automatic USB)
+	timeout     time.Duration // commandTimeout captured at construction
 
 	mu         sync.Mutex
 	slots      [SlotCount]*slotState
@@ -92,7 +96,8 @@ func NewService(o Options) (*Service, error) {
 		o.Logger = slog.Default()
 	}
 	s := &Service{reg: o.Registry, store: o.Store, secrets: o.Secrets, log: o.Logger, emit: nopEmitter{},
-		interfaces: o.Interfaces, autoStart: o.AutoStart, levelVar: o.LogLevel, logDir: o.LogDir, goFn: o.Go}
+		interfaces: o.Interfaces, autoStart: o.AutoStart, levelVar: o.LogLevel, logDir: o.LogDir, goFn: o.Go,
+		panels: o.Panels}
 	s.timeout = commandTimeout
 	if s.goFn == nil {
 		s.goFn = func(f func()) { go f() }
@@ -103,6 +108,7 @@ func NewService(o Options) (*Service, error) {
 		rig = config.Rig{Version: config.Version}
 	}
 	s.bindIP = rig.BindIP
+	s.restorePanelSource(rig.Panel)
 	s.lock = rig.OperatorLock == nil || *rig.OperatorLock
 	s.logLevel = LogNormal
 	if rig.LogLevel == LogDebug {
@@ -463,7 +469,8 @@ func (s *Service) storePassword(slot int, pw string) error {
 
 func (s *Service) saveLocked() error {
 	lock := s.lock
-	rig := config.Rig{Version: config.Version, Active: s.active, BindIP: s.bindIP, OperatorLock: &lock}
+	rig := config.Rig{Version: config.Version, Active: s.active, BindIP: s.bindIP, OperatorLock: &lock,
+		Panel: s.panelSource}
 	if s.logLevel == LogDebug {
 		rig.LogLevel = LogDebug
 	}
