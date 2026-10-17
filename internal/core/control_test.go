@@ -111,3 +111,40 @@ func TestSpecCheckBoundsSection(t *testing.T) {
 		}
 	}
 }
+
+func TestTextValues(t *testing.T) {
+	s := core.ControlSpec{ID: "acme.note", Label: "Note", Group: core.GroupMisc, Kind: core.KindText}
+	t.Run("short text", func(t *testing.T) {
+		if err := s.Validate(core.Text("plateau 2")); err != nil {
+			t.Errorf("Validate = %v", err)
+		}
+	})
+	t.Run("too long", func(t *testing.T) {
+		if err := s.Validate(core.Text(strings.Repeat("x", core.MaxTextLen+1))); !errors.Is(err, core.ErrInvalidValue) {
+			t.Errorf("Validate = %v, want ErrInvalidValue", err)
+		}
+	})
+	t.Run("control characters", func(t *testing.T) {
+		if err := core.Text("a\x1bb").Check(); !errors.Is(err, core.ErrInvalidValue) {
+			t.Errorf("Check = %v, want ErrInvalidValue", err)
+		}
+	})
+}
+
+func TestCustomBlockWidgets(t *testing.T) {
+	for name, tc := range map[string]struct {
+		spec core.ControlSpec
+		ok   bool
+	}{
+		"stepper on a range":   {core.ControlSpec{ID: "a.b", Kind: core.KindRange, Max: 1, Block: "Extra", Widget: core.WidgetStepper}, true},
+		"readout on read-only": {core.ControlSpec{ID: "a.b", Kind: core.KindText, ReadOnly: true, Block: "About", Widget: core.WidgetReadout}, true},
+		"switch on a range":    {core.ControlSpec{ID: "a.b", Kind: core.KindRange, Max: 1, Block: "Extra", Widget: core.WidgetSwitch}, false},
+		"widget without block": {core.ControlSpec{ID: "a.b", Kind: core.KindToggle, Widget: core.WidgetSwitch}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := tc.spec.Check(); (err == nil) != tc.ok {
+				t.Errorf("Check = %v, want ok %t", err, tc.ok)
+			}
+		})
+	}
+}

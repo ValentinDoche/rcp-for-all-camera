@@ -18,7 +18,44 @@ const (
 	KindEnum   ControlKind = "enum"   // one of Options, Value.Choice
 	KindToggle ControlKind = "toggle" // on/off, Value.On
 	KindAction ControlKind = "action" // one-shot trigger, no payload
+	KindText   ControlKind = "text"   // free text, at most MaxTextLen bytes, Value.Text
 )
+
+// MaxTextLen bounds a text value.
+const MaxTextLen = 256
+
+// Widget is how a custom block shows a control (ControlSpec.Widget).
+type Widget string
+
+const (
+	WidgetSlider  Widget = "slider"  // range
+	WidgetStepper Widget = "stepper" // range: − and + around the value
+	WidgetButtons Widget = "buttons" // enum: one button per option
+	WidgetSelect  Widget = "select"  // enum: drop-down list
+	WidgetSwitch  Widget = "switch"  // toggle
+	WidgetButton  Widget = "button"  // action
+	WidgetReadout Widget = "readout" // any read-only kind but action
+	WidgetText    Widget = "text"    // text
+)
+
+// Fits reports whether the widget can show a control of that kind.
+func (w Widget) Fits(k ControlKind, readOnly bool) bool {
+	switch w {
+	case WidgetSlider, WidgetStepper:
+		return k == KindRange
+	case WidgetButtons, WidgetSelect:
+		return k == KindEnum
+	case WidgetSwitch:
+		return k == KindToggle
+	case WidgetButton:
+		return k == KindAction
+	case WidgetReadout:
+		return readOnly && k != KindAction
+	case WidgetText:
+		return k == KindText
+	}
+	return false
+}
 
 // ControlGroup is used by the GUI to lay controls out in sections.
 type ControlGroup string
@@ -67,21 +104,28 @@ type ControlSpec struct {
 	// the GUI does not show it and presets do not store it, as it doubles a
 	// visible control.
 	Hidden bool `json:"hidden,omitempty"`
+	// Block puts the control in a custom block of that title, shown at the
+	// end of the camera page in declaration order, with Widget (empty: the
+	// default widget of its kind). Empty Block: the standard layout.
+	Block  string `json:"block,omitempty"`
+	Widget Widget `json:"widget,omitempty"`
 }
 
 // Value carries a control value. Only the field matching Kind is meaningful:
-// Number for range, Choice for enum, On for toggle, nothing for action.
-// Build values with Number, Choice, Bool and Trigger.
+// Number for range, Choice for enum, On for toggle, Text for text, nothing
+// for action. Build values with Number, Choice, Bool, Text and Trigger.
 type Value struct {
 	Kind   ControlKind `json:"kind"`
 	Number float64     `json:"number,omitempty"`
 	Choice string      `json:"choice,omitempty"`
 	On     bool        `json:"on,omitempty"`
+	Text   string      `json:"text,omitempty"`
 }
 
 func Number(v float64) Value { return Value{Kind: KindRange, Number: v} }
 func Choice(v string) Value  { return Value{Kind: KindEnum, Choice: v} }
 func Bool(v bool) Value      { return Value{Kind: KindToggle, On: v} }
+func Text(v string) Value    { return Value{Kind: KindText, Text: v} }
 func Trigger() Value         { return Value{Kind: KindAction} }
 
 // MaxIDLen bounds control ids and enum choice values. Both cross the GUI
@@ -112,9 +156,12 @@ func isIDChar(c byte) bool {
 // echoes the value.
 func (v Value) Check() error {
 	switch v.Kind {
-	case KindRange, KindEnum, KindToggle, KindAction:
+	case KindRange, KindEnum, KindToggle, KindAction, KindText:
 	default:
 		return fmt.Errorf("unknown value kind: %w", ErrInvalidValue)
+	}
+	if len(v.Text) > MaxTextLen || !printable(v.Text) {
+		return fmt.Errorf("text must be at most %d printable characters: %w", MaxTextLen, ErrInvalidValue)
 	}
 	if len(v.Choice) > MaxIDLen || !printable(v.Choice) {
 		return fmt.Errorf("choice must be at most %d printable characters: %w", MaxIDLen, ErrInvalidValue)
@@ -128,8 +175,14 @@ func (s ControlSpec) Check() error {
 	if err := CheckControlID(s.ID); err != nil {
 		return fmt.Errorf("control spec %q: %w", s.ID, err)
 	}
-	if len(s.Section) > MaxIDLen || !printable(s.Section) {
-		return fmt.Errorf("control %s: section must be at most %d printable characters", s.ID, MaxIDLen)
+	if len(s.Section) > MaxIDLen || !printable(s.Section) || len(s.Block) > MaxIDLen || !printable(s.Block) {
+		return fmt.Errorf("control %s: section and block must be at most %d printable characters", s.ID, MaxIDLen)
+	}
+	if len(s.Label) > MaxIDLen || !printable(s.Label) || len(s.Unit) > 16 || !printable(s.Unit) {
+		return fmt.Errorf("control %s: label or unit too long or not printable", s.ID)
+	}
+	if s.Widget != "" && (s.Block == "" || !s.Widget.Fits(s.Kind, s.ReadOnly)) {
+		return fmt.Errorf("control %s: widget %q needs a block and must fit a %s control", s.ID, s.Widget, s.Kind)
 	}
 	switch s.Kind {
 	case KindRange:
@@ -145,12 +198,13 @@ func (s ControlSpec) Check() error {
 		}
 		seen := make(map[string]bool, len(s.Options))
 		for _, o := range s.Options {
-			if o.Value == "" || len(o.Value) > MaxIDLen || seen[o.Value] {
+			if o.Value == "" || len(o.Value) > MaxIDLen || seen[o.Value] || !printable(o.Value) ||
+				len(o.Label) > MaxIDLen || !printable(o.Label) {
 				return fmt.Errorf("control %s: empty or duplicate option %q", s.ID, o.Value)
 			}
 			seen[o.Value] = true
 		}
-	case KindToggle, KindAction:
+	case KindToggle, KindAction, KindText:
 	default:
 		return fmt.Errorf("control %s: unknown kind %q", s.ID, s.Kind)
 	}
@@ -177,6 +231,10 @@ func (s ControlSpec) Validate(v Value) error {
 			}
 		}
 		return fmt.Errorf("%s: unknown option %q: %w", s.ID, v.Choice, ErrInvalidValue)
+	case KindText:
+		if len(v.Text) > MaxTextLen || !printable(v.Text) {
+			return fmt.Errorf("%s: text must be at most %d printable characters: %w", s.ID, MaxTextLen, ErrInvalidValue)
+		}
 	}
 	return nil
 }
