@@ -1,6 +1,7 @@
-package panelsim
+package panelsim_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsim"
 	"image/png"
 	"os"
 	"slices"
@@ -15,19 +16,15 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/micropanel"
 )
 
-// centre returns the view position of a drawing point.
-func centre(x, y float64) fyne.Position { return pos(x, y) }
-
 func TestMouseDrivesInputs(t *testing.T) {
 	test.NewTempApp(t)
-	s := New()
-	v := NewView(s)
+	s := panelsim.New()
+	v := panelsim.NewView(s)
 	test.NewTempWindow(t, v)
 
-	cam3 := camButtons[2]
-	at := centre(cam3.x+camW/2, cam3.y+camH/2)
+	at := panelsim.CamButtonCentre(2)
 	v.MouseDown(&desktop.MouseEvent{PointEvent: fyne.PointEvent{Position: at}, Button: desktop.MouseButtonPrimary})
-	if keys := s.Input().Keys; !slices.Equal(keys, []micropanel.Key{keyCam1 + 2}) {
+	if keys := s.Input().Keys; !slices.Equal(keys, []micropanel.Key{panelsim.KeyCam1 + 2}) {
 		t.Fatalf("held keys = %v, want CAM3", keys)
 	}
 	v.MouseUp(&desktop.MouseEvent{})
@@ -35,13 +32,12 @@ func TestMouseDrivesInputs(t *testing.T) {
 		t.Fatalf("keys after release = %v", keys)
 	}
 
-	coarse := knobs[8]
-	v.Scrolled(&fyne.ScrollEvent{PointEvent: fyne.PointEvent{Position: centre(coarse.x, coarse.y)}, Scrolled: fyne.Delta{DY: 10}})
+	v.Scrolled(&fyne.ScrollEvent{PointEvent: fyne.PointEvent{Position: panelsim.KnobCentre(8)}, Scrolled: fyne.Delta{DY: 10}})
 	if got := s.Input().Analog[8]; got != 512+8 {
 		t.Fatalf("COARSE = %d after one wheel notch", got)
 	}
 
-	v.MouseDown(&desktop.MouseEvent{PointEvent: fyne.PointEvent{Position: centre(leverX, leverTop)}, Button: desktop.MouseButtonPrimary})
+	v.MouseDown(&desktop.MouseEvent{PointEvent: fyne.PointEvent{Position: panelsim.LeverTopCentre()}, Button: desktop.MouseButtonPrimary})
 	v.Dragged(&fyne.DragEvent{Dragged: fyne.Delta{DY: -1000}})
 	v.DragEnd()
 	if got := s.Input().Lever; got != micropanel.JoystickMax {
@@ -57,7 +53,7 @@ func TestShot(t *testing.T) {
 		t.Skip("set PANELSIM_SHOT to render the panel")
 	}
 	test.NewTempApp(t)
-	s := New()
+	s := panelsim.New()
 	var d [14]byte
 	micropanel.EncodeText(&d, micropanel.DispND, "1")
 	micropanel.EncodeText(&d, micropanel.DispGain, "06")
@@ -81,8 +77,8 @@ func TestShot(t *testing.T) {
 	s.SetRing(-1200)
 	s.TurnKnob(0, 200)
 
-	w := test.NewTempWindow(t, NewView(s))
-	w.Resize(size(bodyW, bodyH).AddWidthHeight(16, 16))
+	w := test.NewTempWindow(t, panelsim.NewView(s))
+	w.Resize(panelsim.ViewSize().AddWidthHeight(16, 16))
 	img := software.RenderCanvas(w.Canvas(), theme.DarkTheme())
 	f, err := os.Create(path)
 	if err != nil {

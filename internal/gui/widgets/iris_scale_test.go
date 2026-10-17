@@ -1,10 +1,10 @@
-package widgets
+package widgets_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 	"math"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/test"
 	"slices"
 	"testing"
 
@@ -14,20 +14,20 @@ import (
 var fIris = core.ControlSpec{ID: core.Iris, Kind: core.KindRange, Min: 1, Max: 22, Step: 0.1, Unit: "f"}
 
 func TestIrisScaleUsesTheLensLimits(t *testing.T) {
-	k := NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
+	k := widgets.NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
 	if k.Min != 2.8 || k.Max != 22 || !k.FStop {
 		t.Fatalf("scale %+v", k)
 	}
-	if k := NewIrisScale(fIris, core.Lens{}); k.Min != 1 || k.Max != 22 {
+	if k := widgets.NewIrisScale(fIris, core.Lens{}); k.Min != 1 || k.Max != 22 {
 		t.Errorf("unknown lens keeps the spec range: %+v", k)
 	}
-	if k := NewIrisScale(fIris, core.Lens{IrisMin: 30, IrisMax: 40}); k.Min != 1 {
+	if k := widgets.NewIrisScale(fIris, core.Lens{IrisMin: 30, IrisMax: 40}); k.Min != 1 {
 		t.Errorf("a lens outside the spec is ignored: %+v", k)
 	}
 }
 
 func TestIrisScaleIsLogarithmicAndOpenAtTheSmallestNumber(t *testing.T) {
-	k := NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
+	k := widgets.NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
 	if k.Open(2.8) != 1 || k.Open(22) != 0 {
 		t.Errorf("open(2.8) = %v, open(22) = %v", k.Open(2.8), k.Open(22))
 	}
@@ -41,7 +41,7 @@ func TestIrisScaleIsLogarithmicAndOpenAtTheSmallestNumber(t *testing.T) {
 }
 
 func TestIrisStepByThirdsAndFullStops(t *testing.T) {
-	k := NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
+	k := widgets.NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
 	for _, c := range []struct {
 		v    float64
 		n    int
@@ -57,28 +57,26 @@ func TestIrisStepByThirdsAndFullStops(t *testing.T) {
 }
 
 func TestIrisStepOfANormalisedIris(t *testing.T) {
-	k := NewIrisScale(core.ControlSpec{ID: core.Iris, Kind: core.KindRange, Min: 0, Max: 1, Step: 0.01}, core.Lens{})
+	k := widgets.NewIrisScale(core.ControlSpec{ID: core.Iris, Kind: core.KindRange, Min: 0, Max: 1, Step: 0.01}, core.Lens{})
 	if k.FStop || k.StepBy(0.5, 3) != 0.6 || k.Open(1) != 1 {
 		t.Errorf("linear scale %+v: step %v", k, k.StepBy(0.5, 3))
 	}
 }
 
 func TestIrisLabels(t *testing.T) {
-	k := NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
+	k := widgets.NewIrisScale(fIris, core.Lens{IrisMin: 2.8, IrisMax: 22})
 	if got := k.Labels(); !slices.Equal(got, []float64{2.8, 4, 5.6, 8, 11, 16, 22}) {
 		t.Errorf("labels %v", got)
 	}
 }
 
 func TestPadCrossFollowsThePuck(t *testing.T) {
-	p := NewIrisPad(fyne.NewSize(120, 110))
+	p := widgets.NewIrisPad(fyne.NewSize(120, 110))
 	p.SetAxes(true, true)
 	p.Resize(fyne.NewSize(120, 110))
 	p.SetPos(0.5, -0.5)
-	r := test.WidgetRenderer(p).(*padRenderer)
-	cx := r.puck.Position().X + padPuckR
-	cy := r.puck.Position().Y + padPuckR
-	if r.v.Position1.X != cx || r.v.Position2.X != cx || r.h.Position1.Y != cy || r.h.Position2.Y != cy {
-		t.Errorf("cross at (%v, %v), puck centre at (%v, %v)", r.v.Position1.X, r.h.Position1.Y, cx, cy)
+	c, vx1, vx2, hy1, hy2 := widgets.PadCross(p)
+	if vx1 != c.X || vx2 != c.X || hy1 != c.Y || hy2 != c.Y {
+		t.Errorf("cross at (%v, %v), puck centre at (%v, %v)", vx1, hy1, c.X, c.Y)
 	}
 }

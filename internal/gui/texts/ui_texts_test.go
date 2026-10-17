@@ -1,8 +1,9 @@
-package texts
+package texts_test
 
 import (
 	"errors"
 	"fmt"
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/app"
@@ -10,7 +11,7 @@ import (
 	"github.com/valentindoche/rcp-for-all-camera/internal/i18n"
 )
 
-func en() Texts { return New(i18n.Default().Translator("en")) }
+func en() texts.Texts { return texts.New(i18n.Default().Translator("en")) }
 
 func rangeSpec(id core.ControlID, min, max, step float64, unit string) core.ControlSpec {
 	s := core.Std(id)
@@ -19,7 +20,7 @@ func rangeSpec(id core.ControlID, min, max, step float64, unit string) core.Cont
 }
 
 func TestControlLabelStandardAndFallback(t *testing.T) {
-	fr := Default()
+	fr := texts.Default()
 	if got := fr.ControlLabel(core.Std(core.ShutterAngle)); got != "Angle d'obturateur" {
 		t.Errorf("shutterAngle = %q", got)
 	}
@@ -27,7 +28,7 @@ func TestControlLabelStandardAndFallback(t *testing.T) {
 		t.Errorf("en shutterAngle = %q", got)
 	}
 	custom := core.ControlSpec{ID: "sony.slowShutter", Label: "Slow shutter", Group: core.GroupMisc}
-	for _, x := range []Texts{fr, en()} {
+	for _, x := range []texts.Texts{fr, en()} {
 		if got := x.ControlLabel(custom); got != "Slow shutter" {
 			t.Errorf("driver label = %q", got)
 		}
@@ -51,7 +52,7 @@ func TestEveryStandardControlAndGroupIsTranslated(t *testing.T) {
 				t.Errorf("%s: no label for standard control %s", l.Code, id)
 			}
 		}
-		for _, g := range GroupOrder {
+		for _, g := range texts.GroupOrder {
 			if !tr.Has("group." + string(g)) {
 				t.Errorf("%s: no title for group %s", l.Code, g)
 			}
@@ -60,7 +61,7 @@ func TestEveryStandardControlAndGroupIsTranslated(t *testing.T) {
 }
 
 func TestGroupTitles(t *testing.T) {
-	fr := Default()
+	fr := texts.Default()
 	want := map[core.ControlGroup]string{
 		core.GroupLens: "Objectif", core.GroupExposure: "Exposition", core.GroupWhite: "Balance des blancs",
 		core.GroupColor: "Correction colorimétrique", core.GroupImage: "Image", core.GroupPTZ: "PTZ",
@@ -75,8 +76,8 @@ func TestGroupTitles(t *testing.T) {
 	if en().GroupTitle("weird") != "Other" || en().GroupTitle(core.GroupLens) != "Lens" {
 		t.Error("en group titles")
 	}
-	if len(GroupOrder) != 11 {
-		t.Errorf("GroupOrder has %d entries", len(GroupOrder))
+	if len(texts.GroupOrder) != 11 {
+		t.Errorf("GroupOrder has %d entries", len(texts.GroupOrder))
 	}
 }
 
@@ -87,7 +88,7 @@ func TestFormatNumber(t *testing.T) {
 		fr, want string
 	}{{0.5, 2, "0,50", "0.50"}, {-1.234, 1, "-1,2", "-1.2"}, {5600, 0, "5600", "5600"}, {-0.001, 2, "0,00", "0.00"}}
 	for _, c := range cases {
-		if got := Default().FormatNumber(c.v, c.dec); got != c.fr {
+		if got := texts.Default().FormatNumber(c.v, c.dec); got != c.fr {
 			t.Errorf("fr FormatNumber(%v,%d) = %q, want %q", c.v, c.dec, got, c.fr)
 		}
 		if got := en().FormatNumber(c.v, c.dec); got != c.want {
@@ -98,7 +99,7 @@ func TestFormatNumber(t *testing.T) {
 
 func TestDecimals(t *testing.T) {
 	for step, want := range map[float64]int{0: 2, 1: 0, 50: 0, 0.1: 1, 0.01: 2, 0.001: 3, 0.25: 2, 2: 0} {
-		if got := Decimals(step); got != want {
+		if got := texts.Decimals(step); got != want {
 			t.Errorf("Decimals(%v) = %d, want %d", step, got, want)
 		}
 	}
@@ -137,7 +138,7 @@ func TestFormatValue(t *testing.T) {
 		{"wrong kind", gain, ch("x"), "--"},
 	}
 	for _, c := range cases {
-		if got := Default().FormatValue(c.spec, c.v); got != c.want {
+		if got := texts.Default().FormatValue(c.spec, c.v); got != c.want {
 			t.Errorf("%s: FormatValue = %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -157,7 +158,7 @@ func TestParseNumber(t *testing.T) {
 	}{{"1,5", 1.5, true}, {"1.5", 1.5, true}, {" 12 dB ", 12, true}, {"5600K", 5600, true}, {"-0,25", -0.25, true},
 		{"+3", 3, true}, {"172,8°", 172.8, true}, {"", 0, false}, {"abc", 0, false}, {"--", 0, false}, {"NaN", 0, false}, {"Inf", 0, false}}
 	for _, c := range cases {
-		got, ok := ParseNumber(c.in)
+		got, ok := texts.ParseNumber(c.in)
 		if ok != c.ok || (ok && got != c.want) {
 			t.Errorf("ParseNumber(%q) = %v,%v want %v,%v", c.in, got, ok, c.want, c.ok)
 		}
@@ -165,7 +166,7 @@ func TestParseNumber(t *testing.T) {
 }
 
 func TestLabelsForSelects(t *testing.T) {
-	fr := Default()
+	fr := texts.Default()
 	if fr.SupportLabel(core.SupportPlanned) != "Prévu" || fr.SupportLabel(core.SupportExperimental) != "Expérimental" ||
 		fr.SupportLabel(core.SupportSupported) != "Pris en charge" {
 		t.Error("support labels")
@@ -188,21 +189,21 @@ func TestErrorNotice(t *testing.T) {
 	mk := func(code, msg string) error { return &app.Error{Code: code, Message: msg} }
 	cases := []struct {
 		err   error
-		level Level
+		level texts.Level
 		want  string
 	}{
-		{mk(app.CodeNotImplemented, "x"), LevelInfo, "Contrôle pas encore disponible : pilote caméra en développement"},
-		{mk(app.CodeInvalidValue, "x"), LevelError, "Valeur refusée par la caméra"},
-		{mk(app.CodeUnknownControl, "x"), LevelError, "Contrôle inconnu pour cette caméra"},
-		{mk(app.CodeNotConnected, "x"), LevelError, "Caméra non connectée"},
-		{mk(app.CodeReadOnly, "x"), LevelError, "Ce contrôle est en lecture seule"},
-		{mk(app.CodeEmptySlot, "x"), LevelError, "Aucune caméra sur cet emplacement"},
-		{mk(app.CodeInternal, "x"), LevelError, "Erreur interne, consultez rcp.log"},
-		{errors.New("boom"), LevelError, "Erreur interne, consultez rcp.log"},
-		{fmt.Errorf("wrap: %w", mk(app.CodeNotImplemented, "x")), LevelInfo, "Contrôle pas encore disponible : pilote caméra en développement"},
+		{mk(app.CodeNotImplemented, "x"), texts.LevelInfo, "Contrôle pas encore disponible : pilote caméra en développement"},
+		{mk(app.CodeInvalidValue, "x"), texts.LevelError, "Valeur refusée par la caméra"},
+		{mk(app.CodeUnknownControl, "x"), texts.LevelError, "Contrôle inconnu pour cette caméra"},
+		{mk(app.CodeNotConnected, "x"), texts.LevelError, "Caméra non connectée"},
+		{mk(app.CodeReadOnly, "x"), texts.LevelError, "Ce contrôle est en lecture seule"},
+		{mk(app.CodeEmptySlot, "x"), texts.LevelError, "Aucune caméra sur cet emplacement"},
+		{mk(app.CodeInternal, "x"), texts.LevelError, "Erreur interne, consultez rcp.log"},
+		{errors.New("boom"), texts.LevelError, "Erreur interne, consultez rcp.log"},
+		{fmt.Errorf("wrap: %w", mk(app.CodeNotImplemented, "x")), texts.LevelInfo, "Contrôle pas encore disponible : pilote caméra en développement"},
 	}
 	for _, c := range cases {
-		n := Default().NoticeFor(c.err)
+		n := texts.Default().NoticeFor(c.err)
 		if n.Level != c.level || n.Text != c.want {
 			t.Errorf("NoticeFor(%v) = %+v, want %v %q", c.err, n, c.level, c.want)
 		}
@@ -226,7 +227,7 @@ func TestConfigError(t *testing.T) {
 		{app.CodeInternal, "x", "Erreur interne, consultez rcp.log."},
 	}
 	for _, c := range cases {
-		if got := Default().ConfigError(&app.Error{Code: c.code, Message: c.msg}); got != c.want {
+		if got := texts.Default().ConfigError(&app.Error{Code: c.code, Message: c.msg}); got != c.want {
 			t.Errorf("ConfigError(%s,%q) = %q, want %q", c.code, c.msg, got, c.want)
 		}
 	}
@@ -238,7 +239,7 @@ func TestConfigError(t *testing.T) {
 func TestSettingsErrors(t *testing.T) {
 	ni := &app.Error{Code: app.CodeNotImplemented}
 	in := &app.Error{Code: app.CodeInternal}
-	for _, x := range []Texts{Default(), en()} {
+	for _, x := range []texts.Texts{texts.Default(), en()} {
 		if x.AutoStartError(ni) == x.AutoStartError(in) {
 			t.Error("auto start errors must differ")
 		}
@@ -249,7 +250,7 @@ func TestSettingsErrors(t *testing.T) {
 }
 
 func TestShortLabel(t *testing.T) {
-	if ShortLabel("ND 1.2 (4 stops)") != "ND 1.2" || ShortLabel("Clair") != "Clair" {
+	if texts.ShortLabel("ND 1.2 (4 stops)") != "ND 1.2" || texts.ShortLabel("Clair") != "Clair" {
 		t.Error("ShortLabel")
 	}
 }

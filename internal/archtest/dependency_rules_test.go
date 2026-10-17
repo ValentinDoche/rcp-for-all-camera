@@ -1,7 +1,7 @@
 // Package archtest checks the dependency rules of the architecture
 // (docs/go-engineering-rules.md, rules A1 and X1): the core depends on
 // nothing, the application on no adapter, a module on nothing but the SDK.
-package archtest
+package archtest_test
 
 import (
 	"bufio"

@@ -1,6 +1,7 @@
-package texts
+package texts_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/texts"
 	"testing"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/core"
@@ -11,7 +12,7 @@ func rng(id core.ControlID, min, max, step float64, unit string) core.ControlSpe
 }
 
 func TestExplicitValues(t *testing.T) {
-	x := Default()
+	x := texts.Default()
 	for _, c := range []struct {
 		s    core.ControlSpec
 		v    float64
@@ -45,14 +46,14 @@ func TestParseExplicitIsTheInverse(t *testing.T) {
 		{rng(core.Iris, 1, 22, 0.1, "f"), "f/5,6", 5.6},
 		{rng(core.Gain, -12, 36, 2, "dB"), "18 dB", 18},
 	} {
-		if got, ok := ParseExplicit(c.s, c.in); !ok || got != c.want {
+		if got, ok := texts.ParseExplicit(c.s, c.in); !ok || got != c.want {
 			t.Errorf("%s %q = %v %v, want %v", c.s.ID, c.in, got, ok, c.want)
 		}
 	}
 }
 
 func TestDistanceAndFocal(t *testing.T) {
-	x := Default()
+	x := texts.Default()
 	if got := x.Distance(0.38); got != "0,38 m" {
 		t.Errorf("distance %q", got)
 	}

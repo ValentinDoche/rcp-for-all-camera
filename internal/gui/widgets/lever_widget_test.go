@@ -1,13 +1,14 @@
-package widgets
+package widgets_test
 
 import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/gui/widgets"
 	"testing"
 
 	"fyne.io/fyne/v2"
 )
 
 func TestLeverDeflectsAndSpringsBack(t *testing.T) {
-	l := NewLever(true)
+	l := widgets.NewLever(true)
 	l.Resize(fyne.NewSize(20, 120))
 	var got []float64
 	l.OnHold = func(d float64) { got = append(got, d) }

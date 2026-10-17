@@ -24,8 +24,8 @@ import (
 // Serial is the serial number the simulated panel reports.
 const Serial = "SIMULATEUR"
 
-// errUnplugged ends a session when the simulated panel is unplugged.
-var errUnplugged = errors.New("panelsim: unplugged")
+// ErrUnplugged ends a session when the simulated panel is unplugged.
+var ErrUnplugged = errors.New("panelsim: unplugged")
 
 // Output is a snapshot of what the panel shows.
 type Output struct {
@@ -141,7 +141,7 @@ func (s *Sim) Run(ctx context.Context, fn func(micropanel.State), raw func([]byt
 	s.mu.Lock()
 	if !s.plugged {
 		s.mu.Unlock()
-		return errUnplugged
+		return ErrUnplugged
 	}
 	q := make(chan micropanel.State, 256)
 	gone := make(chan struct{})
@@ -165,7 +165,7 @@ func (s *Sim) Run(ctx context.Context, fn func(micropanel.State), raw func([]byt
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-gone:
-			return errUnplugged
+			return ErrUnplugged
 		case st := <-q:
 			if raw != nil {
 				raw(inputReport(st))
@@ -242,7 +242,7 @@ func (s *Sim) SetFeature(b []byte) error {
 	s.mu.Lock()
 	if !s.plugged {
 		s.mu.Unlock()
-		return errUnplugged
+		return ErrUnplugged
 	}
 	for i, v := range pos {
 		s.state.Analog[i] = min(v, micropanel.AnalogMax)
@@ -257,7 +257,7 @@ func (s *Sim) GetFeature(id byte, size int) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.plugged {
-		return nil, errUnplugged
+		return nil, ErrUnplugged
 	}
 	switch {
 	case id == 0x0E && size == 19:
@@ -280,7 +280,7 @@ func (s *Sim) output(set func()) error {
 	s.mu.Lock()
 	if !s.plugged {
 		s.mu.Unlock()
-		return errUnplugged
+		return ErrUnplugged
 	}
 	set()
 	s.mu.Unlock()
@@ -394,4 +394,11 @@ func (s *Sim) snapshotLocked() micropanel.State {
 	st := s.state
 	st.Keys = slices.Clone(s.state.Keys)
 	return st
+}
+
+// InSession reports whether a controller is driving the simulated panel.
+func (s *Sim) InSession() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.session != nil
 }

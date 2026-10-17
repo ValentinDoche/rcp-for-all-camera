@@ -1,4 +1,4 @@
-package panelsim
+package panelsim_test
 
 import (
 	"sync"

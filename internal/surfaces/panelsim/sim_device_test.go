@@ -1,8 +1,9 @@
-package panelsim
+package panelsim_test
 
 import (
 	"context"
 	"errors"
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/panelsim"
 	"slices"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 )
 
 // session runs the sim and returns the states it delivers.
-func session(t *testing.T, s *Sim) (<-chan micropanel.State, <-chan error, context.CancelFunc) {
+func session(t *testing.T, s *panelsim.Sim) (<-chan micropanel.State, <-chan error, context.CancelFunc) {
 	t.Helper()
 	dev, err := s.Open()
 	if err != nil {
@@ -37,7 +38,7 @@ func next(t *testing.T, c <-chan micropanel.State) micropanel.State {
 }
 
 func TestRunDeliversInitialStateThenChanges(t *testing.T) {
-	s := New()
+	s := panelsim.New()
 	states, errc, cancel := session(t, s)
 	first := next(t, states)
 	if !first.AnalogRead || first.Analog[0] != 512 {
@@ -62,7 +63,7 @@ func TestRunDeliversInitialStateThenChanges(t *testing.T) {
 }
 
 func TestKnobCounterClamps(t *testing.T) {
-	s := New()
+	s := panelsim.New()
 	s.TurnKnob(3, 2000)
 	s.TurnKnob(4, -2000)
 	in := s.Input()
@@ -72,14 +73,14 @@ func TestKnobCounterClamps(t *testing.T) {
 }
 
 func TestUnplugEndsSessionAndHidesDevice(t *testing.T) {
-	s := New()
+	s := panelsim.New()
 	states, errc, _ := session(t, s)
 	next(t, states)
 	if err := s.SetDigitsRaw([14]byte{1}); err != nil {
 		t.Fatal(err)
 	}
 	s.SetPlugged(false)
-	if err := <-errc; !errors.Is(err, errUnplugged) {
+	if err := <-errc; !errors.Is(err, panelsim.ErrUnplugged) {
 		t.Fatalf("Run = %v, want unplugged", err)
 	}
 	if s.Output().Digits != [14]byte{} {
@@ -95,7 +96,7 @@ func TestUnplugEndsSessionAndHidesDevice(t *testing.T) {
 }
 
 func TestLEDLayersAreORed(t *testing.T) {
-	s := New()
+	s := panelsim.New()
 	var a, b micropanel.LEDBits
 	a.Set(micropanel.LEDStoreRed, true)
 	b.Set(micropanel.LEDAlarm, true)
@@ -117,7 +118,7 @@ func TestLEDLayersAreORed(t *testing.T) {
 }
 
 func TestFeatureReports(t *testing.T) {
-	s := New()
+	s := panelsim.New()
 	var pos [9]uint16
 	pos[0], pos[8] = 100, 2000
 	if err := s.SetFeature(micropanel.AnalogReport(pos)); err != nil {
@@ -143,7 +144,7 @@ func TestFeatureReports(t *testing.T) {
 
 // The real controller drives the sim: camera keys select a slot.
 func TestControllerDrivesSim(t *testing.T) {
-	s := New()
+	s := panelsim.New()
 	c := panel.New(panel.Options{Open: s.Open, Busy: func() bool { return false },
 		FrameEvery: 5 * time.Millisecond, Throttle: 5 * time.Millisecond, RetryMin: 5 * time.Millisecond})
 	api := &fakeAPI{}
@@ -153,7 +154,7 @@ func TestControllerDrivesSim(t *testing.T) {
 	defer func() { cancel(); <-done }()
 
 	waitFor(t, func() bool { return s.Output().Matrix != [32]byte{} }) // slot 1 number drawn
-	waitFor(t, func() bool { s.mu.Lock(); defer s.mu.Unlock(); return s.session != nil })
+	waitFor(t, s.InSession)
 	s.Press(0x41, true)
 	s.Press(0x41, false)
 	waitFor(t, func() bool { return api.selected() == 2 })

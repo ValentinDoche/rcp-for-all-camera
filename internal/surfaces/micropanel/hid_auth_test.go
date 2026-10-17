@@ -1,6 +1,9 @@
-package micropanel
+package micropanel_test
 
-import "testing"
+import (
+	"github.com/valentindoche/rcp-for-all-camera/internal/surfaces/micropanel"
+	"testing"
+)
 
 // Challenges captured from a real ATEM Micro Camera Panel; the panel accepted
 // these responses (feature report 0x05 answered 04 = authenticated).
@@ -11,8 +14,8 @@ func TestAuthResponse(t *testing.T) {
 		{0x376860472588f1bc, 0xcea613baf234d976},
 	}
 	for _, c := range cases {
-		if got := authResponse(c.challenge); got != c.want {
-			t.Errorf("authResponse(%#x) = %#x, want %#x", c.challenge, got, c.want)
+		if got := micropanel.AuthResponse(c.challenge); got != c.want {
+			t.Errorf("micropanel.AuthResponse(%#x) = %#x, want %#x", c.challenge, got, c.want)
 		}
 	}
 }
