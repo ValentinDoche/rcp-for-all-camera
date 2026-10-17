@@ -198,6 +198,8 @@
   "config.general.theme.system": "Système",
   "config.general.theme.light": "Clair",
   "config.general.theme.dark": "Sombre",
+  "config.general.stats": "Statistiques système",
+  "config.general.stats.help": "Affiche dans la barre du bas l'utilisation du processeur et de la mémoire, le débit réseau et l'adresse IP.",
   "config.general.nic": "Carte réseau",
   "config.general.nic.help": "Adresse utilisée pour joindre les caméras.",
   "config.general.nic.default": "Par défaut (choisie par Windows)",

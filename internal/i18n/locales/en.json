@@ -198,6 +198,8 @@
   "config.general.theme.system": "System",
   "config.general.theme.light": "Light",
   "config.general.theme.dark": "Dark",
+  "config.general.stats": "System statistics",
+  "config.general.stats.help": "Shows processor and memory use, network throughput and the IP address in the bottom bar.",
   "config.general.nic": "Network adapter",
   "config.general.nic.help": "Address used to reach the cameras.",
   "config.general.nic.default": "Default (chosen by Windows)",

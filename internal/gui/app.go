@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -35,6 +36,7 @@ var MinWindow = fyne.NewSize(1280, 720)
 const (
 	themePref = "theme"
 	langPref  = "language"
+	statsPref = "showStats" // host statistics in the bottom bar (default on)
 )
 
 type pageKind int
@@ -70,6 +72,7 @@ type App struct {
 	gear      *widget.Button
 	stats     []*widgets.Text // CPU, RAM, down, up, IP
 	statsBox  *fyne.Container
+	showStats atomic.Bool // read by the sampler goroutine
 	titleBar  *titleBar
 	chrome    windowChrome
 	zones     captionZones
@@ -103,6 +106,7 @@ func New(fa fyne.App, api AppAPI, o Options) *App {
 	}
 	a.ctl.SetTexts(texts.New(a.bundle.Translator(a.lang)))
 	a.mode = style.ParseMode(fa.Preferences().StringWithFallback(themePref, string(style.ModeSystem)))
+	a.showStats.Store(fa.Preferences().BoolWithFallback(statsPref, true))
 	fa.Settings().SetTheme(style.NewTheme(a.mode))
 	fa.SetIcon(brand.Logo)
 	a.win = fa.NewWindow(WindowTitle)
@@ -187,6 +191,9 @@ func (a *App) build() {
 	// The stats are centred on the whole bar, not on the space the gear
 	// and the notice leave (which pushed them off centre).
 	a.statsBox = container.NewHBox(statObjs...)
+	if !a.showStats.Load() {
+		a.statsBox.Hide()
+	}
 	bottom := widgets.NewPanel(style.Surface, "", 0, container.New(layout.NewCustomPaddedLayout(2, 2, 10, 14),
 		container.NewStack(
 			container.NewCenter(a.statsBox),
@@ -343,6 +350,21 @@ func (a *App) configEnv() *configEnv {
 		lang: a.lang, langs: a.bundle.Languages(), setLang: a.SetLanguage,
 		openURL: func(u *url.URL) error { return a.openURL(u) }, setTab: func(t int) { a.configTab = t },
 		panels: panelAPIOf(a.api), panelChanged: a.syncChrome, close: a.CloseConfig,
+		showStats: a.ShowStats(), setShowStats: a.SetShowStats,
+	}
+}
+
+// ShowStats reports whether the bottom bar shows the host statistics.
+func (a *App) ShowStats() bool { return a.showStats.Load() }
+
+// SetShowStats shows or hides the host statistics and stores the choice.
+func (a *App) SetShowStats(on bool) {
+	a.showStats.Store(on)
+	a.fa.Preferences().SetBool(statsPref, on)
+	if on {
+		a.statsBox.Show()
+	} else {
+		a.statsBox.Hide()
 	}
 }
 
@@ -537,8 +559,10 @@ func (a *App) sampleHost(ctx context.Context, interval time.Duration) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
-		if st, err := s.Sample(); err == nil {
-			fyne.Do(func() { a.setStats(st) })
+		if a.showStats.Load() { // hidden: nothing to sample
+			if st, err := s.Sample(); err == nil {
+				fyne.Do(func() { a.setStats(st) })
+			}
 		}
 		select {
 		case <-ctx.Done():

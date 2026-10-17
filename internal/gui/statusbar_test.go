@@ -80,3 +80,19 @@ func TestStatsAreCentredInTheWindow(t *testing.T) {
 		t.Fatalf("stats centred at x=%v, window centre %v", box, win)
 	}
 }
+
+func TestStatsCanBeHiddenFromSettings(t *testing.T) {
+	a, _, _ := newTestApp(t, true)
+	g := generalOf(t, a)
+	g.statsSeg.OnChange(1) // No
+	if a.ShowStats() || a.statsBox.Visible() {
+		t.Fatal("stats still shown")
+	}
+	if a.fa.Preferences().BoolWithFallback(statsPref, true) {
+		t.Fatal("choice not stored")
+	}
+	g.statsSeg.OnChange(0)
+	if !a.ShowStats() || !a.statsBox.Visible() {
+		t.Fatal("stats not shown again")
+	}
+}

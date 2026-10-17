@@ -41,6 +41,8 @@ type configEnv struct {
 	panels       PanelAPI
 	panelChanged func()
 	close        func() // closes the Settings window (nil: no close button)
+	showStats    bool
+	setShowStats func(on bool)
 }
 
 // settingRow is one setting: label above the control, help text below, and
@@ -102,6 +104,7 @@ type generalTab struct {
 	nicPrev int
 
 	langSeg, themeSeg        *widgets.Segmented
+	statsSeg                 *widgets.Segmented
 	autoSeg, lockSeg, logSeg *widgets.Segmented
 	autoRow, lockRow, logRow *settingRow
 	exportRow, importRow     *settingRow
@@ -115,7 +118,7 @@ func newGeneralTab(ctl *Controller, env *configEnv) *generalTab {
 		rows  []*settingRow
 	}
 	groups := []group{
-		{"config.general.interface", []*settingRow{g.languageRow(), g.themeRow()}},
+		{"config.general.interface", []*settingRow{g.languageRow(), g.themeRow(), g.statsRow()}},
 		{"config.general.network", []*settingRow{g.networkRow()}},
 		// Room for a future "panel brightness" setting in its own group,
 		// once the hardware is known to support it.
@@ -205,6 +208,17 @@ func (g *generalTab) themeRow() *settingRow {
 	}
 	g.themeSeg = seg
 	return newSettingRow(g.tx.T("config.general.theme"), container.NewHBox(seg), g.tx.T("config.general.theme.help"))
+}
+
+func (g *generalTab) statsRow() *settingRow {
+	g.statsSeg = g.yesNoSeg(func(on bool) {
+		g.env.showStats = on
+		if g.env.setShowStats != nil {
+			g.env.setShowStats(on)
+		}
+	})
+	g.statsSeg.SetSelected(yesNo(g.env.showStats))
+	return newSettingRow(g.tx.T("config.general.stats"), container.NewHBox(g.statsSeg), g.tx.T("config.general.stats.help"))
 }
 
 func (g *generalTab) networkRow() *settingRow {
