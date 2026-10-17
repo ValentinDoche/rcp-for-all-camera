@@ -30,3 +30,17 @@ func TestHIDRejectsBadReportSizes(t *testing.T) {
 		t.Error("write(oversized) = nil error")
 	}
 }
+
+func TestControlInterface(t *testing.T) {
+	const needle = "vid_1edb&pid_bf01"
+	for path, want := range map[string]bool{
+		`\?\hid#vid_1edb&pid_bf01&mi_02#7&1&0000#{4d1e55b2}`: true,
+		`\?\hid#vid_1edb&pid_bf01&mi_00#7&2&0000#{4d1e55b2}`: false,
+		`\?\hid#vid_1edb&pid_bf01#7&3&0000#{4d1e55b2}`:       true,
+		`\?\hid#vid_046d&pid_c52b&mi_02#7&4&0000#{4d1e55b2}`: false,
+	} {
+		if got := controlInterface(path, needle); got != want {
+			t.Errorf("controlInterface(%s) = %v, want %v", path, got, want)
+		}
+	}
+}

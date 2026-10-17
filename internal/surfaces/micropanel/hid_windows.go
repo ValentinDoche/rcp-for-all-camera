@@ -105,21 +105,36 @@ type hidDevice struct {
 
 // findHIDPath returns the device path of the first HID interface matching vid/pid.
 func findHIDPath(vid, pid uint16) (string, error) {
+	paths, err := findHIDPaths(vid, pid)
+	if err != nil {
+		return "", err
+	}
+	return paths[0], nil
+}
+
+// findHIDPaths returns the device paths of every HID interface matching
+// vid/pid (ErrNotFound when there is none). On a composite device only
+// interface MI_02 is kept: the panel's MI_00 is not the control interface.
+func findHIDPaths(vid, pid uint16) ([]string, error) {
 	var g guid
 	procHidDGetHidGuid.Call(uintptr(unsafe.Pointer(&g)))
 	set, _, err := procSetupDiGetClassDevsW.Call(uintptr(unsafe.Pointer(&g)), 0, 0, digcfPresent|digcfDeviceInterface)
 	if set == invalidHandle {
-		return "", fmt.Errorf("SetupDiGetClassDevs: %w", err)
+		return nil, fmt.Errorf("SetupDiGetClassDevs: %w", err)
 	}
 	defer procSetupDiDestroyDeviceInfoList.Call(set)
 
 	needle := strings.ToLower(fmt.Sprintf("vid_%04x&pid_%04x", vid, pid))
+	var paths []string
 	for i := uint32(0); ; i++ {
 		var ifd spDeviceInterfaceData
 		ifd.CbSize = uint32(unsafe.Sizeof(ifd))
 		ok, _, _ := procSetupDiEnumDeviceInterfaces.Call(set, 0, uintptr(unsafe.Pointer(&g)), uintptr(i), uintptr(unsafe.Pointer(&ifd)))
 		if ok == 0 {
-			return "", ErrNotFound
+			if len(paths) == 0 {
+				return nil, ErrNotFound
+			}
+			return paths, nil
 		}
 		var need uint32
 		procSetupDiGetDeviceInterfaceDetailW.Call(set, uintptr(unsafe.Pointer(&ifd)), 0, 0, uintptr(unsafe.Pointer(&need)), 0)
@@ -141,10 +156,20 @@ func findHIDPath(vid, pid uint16) (string, error) {
 		}
 		u16 := unsafe.Slice((*uint16)(unsafe.Pointer(&buf[4])), (len(buf)-4)/2)
 		path := syscall.UTF16ToString(u16)
-		if strings.Contains(strings.ToLower(path), needle) {
-			return path, nil
+		if controlInterface(path, needle) {
+			paths = append(paths, path)
 		}
 	}
+}
+
+// controlInterface reports whether a device path is the panel's HID
+// control interface: it matches vid/pid and is MI_02 (or not composite).
+func controlInterface(path, needle string) bool {
+	l := strings.ToLower(path)
+	if !strings.Contains(l, needle) {
+		return false
+	}
+	return !strings.Contains(l, "&mi_") || strings.Contains(l, "&mi_02")
 }
 
 func openHandle(path string) (syscall.Handle, error) {
@@ -156,11 +181,26 @@ func openHandle(path string) (syscall.Handle, error) {
 		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE, nil, syscall.OPEN_EXISTING, 0, 0)
 }
 
-func openHID(vid, pid uint16) (*hidDevice, error) {
-	path, err := findHIDPath(vid, pid)
+// serialOf reads the USB serial number of the device at path without
+// claiming it (shared handle, no report sent).
+func serialOf(path string) (string, error) {
+	h, err := openHandle(path)
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("open %s: %w", path, err)
 	}
+	defer syscall.CloseHandle(h)
+	return readSerial(h), nil
+}
+
+func readSerial(h syscall.Handle) string {
+	var sn [128]uint16
+	if ok, _, _ := procHidDGetSerialNumberStr.Call(uintptr(h), uintptr(unsafe.Pointer(&sn[0])), uintptr(len(sn)*2)); ok != 0 {
+		return syscall.UTF16ToString(sn[:])
+	}
+	return ""
+}
+
+func openHIDPath(path string) (*hidDevice, error) {
 	rd, err := openHandle(path)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
@@ -187,10 +227,7 @@ func openHID(vid, pid uint16) (*hidDevice, error) {
 		d.inLen, d.outLen, d.featLen = maxReportLen, maxReportLen, maxReportLen
 	}
 
-	var sn [128]uint16
-	if ok, _, _ := procHidDGetSerialNumberStr.Call(uintptr(wr), uintptr(unsafe.Pointer(&sn[0])), uintptr(len(sn)*2)); ok != 0 {
-		d.serial = syscall.UTF16ToString(sn[:])
-	}
+	d.serial = readSerial(wr)
 	return d, nil
 }
 

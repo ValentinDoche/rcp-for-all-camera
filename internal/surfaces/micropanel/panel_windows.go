@@ -22,9 +22,33 @@ type Panel struct {
 	authTTL  time.Duration
 }
 
-// Open finds the panel on USB and authenticates it.
-func Open() (*Panel, error) {
-	dev, err := openHID(VendorID, ProductID)
+// Open finds the first panel on USB and authenticates it.
+func Open() (*Panel, error) { return OpenSerial("") }
+
+// OpenSerial opens and authenticates the panel with this USB serial number
+// ("" = the first panel found). ErrNotFound when it is not plugged in.
+func OpenSerial(serial string) (*Panel, error) {
+	path, err := findHIDPath(VendorID, ProductID)
+	if err != nil {
+		return nil, err
+	}
+	if serial != "" {
+		list, err := List()
+		if err != nil {
+			return nil, err
+		}
+		path = ""
+		for _, in := range list {
+			if in.Serial == serial {
+				path = in.Path
+				break
+			}
+		}
+		if path == "" {
+			return nil, ErrNotFound
+		}
+	}
+	dev, err := openHIDPath(path)
 	if err != nil {
 		return nil, err
 	}
