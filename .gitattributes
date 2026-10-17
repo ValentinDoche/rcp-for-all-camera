@@ -4,3 +4,5 @@
 *.exe binary
 *.dmg binary
 *.png binary
+*.ico binary
+*.syso binary

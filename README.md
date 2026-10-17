@@ -33,6 +33,9 @@ winget install BrechtSanders.WinLibs.POSIX.UCRT
 go build -ldflags "-H windowsgui" -o rcp.exe ./cmd/rcp
 ```
 
+The exe icon comes from `cmd/rcp/rsrc_windows_amd64.syso`, built from the app logo. After a
+logo change, run `go generate ./cmd/rcp` (needs `windres`, shipped with MinGW-w64).
+
 Close ATEM Software Control before starting the app: both cannot drive the panel at once.
 
 ## Tests

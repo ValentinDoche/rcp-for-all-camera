@@ -1,6 +1,9 @@
 // Command rcp is the RCP For All Camera desktop application (Fyne GUI).
 package main
 
+// The exe icon: rsrc_windows_amd64.syso, built from the app logo.
+//go:generate go run ./winres
+
 import (
 	"context"
 	"flag"
