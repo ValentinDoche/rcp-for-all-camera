@@ -240,3 +240,32 @@ td code, th code { white-space: nowrap; }
 .mock .row:last-child { border-bottom: 0; }
 .mock .ctl { font-family: "JetBrains Mono", monospace; font-size: 13px; padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--card); }
 .mock h4 { margin: 0 0 6px; font-size: 15px; }
+
+/* widget gallery */
+.wg { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 18px; margin-top: 24px; }
+@media (max-width: 560px) { .wg { grid-template-columns: 1fr; } }
+.wg-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+.wg-card header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px 0; }
+.wg-card header h3 { margin: 0; font-size: 18px; }
+.wg-preview { margin: 14px 18px; padding: 16px; border-radius: 10px; background: var(--side); border: 1px dashed var(--border-strong); display: flex; align-items: center; gap: 12px; min-height: 64px; font-size: 14px; }
+.wg-preview .lbl { width: 120px; color: var(--text); flex: none; }
+.wg-preview .sub { display: block; color: var(--faint); font-size: 11px; }
+.wg-btn { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--card); font-weight: 700; color: var(--text); }
+.wg-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.wg-track { flex: 1; height: 6px; border-radius: 6px; background: var(--border); position: relative; }
+.wg-track::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 45%; border-radius: 6px; background: var(--accent); }
+.wg-track::after { content: ""; position: absolute; left: calc(45% - 8px); top: -5px; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); }
+.wg-val { font-family: "JetBrains Mono", monospace; font-weight: 600; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--card); }
+.wg-big { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 22px; }
+.wg-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 9px; overflow: hidden; }
+.wg-seg span { padding: 5px 12px; font-weight: 700; border-right: 1px solid var(--border-strong); background: var(--card); }
+.wg-seg span:last-child { border-right: 0; }
+.wg-seg span.on { background: var(--accent); color: #fff; }
+.wg-switch { width: 42px; height: 24px; border-radius: 999px; background: var(--accent); position: relative; flex: none; }
+.wg-switch::after { content: ""; position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.wg-input { flex: 1; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--card); color: var(--muted); }
+.wg-card .body { padding: 0 18px 16px; }
+.wg-card .body p { margin: 0 0 10px; color: var(--muted); }
+.wg-card table { font-size: 14px; }
+.wg-card .table-wrap { margin: 10px 0; box-shadow: none; }
+.wg-card pre { margin: 10px 0 0; font-size: 12.5px; }

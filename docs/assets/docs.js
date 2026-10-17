@@ -27,24 +27,31 @@
 
   // The menu: groups, then pages with their sections.
   var nav = [
-    { group: "RCP For All Camera", pages: [
-      { href: "index.html", icon: "home", title: "Vue d'ensemble", subs: [
-        ["#quoi", "Ce que fait l'application"], ["#architecture", "Architecture"], ["#flux", "Du panneau à la caméra"],
-        ["#panneau", "Le panneau"], ["#interface", "L'interface"], ["#donnees", "Données et sécurité"],
-        ["#installation", "Installation"], ["#tests", "Tests et qualité"], ["#etat", "État du projet"]
+    { group: "Get started", pages: [
+      { href: "index.html", icon: "home", title: "Overview", subs: [
+        ["#what", "What the application does"], ["#quickstart", "Quick start"], ["#concepts", "Key concepts"],
+        ["#architecture", "Architecture"], ["#flow", "From the panel to the camera"], ["#panel", "The control panel"],
+        ["#window", "The application window"], ["#data", "Data and security"], ["#build", "Build from source"],
+        ["#tests", "Tests and quality"]
       ] }
     ] },
-    { group: "Caméras", pages: [
-      { href: "modules-camera.html", icon: "puzzle", title: "Modules caméra", subs: [
-        ["#idee", "L'idée"], ["#mots", "Les mots à connaître"], ["#dossier", "Le dossier modules"],
-        ["#contrat", "Le contrat"], ["#vie", "La vie d'une caméra"], ["#demo", "Exemple : demo"],
-        ["#construire", "Construire et installer"], ["#verifier", "Vérifier"], ["#familles", "Familles et hooks"],
-        ["#securite", "Le bac à sable"], ["#marques", "Sony, Panasonic…"], ["#abi", "Annexe : l'ABI"], ["#faq", "Questions"]
+    { group: "Cameras", pages: [
+      { href: "modules-camera.html", icon: "puzzle", title: "Camera modules", subs: [
+        ["#how", "How modules work"], ["#concepts", "Key concepts"], ["#quickstart", "Quick start"],
+        ["#contract", "The module contract"], ["#lifecycle", "Camera lifecycle"], ["#demo", "Walkthrough: demo"],
+        ["#controls", "Controls reference"], ["#custom", "Custom blocks"], ["#widgets", "Widget gallery"],
+        ["#host", "Host services"], ["#testing", "Testing"], ["#sandbox", "The sandbox"], ["#abi", "Appendix: the ABI"],
+        ["#faq", "FAQ"]
       ] }
     ] },
-    { group: "Référence", pages: [
-      { href: "go-engineering-rules.md", icon: "book", title: "Règles d'ingénierie Go", subs: [] },
-      { href: "atem-micro-camera-panel-protocol.md", icon: "panel", title: "Protocole du panneau", subs: [] }
+    { group: "Security", pages: [
+      { href: "vulnerabilities.html", icon: "shield", title: "Known vulnerabilities", subs: [
+        ["#how", "How we check"], ["#dependencies", "Dependencies"], ["#threats", "Application threats"], ["#report", "Report a vulnerability"]
+      ] }
+    ] },
+    { group: "Reference", pages: [
+      { href: "go-engineering-rules.md", icon: "book", title: "Go engineering rules", subs: [] },
+      { href: "atem-micro-camera-panel-protocol.md", icon: "panel", title: "Panel USB protocol", subs: [] }
     ] }
   ];
 
@@ -62,7 +69,7 @@
         });
       });
     });
-    html += '<div class="nohit">Aucun résultat dans le menu.</div>';
+    html += '<div class="nohit">No match in the menu.</div>';
     el.innerHTML = html;
   }
 
@@ -90,9 +97,9 @@
         '<circle cx="32" cy="32" r="26" fill="none" stroke="#6B6F78" stroke-width="2"/>' +
         '<path d="M36.993 25.409L51.939 25.409A21 21 0 0 1 51.465 39.881Z M40.191 30.87L50.759 41.438A21 21 0 0 1 40.191 51.337Z M38.591 36.993L38.591 51.939A21 21 0 0 1 24.119 51.465Z M33.13 40.191L22.562 50.759A21 21 0 0 1 12.663 40.191Z M27.007 38.591L12.061 38.591A21 21 0 0 1 12.535 24.119Z M23.809 33.13L13.241 22.562A21 21 0 0 1 23.809 12.663Z M30.87 23.809L41.438 13.241A21 21 0 0 1 51.337 23.809Z" fill="#E8E9EC"/>' +
         '<path d="M25.409 27.007L25.409 12.061A21 21 0 0 1 39.881 12.535Z" fill="#F47B20"/></svg>RCP <span>docs</span></a>' +
-        '<div class="search">' + svg("search") + '<input id="search" type="search" placeholder="Rechercher" aria-label="Rechercher dans la documentation"></div>' +
-        '<nav class="toplinks"><a href="index.html">Docs</a><a href="modules-camera.html">Modules</a><a href="go-engineering-rules.md">Règles</a></nav>' +
-        '<button class="theme-btn" id="theme-btn" aria-label="Thème clair ou sombre"></button>';
+        '<div class="search">' + svg("search") + '<input id="search" type="search" placeholder="Search" aria-label="Search the documentation"></div>' +
+        '<nav class="toplinks"><a href="index.html">Docs</a><a href="modules-camera.html">Modules</a><a href="vulnerabilities.html">Security</a></nav>' +
+        '<button class="theme-btn" id="theme-btn" aria-label="Light or dark theme"></button>';
     }
     var side = document.getElementById("sidebar");
     if (side) buildSidebar(side);

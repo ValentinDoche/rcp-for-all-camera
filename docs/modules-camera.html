@@ -43,8 +43,8 @@
     </div>
     <div class="card">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6v6h-6z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6h-6z"/><path d="M17 14v6"/><path d="M14 17h6"/></svg>
-      <a class="title" href="#custom">Custom blocks</a>
-      <p>Add your own controls at the end of the camera page, with the widget of your choice.</p>
+      <a class="title" href="#custom">Custom blocks and widgets</a>
+      <p>Add your own controls at the end of the camera page, with any widget of the <a href="#widgets">gallery</a>.</p>
     </div>
     <div class="card">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M9 12l2 2l4 -4"/></svg>
@@ -483,20 +483,7 @@ rcpmod.Custom(rcpmod.Labeled(rcpmod.Range(<span class="s">"acme.fanSpeed"</span>
     <div class="row"><span>Firmware</span><span class="ctl">7.4.1</span></div>
     <div class="row"><span>Fan speed</span><span class="ctl">−&nbsp;&nbsp;3&nbsp;&nbsp;+</span></div>
   </div>
-  <h3>Widgets</h3>
-  <div class="table-wrap"><table>
-    <thead><tr><th>Widget</th><th>Shows</th><th>For kind</th></tr></thead>
-    <tbody>
-      <tr><td><code>WidgetSlider</code></td><td>a slider with − / + and the value</td><td>range</td></tr>
-      <tr><td><code>WidgetStepper</code></td><td>− and + around the value, no slider</td><td>range</td></tr>
-      <tr><td><code>WidgetButtons</code></td><td>one button per option</td><td>enum</td></tr>
-      <tr><td><code>WidgetSelect</code></td><td>a drop-down list</td><td>enum</td></tr>
-      <tr><td><code>WidgetSwitch</code></td><td>an on/off switch</td><td>toggle</td></tr>
-      <tr><td><code>WidgetButton</code></td><td>one button</td><td>action</td></tr>
-      <tr><td><code>WidgetReadout</code></td><td>the value, large, not editable</td><td>any read-only kind except action</td></tr>
-      <tr><td><code>WidgetText</code></td><td>a text field</td><td>text</td></tr>
-    </tbody>
-  </table></div>
+  <p>The <a href="#widgets">widget gallery</a> shows every widget and its configuration.</p>
   <details class="more"><summary>More info: ordering and rules</summary><div>
     <ul>
       <li>Blocks appear in the order their first control is declared; controls keep their declaration order inside a
@@ -510,7 +497,159 @@ rcpmod.Custom(rcpmod.Labeled(rcpmod.Range(<span class="s">"acme.fanSpeed"</span>
   </div></details>
 </section>
 
-<section id="host">
+<section id="widgets">
+  <h2>Widget gallery</h2>
+  <p class="lead">Every widget a custom block can use, what it looks like, which control kinds it accepts and how to
+  configure it. A widget is chosen with <code>rcpmod.Custom(spec, block, widget)</code>; everything else comes from the
+  control description.</p>
+  <details class="more"><summary>More info: fields every widget shares</summary><div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Field</th><th>Role in a custom block</th></tr></thead>
+      <tbody>
+        <tr><td><code>Block</code></td><td>Title of the panel the control goes in. Controls with the same title share a panel.</td></tr>
+        <tr><td><code>Widget</code></td><td>One of the widgets below. Empty: the default widget of the kind.</td></tr>
+        <tr><td><code>Label</code></td><td>Text shown on the left of the widget (required for a brand-specific id).</td></tr>
+        <tr><td><code>Group</code></td><td>Required with a label; used when the control is shown outside a block.</td></tr>
+        <tr><td><code>ReadOnly</code></td><td>The value is shown but cannot be changed. Required by <code>WidgetReadout</code>.</td></tr>
+        <tr><td><code>Guarded</code></td><td>The operator lock asks for confirmation before each write.</td></tr>
+        <tr><td><code>Hidden</code></td><td>The control is not shown at all (panel only).</td></tr>
+      </tbody>
+    </table></div>
+  </div></details>
+
+  <div class="wg">
+
+    <article class="wg-card">
+      <header><h3>Slider</h3><span class="pill">WidgetSlider</span></header>
+      <div class="wg-preview"><span class="lbl">Fan speed<span class="sub">0 to 100 %</span></span><span class="wg-btn">−</span><span class="wg-track"></span><span class="wg-btn">+</span><span class="wg-val">45 %</span></div>
+      <div class="body">
+        <p>A continuous value with fine control. The user drags the slider, taps − / +, or types a value; out-of-range input
+        is clamped.</p>
+        <div class="table-wrap"><table><tbody>
+          <tr><td>Kind</td><td><code>KindRange</code></td></tr>
+          <tr><td>Configuration</td><td><code>Min</code>, <code>Max</code> (limits), <code>Step</code> (resolution; − / + move one step, or ten on fine ranges), <code>Unit</code> (shown after the value)</td></tr>
+          <tr><td>Writes</td><td><code>Number(v)</code>, rounded to <code>Step</code></td></tr>
+        </tbody></table></div>
+<pre><code>rcpmod.Custom(rcpmod.Labeled(rcpmod.Range(<span class="s">"acme.fan"</span>, 0, 100, 1, <span class="s">"%"</span>), <span class="s">"Fan speed"</span>, rcpmod.GroupSystem),
+    <span class="s">"Acme"</span>, rcpmod.WidgetSlider)</code></pre>
+      </div>
+    </article>
+
+    <article class="wg-card">
+      <header><h3>Stepper</h3><span class="pill">WidgetStepper</span></header>
+      <div class="wg-preview"><span class="lbl">Tally brightness</span><span class="wg-btn">−</span><span class="wg-val">3</span><span class="wg-btn">+</span></div>
+      <div class="body">
+        <p>A small set of numeric levels where a slider would be too much. Each tap moves one <code>Step</code>, from the value
+        the camera is heading to, so quick taps add up.</p>
+        <div class="table-wrap"><table><tbody>
+          <tr><td>Kind</td><td><code>KindRange</code></td></tr>
+          <tr><td>Configuration</td><td><code>Min</code>, <code>Max</code>, <code>Step</code> (one tap), <code>Unit</code></td></tr>
+          <tr><td>Writes</td><td><code>Number(v)</code></td></tr>
+        </tbody></table></div>
+<pre><code>rcpmod.Custom(rcpmod.Labeled(rcpmod.Range(<span class="s">"acme.tallyLevel"</span>, 0, 5, 1, <span class="s">""</span>), <span class="s">"Tally brightness"</span>, rcpmod.GroupSystem),
+    <span class="s">"Acme"</span>, rcpmod.WidgetStepper)</code></pre>
+      </div>
+    </article>
+
+    <article class="wg-card">
+      <header><h3>Buttons</h3><span class="pill">WidgetButtons</span></header>
+      <div class="wg-preview"><span class="lbl">Scene file</span><span class="wg-seg"><span>1</span><span class="on">2</span><span>3</span><span>4</span></span></div>
+      <div class="body">
+        <p>A short list of choices, all visible at once; the current one is highlighted. Best up to five or six short
+        labels.</p>
+        <div class="table-wrap"><table><tbody>
+          <tr><td>Kind</td><td><code>KindEnum</code></td></tr>
+          <tr><td>Configuration</td><td><code>Options</code>: each option's <code>Value</code> is sent to the module, its <code>Label</code> is shown</td></tr>
+          <tr><td>Writes</td><td><code>Choice(value)</code></td></tr>
+        </tbody></table></div>
+<pre><code>rcpmod.Custom(rcpmod.Labeled(rcpmod.Enum(<span class="s">"acme.scene"</span>, rcpmod.Numbered(4)), <span class="s">"Scene file"</span>, rcpmod.GroupImage),
+    <span class="s">"Acme"</span>, rcpmod.WidgetButtons)</code></pre>
+      </div>
+    </article>
+
+    <article class="wg-card">
+      <header><h3>Select</h3><span class="pill">WidgetSelect</span></header>
+      <div class="wg-preview"><span class="lbl">Output format</span><span class="wg-input" style="flex:none;min-width:180px;color:var(--text)">1080p50 ▾</span></div>
+      <div class="body">
+        <p>A drop-down list, for long option lists or long labels.</p>
+        <div class="table-wrap"><table><tbody>
+          <tr><td>Kind</td><td><code>KindEnum</code></td></tr>
+          <tr><td>Configuration</td><td><code>Options</code> (value and label)</td></tr>
+          <tr><td>Writes</td><td><code>Choice(value)</code></td></tr>
+        </tbody></table></div>
+<pre><code>rcpmod.Custom(rcpmod.Labeled(rcpmod.Enum(<span class="s">"acme.format"</span>, rcpmod.Pairs(
+    <span class="s">"1080p50"</span>, <span class="s">"1080p50"</span>, <span class="s">"2160p25"</span>, <span class="s">"UHD 25p"</span>)), <span class="s">"Output format"</span>, rcpmod.GroupOutput),
+    <span class="s">"Acme"</span>, rcpmod.WidgetSelect)</code></pre>
+      </div>
+    </article>
+
+    <article class="wg-card">
+      <header><h3>Switch</h3><span class="pill">WidgetSwitch</span></header>
+      <div class="wg-preview"><span class="lbl">Tally lamp</span><span class="wg-switch"></span><span>On</span></div>
+      <div class="body">
+        <p>An on/off setting. The switch shows the state the camera reports.</p>
+        <div class="table-wrap"><table><tbody>
+          <tr><td>Kind</td><td><code>KindToggle</code></td></tr>
+          <tr><td>Configuration</td><td>none (mark it <code>Guarded</code> if it changes what goes on air)</td></tr>
+          <tr><td>Writes</td><td><code>Bool(on)</code></td></tr>
+        </tbody></table></div>
+<pre><code>rcpmod.Custom(rcpmod.Labeled(rcpmod.Toggle(<span class="s">"acme.tallyLamp"</span>), <span class="s">"Tally lamp"</span>, rcpmod.GroupSystem),
+    <span class="s">"Acme"</span>, rcpmod.WidgetSwitch)</code></pre>
+      </div>
+    </article>
+
+    <article class="wg-card">
+      <header><h3>Button</h3><span class="pill">WidgetButton</span></header>
+      <div class="wg-preview"><span class="lbl">Black balance</span><span class="wg-btn">Run</span></div>
+      <div class="body">
+        <p>A one-shot action: auto black balance, a lens calibration, a test flash. The module reports any resulting change
+        as events.</p>
+        <div class="table-wrap"><table><tbody>
+          <tr><td>Kind</td><td><code>KindAction</code></td></tr>
+          <tr><td>Configuration</td><td>none</td></tr>
+          <tr><td>Writes</td><td><code>Trigger()</code></td></tr>
+        </tbody></table></div>
+<pre><code>rcpmod.Custom(rcpmod.Labeled(rcpmod.Action(<span class="s">"acme.blackBalance"</span>), <span class="s">"Black balance"</span>, rcpmod.GroupWhite),
+    <span class="s">"Acme"</span>, rcpmod.WidgetButton)</code></pre>
+      </div>
+    </article>
+
+    <article class="wg-card">
+      <header><h3>Readout</h3><span class="pill">WidgetReadout</span></header>
+      <div class="wg-preview"><span class="lbl">Sensor temperature</span><span class="wg-big">41 °C</span></div>
+      <div class="body">
+        <p>A value to watch, shown large: a temperature, a firmware version, a remaining recording time. It updates with
+        every event.</p>
+        <div class="table-wrap"><table><tbody>
+          <tr><td>Kind</td><td>any except <code>KindAction</code>, with <code>ReadOnly</code></td></tr>
+          <tr><td>Configuration</td><td><code>Unit</code> and <code>Step</code> (decimals) for a range; <code>Options</code> labels for an enum</td></tr>
+          <tr><td>Writes</td><td>nothing</td></tr>
+        </tbody></table></div>
+<pre><code>rcpmod.Custom(rcpmod.Labeled(rcpmod.ReadOnly(rcpmod.Range(<span class="s">"acme.temp"</span>, 0, 100, 1, <span class="s">"°C"</span>)), <span class="s">"Sensor temperature"</span>,
+    rcpmod.GroupSystem), <span class="s">"Acme"</span>, rcpmod.WidgetReadout)</code></pre>
+      </div>
+    </article>
+
+    <article class="wg-card">
+      <header><h3>Text</h3><span class="pill">WidgetText</span></header>
+      <div class="wg-preview"><span class="lbl">Camera name</span><span class="wg-input">Studio A — wide</span></div>
+      <div class="body">
+        <p>Free text the user types and confirms with Enter: a camera name, a clip prefix. Read-only, it becomes a plain
+        label.</p>
+        <div class="table-wrap"><table><tbody>
+          <tr><td>Kind</td><td><code>KindText</code></td></tr>
+          <tr><td>Configuration</td><td>none; at most 256 bytes of printable UTF-8 (longer input is refused with a message)</td></tr>
+          <tr><td>Writes</td><td><code>Text(s)</code></td></tr>
+        </tbody></table></div>
+<pre><code>rcpmod.Custom(rcpmod.Labeled(rcpmod.ControlSpec{ID: <span class="s">"acme.name"</span>, Kind: rcpmod.KindText}, <span class="s">"Camera name"</span>,
+    rcpmod.GroupSystem), <span class="s">"Acme"</span>, rcpmod.WidgetText)</code></pre>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<section id="host" class="band">
   <h2>Host services</h2>
   <div class="table-wrap"><table>
     <thead><tr><th>Call</th><th>What it does</th><th>Limits</th></tr></thead>
@@ -524,7 +663,7 @@ rcpmod.Custom(rcpmod.Labeled(rcpmod.Range(<span class="s">"acme.fanSpeed"</span>
   </table></div>
 </section>
 
-<section id="testing" class="band">
+<section id="testing">
   <h2>Testing</h2>
   <p>A module is ordinary Go code: test it with <code>go test</code>, without WebAssembly and without a camera.
   <code>sdk/rcpmod/rcpmodtest</code> provides a <strong>test host</strong> that plays the application.</p>
@@ -565,7 +704,7 @@ rcpmod.Custom(rcpmod.Labeled(rcpmod.Range(<span class="s">"acme.fanSpeed"</span>
   </div></details>
 </section>
 
-<section id="sandbox">
+<section id="sandbox" class="band">
   <h2>The sandbox</h2>
   <p>A module cannot do anything by itself: no file, no network connection, no other program. It only has the services
   above, and the application limits them. Each limit is checked by a test against a deliberately hostile module; the
@@ -582,7 +721,7 @@ rcpmod.Custom(rcpmod.Labeled(rcpmod.Range(<span class="s">"acme.fanSpeed"</span>
   </table></div>
 </section>
 
-<section id="abi" class="band">
+<section id="abi">
   <h2>Appendix: the ABI, for other languages</h2>
   <p>The Go SDK hides everything below. A module written in another language that compiles to WebAssembly (Rust, Zig, C)
   implements it directly. A module is a WASI preview 1 <em>reactor</em>: it exports <code>_initialize</code>, which the
@@ -617,7 +756,7 @@ rcpmod.Custom(rcpmod.Labeled(rcpmod.Range(<span class="s">"acme.fanSpeed"</span>
   </div></details>
 </section>
 
-<section id="faq">
+<section id="faq" class="band">
   <h2>Frequently asked questions</h2>
   <h3>Is WebAssembly fast enough?</h3>
   <p>A call into a module takes about 10 microseconds; the panel's iris lever sends a value every 50 milliseconds.</p>
