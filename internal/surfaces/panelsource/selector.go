@@ -64,7 +64,9 @@ func (s *Selector) List() []app.PanelSource {
 	return append(out, app.PanelSource{ID: app.PanelSourceSim, Kind: app.PanelKindSim})
 }
 
-// Select switches to source id. Choosing the simulator plugs it in.
+// Select switches to source id. Choosing the simulator plugs it in and
+// notifies even when it was already selected, so a closed simulator
+// window comes back.
 func (s *Selector) Select(id string) error {
 	if !app.ValidPanelSource(id) {
 		return fmt.Errorf("panelsource: unknown source %q", id)
@@ -77,7 +79,7 @@ func (s *Selector) Select(id string) error {
 	if id == app.PanelSourceSim {
 		s.sim.SetPlugged(true)
 	}
-	if changed && fn != nil {
+	if (changed || id == app.PanelSourceSim) && fn != nil {
 		fn(id)
 	}
 	return nil

@@ -67,8 +67,8 @@ func TestSelectRoutesOpenBusyAndPresence(t *testing.T) {
 	if ok, _ := s.Present(); !ok {
 		t.Fatal("simulator not present")
 	}
-	_ = s.Select(app.PanelSourceSim) // unchanged: no notification
-	if len(notified) != 3 {
+	_ = s.Select(app.PanelSourceSim) // again: the window must come back
+	if len(notified) != 4 {
 		t.Fatalf("notified %v", notified)
 	}
 	if err := s.Select("bogus"); err == nil {
