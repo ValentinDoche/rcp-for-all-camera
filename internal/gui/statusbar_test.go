@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
 	"github.com/valentindoche/rcp-for-all-camera/internal/sysinfo"
@@ -63,5 +64,19 @@ func TestEmptySlotTabIsDisabled(t *testing.T) {
 	}
 	if !a.slotTabs.Disabled(5) || a.slotTabs.Disabled(0) {
 		t.Fatal("tab 6 must be disabled and tab 1 enabled")
+	}
+}
+
+// Regression (0.2.0): the stats were centred in the space between the gear
+// and the notice, so they sat left of the window's centre.
+func TestStatsAreCentredInTheWindow(t *testing.T) {
+	a, _, _ := newTestApp(t, true)
+	sized(a)
+	a.setStats(sysinfoStats())
+	d := fyne.CurrentApp().Driver()
+	box := d.AbsolutePositionForObject(a.statsBox).X + a.statsBox.Size().Width/2
+	win := a.Window().Canvas().Size().Width / 2
+	if diff := box - win; diff < -2 || diff > 2 {
+		t.Fatalf("stats centred at x=%v, window centre %v", box, win)
 	}
 }

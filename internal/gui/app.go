@@ -69,6 +69,7 @@ type App struct {
 	body      *fyne.Container
 	gear      *widget.Button
 	stats     []*widgets.Text // CPU, RAM, down, up, IP
+	statsBox  *fyne.Container
 	titleBar  *titleBar
 	chrome    windowChrome
 	zones     captionZones
@@ -183,9 +184,13 @@ func (a *App) build() {
 	}
 	a.setStats(sysinfo.Stats{})
 	a.noticeTxt = widgets.NewText("", style.TextMuted, 12).Clip().Align(fyne.TextAlignTrailing)
+	// The stats are centred on the whole bar, not on the space the gear
+	// and the notice leave (which pushed them off centre).
+	a.statsBox = container.NewHBox(statObjs...)
 	bottom := widgets.NewPanel(style.Surface, "", 0, container.New(layout.NewCustomPaddedLayout(2, 2, 10, 14),
-		container.NewBorder(nil, nil, a.gear, widgets.Sized(460, 0, a.noticeTxt),
-			container.NewCenter(container.NewHBox(statObjs...))))).Flat()
+		container.NewStack(
+			container.NewCenter(a.statsBox),
+			container.NewBorder(nil, nil, a.gear, widgets.Sized(460, 0, a.noticeTxt))))).Flat()
 
 	// pages
 	for i := 1; i <= app.SlotCount; i++ {
