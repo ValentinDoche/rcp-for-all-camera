@@ -178,6 +178,16 @@ zips it with the README and publishes a GitHub release (a tag with a suffix such
     becomes unreachable). Settings is a layer under the title bar (`a.modal`, `blocker`).
 19. The main window must be Fyne's master (`SetMaster`): otherwise a hidden window (the panel
     simulator) keeps the process alive after the main window closes.
+20. **The iris lever drives `irisNorm`, not the f-stop, when the camera offers it.** Found in ATEM
+    Software Control (`CameraControlBmdModel::setAperture(v)` at 0x1403aedc0 sends
+    `setApertureNormalised(1 - v)` when the camera reports a normalised aperture, else a fixed
+    f-stop curve). The camera maps it to the mounted lens, so the lever cannot overshoot a
+    f/2.8 lens. `normalised` 0 = open, 1 = closed (TODO(verify) live on the REST API). The
+    Studio 6K Pro firmware has no `/lens/iris/description`: its lens iris limits are learned
+    from the stops reported at normalised 0 and 1.
+21. A camera answers the lever late and snaps or clamps the value: reports within 800 ms of a
+    lever write and near the values sent are echoes, not changes from elsewhere (`echo.go`).
+    Treating them as changes released the lever mid-movement.
 
 ## 7. What was tried and abandoned
 
