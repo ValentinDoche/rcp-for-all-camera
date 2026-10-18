@@ -154,8 +154,7 @@ implement ports the application or the panel controller declares.</figcaption>
   <details class="more"><summary>More info: how the rules are enforced</summary><div>
     <p>A test, <code>internal/archtest/dependency_rules_test.go</code>, reads the imports of every package and fails
     when one breaks the rules: <code>core</code> imports no other package of the project, nor the network or the GUI
-    toolkit; <code>app</code> imports no adapter; a module imports nothing but the SDK. The rules themselves are in
-    <a href="go-engineering-rules.md">Go engineering rules</a>.</p>
+    toolkit; <code>app</code> imports no adapter; a module imports nothing but the SDK.</p>
   </div></details>
 </section>
 
@@ -197,7 +196,7 @@ implement ports the application or the panel controller declares.</figcaption>
   <p>The displays show the active camera's ND, gain, shutter, iris and master black: blank when the camera has no such
   control, dashes when its value is unknown. Every key, light and display is described in the
   <a href="https://github.com/ValentinDoche/rcp-for-all-camera/blob/main/docs/panel-mapping.md">panel mapping</a>; the
-  USB protocol in <a href="atem-micro-camera-panel-protocol.md">Panel USB protocol</a>.</p>
+  USB protocol, with a clickable panel, in <a href="panel-protocol.html">Panel USB protocol</a>.</p>
 </section>
 
 <section id="window">

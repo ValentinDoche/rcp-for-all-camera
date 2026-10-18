@@ -49,9 +49,11 @@
         ["#how", "How we check"], ["#dependencies", "Dependencies"], ["#threats", "Application threats"], ["#report", "Report a vulnerability"]
       ] }
     ] },
-    { group: "Reference", pages: [
-      { href: "go-engineering-rules.md", icon: "book", title: "Go engineering rules", subs: [] },
-      { href: "atem-micro-camera-panel-protocol.md", icon: "panel", title: "Panel USB protocol", subs: [] }
+    { group: "Hardware", pages: [
+      { href: "panel-protocol.html", icon: "panel", title: "Panel USB protocol", subs: [
+        ["#explorer", "Panel explorer"], ["#identity", "USB identity"], ["#auth", "Authentication"],
+        ["#inputs", "Inputs"], ["#outputs", "Outputs"], ["#reports", "Report map"], ["#pitfalls", "Pitfalls"]
+      ] }
     ] }
   ];
 
@@ -98,7 +100,7 @@
         '<path d="M36.993 25.409L51.939 25.409A21 21 0 0 1 51.465 39.881Z M40.191 30.87L50.759 41.438A21 21 0 0 1 40.191 51.337Z M38.591 36.993L38.591 51.939A21 21 0 0 1 24.119 51.465Z M33.13 40.191L22.562 50.759A21 21 0 0 1 12.663 40.191Z M27.007 38.591L12.061 38.591A21 21 0 0 1 12.535 24.119Z M23.809 33.13L13.241 22.562A21 21 0 0 1 23.809 12.663Z M30.87 23.809L41.438 13.241A21 21 0 0 1 51.337 23.809Z" fill="#E8E9EC"/>' +
         '<path d="M25.409 27.007L25.409 12.061A21 21 0 0 1 39.881 12.535Z" fill="#F47B20"/></svg>RCP <span>docs</span></a>' +
         '<div class="search">' + svg("search") + '<input id="search" type="search" placeholder="Search" aria-label="Search the documentation"></div>' +
-        '<nav class="toplinks"><a href="index.html">Docs</a><a href="modules-camera.html">Modules</a><a href="vulnerabilities.html">Security</a></nav>' +
+        '<nav class="toplinks"><a href="index.html">Docs</a><a href="modules-camera.html">Modules</a><a href="panel-protocol.html">Panel</a><a href="vulnerabilities.html">Security</a></nav>' +
         '<button class="theme-btn" id="theme-btn" aria-label="Light or dark theme"></button>';
     }
     var side = document.getElementById("sidebar");
