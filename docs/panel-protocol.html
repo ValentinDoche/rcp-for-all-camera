@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel USB Protocol</title>
+<meta name="description" content="The USB HID protocol of the Blackmagic ATEM Micro Camera Panel, with a clickable panel: every key, knob, display and light, its report and how to drive it.">
+<link rel="stylesheet" href="assets/docs.css">
+<script src="assets/docs.js"></script>
+<script src="assets/panel-explorer.js"></script>
+</head>
+<body>
+<header class="topbar" id="topbar"></header>
+<div class="layout">
+<aside class="sidebar" id="sidebar"></aside>
+<main>
+
+<div class="hero">
+  <div class="kicker">Hardware reference</div>
+  <h1>Panel USB protocol</h1>
+  <p>How a PC drives the Blackmagic ATEM Micro Camera Panel over USB, with no ATEM switcher: authentication, every input, every display and every light.</p>
+</div>
+
+<section id="explorer">
+  <h2>Panel explorer</h2>
+  <p class="lead">Click any part of the panel: a key, a knob, a display, a light. The panel on the right explains the
+  report that carries it, the LEDs behind it and how to light them, with a ready-to-send example, and what RCP For
+  All Camera does with it.</p>
+  <div class="px">
+    <div class="px-panel">
+      <svg class="pn" id="pn" viewBox="146 8 270 402" role="img" aria-label="The ATEM Micro Camera Panel, every element clickable"></svg>
+      <p class="px-hint">Click an element, or move with Tab and press Enter.</p>
+    </div>
+    <div class="px-detail" id="px-detail" aria-live="polite"></div>
+  </div>
+  <div class="note"><p>Status of the facts: key codes, knobs, lever, displays, matrix and all 75 LEDs were confirmed on a real
+  panel. The names of key codes <code>0x59</code>–<code>0x5E</code> are inferred from the order they were pressed in.</p></div>
+</section>
+
+<section id="identity">
+  <h2>USB identity</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Item</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Vendor / product</td><td><code>0x1EDB</code> (Blackmagic Design) / <code>0xBF01</code></td></tr>
+      <tr><td>Interface MI_00</td><td>Class <em>Media</em>, bound to Blackmagic's ATEM driver. Not used to drive the panel.</td></tr>
+      <tr><td>Interface MI_02</td><td><strong>HID</strong>, usage page <code>0xFF00</code> (vendor). All panel input and output goes here, through the standard Windows HID driver.</td></tr>
+      <tr><td>Serial number</td><td>The USB serial string, for example <code>51FAF46D3FCF41928805487C9118E9FF</code></td></tr>
+      <tr><td>Largest reports</td><td>Input 19 bytes, output 33 bytes, feature 64 bytes (report id included)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="warn"><p><strong>Feature reports must have their exact size.</strong> Padding a feature buffer to the
+  64-byte maximum makes the panel fail the request (<code>ERROR_GEN_FAILURE</code>). Output reports can be padded to
+  33 bytes.</p></div>
+</section>
+
+<section id="auth">
+  <h2>Authentication</h2>
+  <p>The panel sends nothing until the host authenticates, with the challenge and response of Blackmagic's DaVinci
+  Speed Editor, on feature report <code>0x05</code>. Each message is <code>[05, command, u64 little endian]</code>.</p>
+<pre><code>SET 05 00 00×8          → GET 05: 05 00 &lt;device challenge&gt;
+SET 05 01 00×8          → GET 05: 05 02 …              (host challenge, may be ignored)
+SET 05 03 &lt;response&gt;    → GET 05: 05 04 &lt;timeout, u16 s&gt;  (the panel answers 600 s)</code></pre>
+  <p>The response is computed from the challenge (<code>internal/surfaces/micropanel/hid_auth.go</code>, tested against
+  three challenges a real panel accepted). Authenticate again before the timeout ends: RCP For All Camera does it every
+  400 s.</p>
+  <details class="more"><summary>More info: ATEM Software Control</summary><div>
+    <p>ATEM Software Control also authenticates the panel and overwrites its displays. Close it before driving the panel
+    from another program: only one of them can own it.</p>
+  </div></details>
+</section>
+
+<section id="inputs">
+  <h2>Inputs</h2>
+  <h3>Keys: input report <code>0x03</code></h3>
+  <p>Up to six u16 little-endian codes of the keys held right now (0 = empty). A press or a release is found by comparing
+  two reports.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Code</th><th>Key</th><th>Code</th><th>Key</th></tr></thead>
+    <tbody>
+      <tr><td><code>0x40</code>–<code>0x47</code></td><td>CAMERA 1–8</td><td><code>0x54</code> / <code>0x55</code></td><td>SHUTTER ▲ / ▼</td></tr>
+      <tr><td><code>0x48</code>–<code>0x4C</code></td><td>SCENE 1–5</td><td><code>0x56</code> / <code>0x57</code> / <code>0x58</code></td><td>ON / W/B / BARS</td></tr>
+      <tr><td><code>0x4D</code></td><td>STORE</td><td><code>0x59</code></td><td>BLACK/FLARE (inferred, never seen)</td></tr>
+      <tr><td><code>0x4E</code> / <code>0x4F</code></td><td>ND ▲ / ▼</td><td><code>0x5A</code> / <code>0x5B</code></td><td>IRIS/MB ACTIVE / AUTO IRIS (inferred)</td></tr>
+      <tr><td><code>0x50</code> / <code>0x51</code></td><td>CC ▲ / ▼</td><td><code>0x5C</code> / <code>0x5D</code></td><td>CALL / PANEL ACTIVE (inferred)</td></tr>
+      <tr><td><code>0x52</code> / <code>0x53</code></td><td>MASTER GAIN ▲ / ▼</td><td><code>0x5E</code></td><td>PREVIEW (inferred)</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Knobs: input and feature report <code>0x0E</code></h3>
+  <p>Nine u16 little-endian absolute positions, 0 to 1024, in this order: WHITE R, BLACK R, WHITE G, BLACK G, WHITE B,
+  BLACK B, the unlabelled top-right knob, SENS, COARSE. The panel counts the turns and stops at both ends. Input reports
+  only come on change, so read the feature report at connect.</p>
+  <h3>Iris lever and master black ring: input and feature report <code>0x0F</code></h3>
+  <p>Three int32 little endian: <code>[1, lever, ring]</code>. The lever goes from -4096 (pulled back) to +4096 (pushed
+  forward); the ring from about -4096 to +4096.</p>
+</section>
+
+<section id="outputs">
+  <h2>Outputs</h2>
+  <h3>Displays: output report <code>0x10</code></h3>
+  <p>14 bytes, one per digit, raw segments: bit 7 = a, bit 6 = b, bit 5 = c, bit 4 = d, bit 3 = e, bit 2 = f, bit 1 =
+  g, bit 0 = point. Digits: 0 ND, 1 CC, 2–3 MASTER GAIN, 4–7 SHUTTER, 8–10 IRIS, 11–13 MASTER BLACK.</p>
+<pre><code>10 00 00 00 00 EE 38 1E 3A 00 00 00 00 00 00   "Auto" on SHUTTER</code></pre>
+  <h3>Camera matrix: output report <code>0x11</code></h3>
+  <p>7 rows × 10 columns, 2 bits per pixel (0 off, 1 red, 2 green, 3 amber). Pixel <code>p = row × 10 + col</code> is
+  in byte <code>p &gt;&gt; 2</code>, bits <code>2 × (p &amp; 3)</code>, least significant first.</p>
+  <h3>Lights: output report <code>0x02</code></h3>
+  <p>A 30-byte bitmap, LED <em>n</em> = bit <code>n &amp; 7</code> of byte <code>n &gt;&gt; 3</code>, followed by a
+  layer number. Every light is on layer 0, indices 0 to 74.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>LED</th><th>Light</th><th>LED</th><th>Light</th></tr></thead>
+    <tbody>
+      <tr><td><code>0</code>–<code>15</code></td><td>Iris scale, 0 = top, 15 = CLS</td><td><code>56</code> / <code>58</code> / <code>60</code></td><td>REL / ABS / BARS indicators</td></tr>
+      <tr><td><code>16+3c</code>…<code>18+3c</code></td><td>CAMERA c+1, red / green / blue</td><td><code>57</code> / <code>59</code> / <code>61</code></td><td>ON / W/B / BARS keys</td></tr>
+      <tr><td><code>40</code></td><td>SCENE FILE indicator</td><td><code>62</code> / <code>63</code></td><td>D EXT / EXT</td></tr>
+      <tr><td><code>41</code>–<code>45</code></td><td>SCENE 1–5</td><td><code>64</code> / <code>65</code></td><td>IRIS/MB ACTIVE white / red</td></tr>
+      <tr><td><code>46</code> / <code>47</code></td><td>STORE white / red</td><td><code>66</code></td><td>AUTO IRIS</td></tr>
+      <tr><td><code>48</code> / <code>49</code></td><td>ND ▲ / ▼</td><td><code>67</code> / <code>68</code></td><td>CALL white / red</td></tr>
+      <tr><td><code>50</code> / <code>51</code></td><td>CC ▲ / ▼</td><td><code>69</code> / <code>70</code> / <code>71</code></td><td>NETWORK / ALARM / CABLE</td></tr>
+      <tr><td><code>52</code> / <code>53</code></td><td>MASTER GAIN ▲ / ▼</td><td><code>72</code> / <code>73</code></td><td>PANEL ACTIVE white / red</td></tr>
+      <tr><td><code>54</code> / <code>55</code></td><td>SHUTTER ▲ / ▼</td><td><code>74</code></td><td>PREVIEW</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="reports">
+  <h2>Report map</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Id</th><th>Direction</th><th>Size</th><th>Meaning</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><code>0x02</code></td><td>out</td><td>32</td><td>Lights: bitmap and layer</td><td><span class="pill ok">Confirmed</span></td></tr>
+      <tr><td><code>0x03</code></td><td>in</td><td>13</td><td>Held keys, up to 6 × u16</td><td><span class="pill ok">Confirmed</span></td></tr>
+      <tr><td><code>0x04</code></td><td>feature</td><td>8</td><td>Status or version, changes between reads</td><td><span class="pill">Unknown</span></td></tr>
+      <tr><td><code>0x05</code></td><td>feature</td><td>10</td><td>Authentication</td><td><span class="pill ok">Confirmed</span></td></tr>
+      <tr><td><code>0x06</code></td><td>in, feature</td><td>3</td><td>Battery: byte 1 bit 0 = charging, byte 2 = percent</td><td><span class="pill ok">Read</span></td></tr>
+      <tr><td><code>0x09</code> → <code>0x0A</code></td><td>feature</td><td>4 / 28</td><td>Switcher input ids of the camera buttons</td><td><span class="pill info">Static analysis</span></td></tr>
+      <tr><td><code>0x0D</code></td><td>in</td><td>5</td><td>Settings changed (then read <code>0x14</code>)</td><td><span class="pill info">Static analysis</span></td></tr>
+      <tr><td><code>0x0E</code></td><td>in, feature</td><td>19</td><td>Knob positions, 9 × u16</td><td><span class="pill ok">Confirmed</span></td></tr>
+      <tr><td><code>0x0F</code></td><td>in, feature</td><td>13</td><td>Lever and ring, 3 × int32</td><td><span class="pill ok">Confirmed</span></td></tr>
+      <tr><td><code>0x10</code></td><td>out</td><td>15</td><td>14 seven-segment digits</td><td><span class="pill ok">Confirmed</span></td></tr>
+      <tr><td><code>0x11</code></td><td>out</td><td>33</td><td>Camera dot matrix</td><td><span class="pill ok">Confirmed</span></td></tr>
+      <tr><td><code>0x12</code> / <code>0x13</code></td><td>feature</td><td>4 / 64</td><td>Scene files stored in the panel</td><td><span class="pill info">Static analysis</span></td></tr>
+      <tr><td><code>0x15</code></td><td>feature</td><td>33</td><td>Device name: <code>ATEM Micro Camera Panel</code></td><td><span class="pill ok">Read</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="pitfalls">
+  <h2>Pitfalls</h2>
+  <ul>
+    <li><strong>Light layers persist in the panel</strong>, even across a host restart, and a bit set on any layer lights
+    the LED. A host that only uses layer 0 must clear layers 1 to 5 when it starts.</li>
+    <li><strong>Keep LED bits above 74 at 0</strong>: setting them draws stray shapes on the camera matrix.</li>
+    <li>Use <strong>two handles</strong> on the HID device, one for the blocking reads, one for writes and feature
+    reports: Windows serialises the I/O of a synchronous handle.</li>
+    <li>Input reports come only on change: read features <code>0x0E</code> and <code>0x0F</code> at connect to know where
+    the knobs and the lever are.</li>
+  </ul>
+  <p>The byte-by-byte reference this page is built from is
+  <a href="https://github.com/ValentinDoche/rcp-for-all-camera/blob/main/docs/atem-micro-camera-panel-protocol.md">atem-micro-camera-panel-protocol.md</a>;
+  the driver is <code>internal/surfaces/micropanel</code>.</p>
+</section>
+
+<footer class="page">RCP For All Camera · Panel USB protocol · version 0.3.0-ALPHA ·
+<a href="index.html">Documentation home</a> · <a href="modules-camera.html">Camera modules guide</a></footer>
+</main>
+</div>
+</body>
+</html>

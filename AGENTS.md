@@ -58,7 +58,7 @@ internal/surfaces/panelsim/, panelsource/
 internal/sysinfo, autostart, i18n, archtest (dependency rules test)
 sdk/rcpmod/                       ← the module SDK; rcpmodtest/ is its test kit
 modules/<id>/                     ← one camera model per folder: main.go, ui.go, tests
-docs/index.html, modules-camera.html, vulnerabilities.html, assets/  ← HTML documentation
+docs/index.html, modules-camera.html, panel-protocol.html, vulnerabilities.html, assets/  ← HTML docs
 docs/*.md                         ← architecture, app API, adding a camera, protocol, panel mapping, security...
 .github/workflows/                ← ci.yml, release.yml, vulncheck.yml (weekly)
 ```
